@@ -2,9 +2,11 @@
 """Generate frontend/.env from environment variables for deployment"""
 import os
 
+anon_key = os.getenv('SUPABASE_ANON_KEY') or os.getenv('SUPABASE_KEY', '')
+
 frontend_env_content = f"""VITE_API_URL={os.getenv('VITE_API_URL', 'http://127.0.0.1:5000/api')}
 VITE_SUPABASE_URL={os.getenv('SUPABASE_URL', '')}
-VITE_SUPABASE_ANON_KEY={os.getenv('SUPABASE_KEY', '')}
+VITE_SUPABASE_ANON_KEY={anon_key}
 """
 
 with open('frontend/.env', 'w') as f:
