@@ -1,11 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY no frontend/.env')
-}
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://vwqldtjjtkdzvkdirmam.supabase.co'
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3cWxkdGpqdGtkenZrZGlybWFtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4Nzc4MjQsImV4cCI6MjA5MDQ1MzgyNH0.bAJZYfU9oVnt4ibgHRYBGgpb4NwPL9nl0vXYR9rtlY8'
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
