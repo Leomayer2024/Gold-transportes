@@ -20,11 +20,13 @@ CREATE TABLE IF NOT EXISTS horas_extras_rtm_registros (
 CREATE INDEX IF NOT EXISTS idx_horas_extras_rtm_mes ON horas_extras_rtm_registros(mes_referencia);
 CREATE INDEX IF NOT EXISTS idx_horas_extras_rtm_filial ON horas_extras_rtm_registros(filial_nome);
 CREATE INDEX IF NOT EXISTS idx_horas_extras_rtm_colaborador ON horas_extras_rtm_registros(colaborador_id);
-CREATE INDEX IF NOT EXISTS idx_horas_extras_rtm_filial_id ON horas_extras_rtm_registros(filial_id);
 
 -- Migração: adiciona filial_id caso a tabela já exista sem essa coluna
+-- IMPORTANTE: o índice de filial_id deve vir APÓS o ADD COLUMN
 ALTER TABLE horas_extras_rtm_registros
     ADD COLUMN IF NOT EXISTS filial_id bigint REFERENCES filiais(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_horas_extras_rtm_filial_id ON horas_extras_rtm_registros(filial_id);
 
 -- RLS: apenas usuários autenticados podem ler/escrever
 ALTER TABLE horas_extras_rtm_registros ENABLE ROW LEVEL SECURITY;
