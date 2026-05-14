@@ -9338,5 +9338,5 @@ if __name__ == '__main__':
     port = int(os.getenv('PORT', '5000'))
     debug_mode = os.getenv('FLASK_DEBUG', '0').strip().lower() in {'1', 'true', 'yes'}
     app.logger.info('Servidor Flask iniciado. debug=%s porta=%s', debug_mode, port)
-    app.run(debug=debug_mode, use_reloader=False, host='127.0.0.1', port=port)
+    app.run(debug=debug_mode, use_reloader=False, host='0.0.0.0', port=port)
 
