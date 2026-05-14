@@ -9376,6 +9376,34 @@ def create_app():
             app.logger.error('detalhe_horas_extras_rtm: %s', exc)
             return jsonify({'error': translate_database_error(exc)}), 500
 
+    @app.route('/api/horas-extras-rtm/registro/<registro_id>', methods=['PUT'])
+    def editar_registro_horas_extras_rtm(registro_id):
+        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        if not token:
+            return jsonify({'error': 'Não autenticado.'}), 401
+        data = request.get_json() or {}
+        try:
+            hn = float(data.get('horas_normais') or 0)
+            he = float(data.get('horas_extra_100') or 0)
+            vh50 = float(data.get('valor_hora_50') or 0)
+            vh100 = float(data.get('valor_hora_100') or 0)
+            t50 = hn * vh50
+            t100 = he * vh100
+            update = {
+                'horas_normais': hn,
+                'horas_extra_100': he,
+                'valor_hora_50': vh50,
+                'valor_hora_100': vh100,
+                'total_50': t50,
+                'total_100': t100,
+                'total_geral': t50 + t100,
+            }
+            supabase.table('horas_extras_rtm_registros').update(update).eq('id', registro_id).execute()
+            return jsonify({'ok': True})
+        except Exception as exc:
+            app.logger.error('editar_registro_horas_extras_rtm: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
     @app.route('/api/horas-extras-rtm/mes/<mes>', methods=['DELETE'])
     def deletar_mes_horas_extras_rtm(mes):
         token = request.headers.get('Authorization', '').replace('Bearer ', '')

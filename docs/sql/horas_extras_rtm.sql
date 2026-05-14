@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS horas_extras_rtm_registros (
     id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
     mes_referencia date NOT NULL,
     funcionario_nome text NOT NULL,
-    colaborador_id uuid REFERENCES colaboradores(id) ON DELETE SET NULL,
+    colaborador_id bigint REFERENCES colaboradores(id) ON DELETE SET NULL,
     filial_nome text,
     estado text,
     horas_normais numeric(10,4) DEFAULT 0,
@@ -23,11 +23,14 @@ CREATE INDEX IF NOT EXISTS idx_horas_extras_rtm_colaborador ON horas_extras_rtm_
 -- RLS: apenas usuários autenticados podem ler/escrever
 ALTER TABLE horas_extras_rtm_registros ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY IF NOT EXISTS "auth_select" ON horas_extras_rtm_registros
-    FOR SELECT TO authenticated USING (true);
-
-CREATE POLICY IF NOT EXISTS "auth_insert" ON horas_extras_rtm_registros
-    FOR INSERT TO authenticated WITH CHECK (true);
-
-CREATE POLICY IF NOT EXISTS "auth_delete" ON horas_extras_rtm_registros
-    FOR DELETE TO authenticated USING (true);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'horas_extras_rtm_registros' AND policyname = 'auth_select') THEN
+    CREATE POLICY "auth_select" ON horas_extras_rtm_registros FOR SELECT TO authenticated USING (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'horas_extras_rtm_registros' AND policyname = 'auth_insert') THEN
+    CREATE POLICY "auth_insert" ON horas_extras_rtm_registros FOR INSERT TO authenticated WITH CHECK (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'horas_extras_rtm_registros' AND policyname = 'auth_delete') THEN
+    CREATE POLICY "auth_delete" ON horas_extras_rtm_registros FOR DELETE TO authenticated USING (true);
+  END IF;
+END $$;
