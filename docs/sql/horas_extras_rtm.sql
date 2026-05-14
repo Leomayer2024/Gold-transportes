@@ -4,6 +4,7 @@ CREATE TABLE IF NOT EXISTS horas_extras_rtm_registros (
     mes_referencia date NOT NULL,
     funcionario_nome text NOT NULL,
     colaborador_id bigint REFERENCES colaboradores(id) ON DELETE SET NULL,
+    filial_id bigint REFERENCES filiais(id) ON DELETE SET NULL,
     filial_nome text,
     estado text,
     horas_normais numeric(10,4) DEFAULT 0,
@@ -19,6 +20,11 @@ CREATE TABLE IF NOT EXISTS horas_extras_rtm_registros (
 CREATE INDEX IF NOT EXISTS idx_horas_extras_rtm_mes ON horas_extras_rtm_registros(mes_referencia);
 CREATE INDEX IF NOT EXISTS idx_horas_extras_rtm_filial ON horas_extras_rtm_registros(filial_nome);
 CREATE INDEX IF NOT EXISTS idx_horas_extras_rtm_colaborador ON horas_extras_rtm_registros(colaborador_id);
+CREATE INDEX IF NOT EXISTS idx_horas_extras_rtm_filial_id ON horas_extras_rtm_registros(filial_id);
+
+-- Migração: adiciona filial_id caso a tabela já exista sem essa coluna
+ALTER TABLE horas_extras_rtm_registros
+    ADD COLUMN IF NOT EXISTS filial_id bigint REFERENCES filiais(id) ON DELETE SET NULL;
 
 -- RLS: apenas usuários autenticados podem ler/escrever
 ALTER TABLE horas_extras_rtm_registros ENABLE ROW LEVEL SECURITY;
@@ -29,6 +35,9 @@ DO $$ BEGIN
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'horas_extras_rtm_registros' AND policyname = 'auth_insert') THEN
     CREATE POLICY "auth_insert" ON horas_extras_rtm_registros FOR INSERT TO authenticated WITH CHECK (true);
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'horas_extras_rtm_registros' AND policyname = 'auth_update') THEN
+    CREATE POLICY "auth_update" ON horas_extras_rtm_registros FOR UPDATE TO authenticated USING (true);
   END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_policies WHERE tablename = 'horas_extras_rtm_registros' AND policyname = 'auth_delete') THEN
     CREATE POLICY "auth_delete" ON horas_extras_rtm_registros FOR DELETE TO authenticated USING (true);

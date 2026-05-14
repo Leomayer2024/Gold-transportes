@@ -9302,10 +9302,8 @@ def create_app():
     # ============ HORAS EXTRAS RTM — FECHAMENTOS ============
 
     @app.route('/api/horas-extras-rtm/salvar', methods=['POST'])
-    def salvar_horas_extras_rtm():
-        token = request.headers.get('Authorization', '').replace('Bearer ', '')
-        if not token:
-            return jsonify({'error': 'Não autenticado.'}), 401
+    @require_auth
+    def salvar_horas_extras_rtm(profile):
         data = request.get_json() or {}
         mes_referencia = data.get('mes_referencia')
         registros = data.get('registros', [])
@@ -9314,13 +9312,26 @@ def create_app():
         if not registros:
             return jsonify({'error': 'Nenhum registro para salvar.'}), 400
         try:
-            supabase.table('horas_extras_rtm_registros').delete().eq('mes_referencia', mes_referencia).execute()
+            # Resolve filial_id for each colaborador being saved
+            colab_ids = [r.get('colaborador_id') for r in registros if r.get('colaborador_id')]
+            collab_filial_map = {}
+            if colab_ids:
+                resp = supabase.table('colaboradores').select('id, filial_id').in_('id', colab_ids).execute()
+                for c in (resp.data or []):
+                    collab_filial_map[int(c['id'])] = c.get('filial_id')
+            user_filial_id = profile.get('filial_id')
+
             rows = []
             for r in registros:
+                cid = r.get('colaborador_id')
+                filial_id = collab_filial_map.get(int(cid)) if cid else None
+                if filial_id is None:
+                    filial_id = user_filial_id
                 rows.append({
                     'mes_referencia': mes_referencia,
                     'funcionario_nome': r.get('funcionario_nome', ''),
-                    'colaborador_id': r.get('colaborador_id'),
+                    'colaborador_id': cid,
+                    'filial_id': filial_id,
                     'filial_nome': r.get('filial_nome', ''),
                     'estado': r.get('estado', ''),
                     'horas_normais': float(r.get('horas_normais') or 0),
@@ -9331,6 +9342,16 @@ def create_app():
                     'total_100': float(r.get('total_100') or 0),
                     'total_geral': float(r.get('total_geral') or 0),
                 })
+
+            # Delete only allowed filial's existing records for this month
+            del_query = supabase.table('horas_extras_rtm_registros').delete().eq('mes_referencia', mes_referencia)
+            if profile_has_filial_scope(profile):
+                allowed_ids = profile.get('allowed_filial_ids') or []
+                if not allowed_ids:
+                    return jsonify({'error': 'Sem filiais permitidas para salvar.'}), 403
+                del_query = del_query.in_('filial_id', allowed_ids)
+            del_query.execute()
+
             if rows:
                 supabase.table('horas_extras_rtm_registros').insert(rows).execute()
             return jsonify({'ok': True, 'count': len(rows)})
@@ -9339,14 +9360,18 @@ def create_app():
             return jsonify({'error': translate_database_error(exc)}), 500
 
     @app.route('/api/horas-extras-rtm/meses', methods=['GET'])
-    def listar_meses_horas_extras_rtm():
-        token = request.headers.get('Authorization', '').replace('Bearer ', '')
-        if not token:
-            return jsonify({'error': 'Não autenticado.'}), 401
+    @require_auth
+    def listar_meses_horas_extras_rtm(profile):
         try:
-            result = supabase.table('horas_extras_rtm_registros').select(
+            query = supabase.table('horas_extras_rtm_registros').select(
                 'mes_referencia, horas_normais, horas_extra_100, total_geral'
-            ).order('mes_referencia', desc=True).execute()
+            ).order('mes_referencia', desc=True)
+            if profile_has_filial_scope(profile):
+                allowed_ids = profile.get('allowed_filial_ids') or []
+                if not allowed_ids:
+                    return jsonify({'data': []})
+                query = query.in_('filial_id', allowed_ids)
+            result = query.execute()
             from collections import defaultdict
             meses = defaultdict(lambda: {'funcionarios': 0, 'total_horas_normais': 0.0, 'total_horas_100': 0.0, 'total_geral': 0.0})
             for row in (result.data or []):
@@ -9362,27 +9387,35 @@ def create_app():
             return jsonify({'error': translate_database_error(exc)}), 500
 
     @app.route('/api/horas-extras-rtm/detalhe', methods=['GET'])
-    def detalhe_horas_extras_rtm():
-        token = request.headers.get('Authorization', '').replace('Bearer ', '')
-        if not token:
-            return jsonify({'error': 'Não autenticado.'}), 401
+    @require_auth
+    def detalhe_horas_extras_rtm(profile):
         mes = request.args.get('mes')
         if not mes:
             return jsonify({'error': 'Parâmetro mes obrigatório.'}), 400
         try:
-            result = supabase.table('horas_extras_rtm_registros').select('*').eq('mes_referencia', mes).order('funcionario_nome').execute()
+            query = supabase.table('horas_extras_rtm_registros').select('*').eq('mes_referencia', mes).order('funcionario_nome')
+            if profile_has_filial_scope(profile):
+                allowed_ids = profile.get('allowed_filial_ids') or []
+                if not allowed_ids:
+                    return jsonify({'data': []})
+                query = query.in_('filial_id', allowed_ids)
+            result = query.execute()
             return jsonify({'data': result.data or []})
         except Exception as exc:
             app.logger.error('detalhe_horas_extras_rtm: %s', exc)
             return jsonify({'error': translate_database_error(exc)}), 500
 
     @app.route('/api/horas-extras-rtm/registro/<registro_id>', methods=['PUT'])
-    def editar_registro_horas_extras_rtm(registro_id):
-        token = request.headers.get('Authorization', '').replace('Bearer ', '')
-        if not token:
-            return jsonify({'error': 'Não autenticado.'}), 401
+    @require_auth
+    def editar_registro_horas_extras_rtm(profile, registro_id):
         data = request.get_json() or {}
         try:
+            # Verify filial scope before editing
+            if profile_has_filial_scope(profile):
+                reg_resp = supabase.table('horas_extras_rtm_registros').select('filial_id').eq('id', registro_id).limit(1).execute()
+                reg = (reg_resp.data or [{}])[0]
+                if reg.get('filial_id') and int(reg['filial_id']) not in set(profile.get('allowed_filial_ids') or []):
+                    return jsonify({'error': 'Sem permissão para editar este registro.'}), 403
             hn = float(data.get('horas_normais') or 0)
             he = float(data.get('horas_extra_100') or 0)
             vh50 = float(data.get('valor_hora_50') or 0)
@@ -9405,51 +9438,82 @@ def create_app():
             return jsonify({'error': translate_database_error(exc)}), 500
 
     @app.route('/api/horas-extras-rtm/mes/<mes>', methods=['DELETE'])
-    def deletar_mes_horas_extras_rtm(mes):
-        token = request.headers.get('Authorization', '').replace('Bearer ', '')
-        if not token:
-            return jsonify({'error': 'Não autenticado.'}), 401
+    @require_auth
+    def deletar_mes_horas_extras_rtm(profile, mes):
         try:
-            supabase.table('horas_extras_rtm_registros').delete().eq('mes_referencia', mes).execute()
+            del_query = supabase.table('horas_extras_rtm_registros').delete().eq('mes_referencia', mes)
+            if profile_has_filial_scope(profile):
+                allowed_ids = profile.get('allowed_filial_ids') or []
+                if not allowed_ids:
+                    return jsonify({'error': 'Sem filiais permitidas.'}), 403
+                del_query = del_query.in_('filial_id', allowed_ids)
+            del_query.execute()
             return jsonify({'ok': True})
         except Exception as exc:
             app.logger.error('deletar_mes_horas_extras_rtm: %s', exc)
             return jsonify({'error': translate_database_error(exc)}), 500
 
     @app.route('/api/horas-extras-rtm/metricas', methods=['GET'])
-    def metricas_horas_extras_rtm():
-        token = request.headers.get('Authorization', '').replace('Bearer ', '')
-        if not token:
-            return jsonify({'error': 'Não autenticado.'}), 401
+    @require_auth
+    def metricas_horas_extras_rtm(profile):
         try:
-            result = supabase.table('horas_extras_rtm_registros').select(
-                'mes_referencia, funcionario_nome, filial_nome, estado, horas_normais, horas_extra_100, total_geral'
-            ).execute()
+            query = supabase.table('horas_extras_rtm_registros').select(
+                'mes_referencia, funcionario_nome, filial_nome, estado, horas_normais, horas_extra_100, total_50, total_100, total_geral'
+            )
+            if profile_has_filial_scope(profile):
+                allowed_ids = profile.get('allowed_filial_ids') or []
+                if not allowed_ids:
+                    return jsonify({'top_filiais': [], 'top_funcionarios_100': [], 'top_funcionarios_50': [], 'evolucao_mensal': [], 'resumo_por_ano': []})
+                query = query.in_('filial_id', allowed_ids)
+            result = query.execute()
             rows = result.data or []
             from collections import defaultdict
-            filiais = defaultdict(lambda: {'horas_normais': 0.0, 'horas_extra_100': 0.0, 'total': 0.0, 'funcionarios': 0})
-            funcionarios = defaultdict(lambda: {'horas_normais': 0.0, 'horas_extra_100': 0.0, 'total': 0.0, 'meses': 0})
-            meses_map = defaultdict(lambda: {'horas_normais': 0.0, 'horas_extra_100': 0.0, 'total': 0.0, 'funcionarios': 0})
+            filiais = defaultdict(lambda: {'horas_normais': 0.0, 'horas_extra_100': 0.0, 'total_50': 0.0, 'total_100': 0.0, 'total': 0.0, 'funcionarios': 0})
+            funcionarios = defaultdict(lambda: {'horas_normais': 0.0, 'horas_extra_100': 0.0, 'total_50': 0.0, 'total_100': 0.0, 'total': 0.0, 'meses': 0})
+            meses_map = defaultdict(lambda: {'horas_normais': 0.0, 'horas_extra_100': 0.0, 'total_50': 0.0, 'total_100': 0.0, 'total': 0.0, 'funcionarios': 0})
+            anos_map = defaultdict(lambda: {'horas_normais': 0.0, 'horas_extra_100': 0.0, 'total_50': 0.0, 'total_100': 0.0, 'total': 0.0, 'meses': set()})
             for r in rows:
                 f = r.get('filial_nome') or 'Sem filial'
                 filiais[f]['horas_normais'] += float(r.get('horas_normais') or 0)
                 filiais[f]['horas_extra_100'] += float(r.get('horas_extra_100') or 0)
+                filiais[f]['total_50'] += float(r.get('total_50') or 0)
+                filiais[f]['total_100'] += float(r.get('total_100') or 0)
                 filiais[f]['total'] += float(r.get('total_geral') or 0)
                 filiais[f]['funcionarios'] += 1
                 fn = r.get('funcionario_nome') or 'Desconhecido'
                 funcionarios[fn]['horas_normais'] += float(r.get('horas_normais') or 0)
                 funcionarios[fn]['horas_extra_100'] += float(r.get('horas_extra_100') or 0)
+                funcionarios[fn]['total_50'] += float(r.get('total_50') or 0)
+                funcionarios[fn]['total_100'] += float(r.get('total_100') or 0)
                 funcionarios[fn]['total'] += float(r.get('total_geral') or 0)
                 funcionarios[fn]['meses'] += 1
                 m = r.get('mes_referencia') or ''
                 meses_map[m]['horas_normais'] += float(r.get('horas_normais') or 0)
                 meses_map[m]['horas_extra_100'] += float(r.get('horas_extra_100') or 0)
+                meses_map[m]['total_50'] += float(r.get('total_50') or 0)
+                meses_map[m]['total_100'] += float(r.get('total_100') or 0)
                 meses_map[m]['total'] += float(r.get('total_geral') or 0)
                 meses_map[m]['funcionarios'] += 1
-            top_filiais = sorted([{'filial': k, **v} for k, v in filiais.items()], key=lambda x: x['horas_extra_100'], reverse=True)[:12]
-            top_funcionarios = sorted([{'funcionario': k, **v} for k, v in funcionarios.items()], key=lambda x: x['horas_extra_100'], reverse=True)[:15]
+                ano = m[:4] if m else ''
+                if ano:
+                    anos_map[ano]['horas_normais'] += float(r.get('horas_normais') or 0)
+                    anos_map[ano]['horas_extra_100'] += float(r.get('horas_extra_100') or 0)
+                    anos_map[ano]['total_50'] += float(r.get('total_50') or 0)
+                    anos_map[ano]['total_100'] += float(r.get('total_100') or 0)
+                    anos_map[ano]['total'] += float(r.get('total_geral') or 0)
+                    anos_map[ano]['meses'].add(m)
+            top_filiais = sorted([{'filial': k, **v} for k, v in filiais.items()], key=lambda x: x['total'], reverse=True)[:12]
+            top_func_100 = sorted([{'funcionario': k, **v} for k, v in funcionarios.items()], key=lambda x: x['horas_extra_100'], reverse=True)[:10]
+            top_func_50 = sorted([{'funcionario': k, **v} for k, v in funcionarios.items()], key=lambda x: x['horas_normais'], reverse=True)[:10]
             evolucao = sorted([{'mes': k, **v} for k, v in meses_map.items()], key=lambda x: x['mes'])
-            return jsonify({'top_filiais': top_filiais, 'top_funcionarios': top_funcionarios, 'evolucao_mensal': evolucao})
+            resumo_por_ano = sorted([{'ano': k, 'meses': len(v.pop('meses')), **v} for k, v in anos_map.items()], key=lambda x: x['ano'], reverse=True)
+            return jsonify({
+                'top_filiais': top_filiais,
+                'top_funcionarios_100': top_func_100,
+                'top_funcionarios_50': top_func_50,
+                'evolucao_mensal': evolucao,
+                'resumo_por_ano': resumo_por_ano,
+            })
         except Exception as exc:
             app.logger.error('metricas_horas_extras_rtm: %s', exc)
             return jsonify({'error': translate_database_error(exc)}), 500

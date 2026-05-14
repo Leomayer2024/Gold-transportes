@@ -382,73 +382,189 @@ function AbaHistorico() {
   )
 }
 
-// ─── Aba Métricas ──────────────────────────────────────────────────────────────
-function AbaMetricas() {
+// ─── Aba Gráficos ──────────────────────────────────────────────────────────────
+function RankingBar({ items, valueKey, labelKey, colorBar, formatValue, limit = 10 }) {
+  const top = items.slice(0, limit)
+  const max = Math.max(...top.map((d) => d[valueKey] || 0), 0.001)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+      {top.map((d, i) => {
+        const pct = Math.max((d[valueKey] / max) * 100, 1)
+        return (
+          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 20, fontSize: 10, fontWeight: 700, color: i < 3 ? colorBar : 'var(--muted)', textAlign: 'right', flexShrink: 0 }}>{i + 1}º</div>
+            <div style={{ flex: 1, background: '#f0f4f8', borderRadius: 4, height: 24, position: 'relative', minWidth: 60 }}>
+              <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct}%`, background: i === 0 ? colorBar : i < 3 ? colorBar + 'cc' : colorBar + '66', borderRadius: 4 }} />
+              <span style={{ position: 'absolute', right: 8, top: 0, bottom: 0, display: 'flex', alignItems: 'center', fontSize: 11, fontWeight: 700, color: '#333', zIndex: 1 }}>
+                {formatValue ? formatValue(d[valueKey]) : d[valueKey]}
+              </span>
+            </div>
+            <div style={{ width: 160, fontSize: 11, color: '#333', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flexShrink: 0 }} title={d[labelKey]}>{d[labelKey]}</div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function KpiCard({ label, value, sub, color, mono, icon, accent }) {
+  return (
+    <div style={{ flex: '1 1 160px', minWidth: 160, padding: '16px 20px', background: accent || '#fff', border: `1.5px solid ${color ? color + '33' : 'var(--border-light)'}`, borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: color || 'var(--muted)', display: 'flex', alignItems: 'center', gap: 5 }}>
+        {icon && <span style={{ fontSize: 14 }}>{icon}</span>}{label}
+      </div>
+      <div style={{ fontSize: 24, fontWeight: 900, fontFamily: mono ? 'monospace' : undefined, color: color || '#111', lineHeight: 1.1 }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{sub}</div>}
+    </div>
+  )
+}
+
+function AbaGraficos() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [tab, setTab] = useState('filiais')
+  const [rankTab, setRankTab] = useState('h100')
 
   useEffect(() => { api.rtmMetricas().then(setData).catch(() => {}).finally(() => setLoading(false)) }, [])
 
-  const totHorasExtra = data?.evolucao_mensal?.reduce((s, m) => s + (m.horas_extra_100 || 0), 0) || 0
-  const totGeral = data?.evolucao_mensal?.reduce((s, m) => s + (m.total || 0), 0) || 0
-  const mesesN = data?.evolucao_mensal?.length || 0
+  if (loading) return <div className="surface-card" style={{ textAlign: 'center', color: 'var(--muted)', padding: 48 }}>Carregando gráficos…</div>
 
-  if (loading) return <div className="surface-card" style={{ textAlign: 'center', color: 'var(--muted)', padding: 40 }}>Carregando métricas…</div>
+  const evolucao = data?.evolucao_mensal || []
+  const mesesN = evolucao.length
   if (!data || mesesN === 0) return (
     <div className="surface-card empty-state">
       <strong>Nenhum dado</strong>
-      <p>Salve ao menos um fechamento na aba Calculadora para ver as métricas.</p>
+      <p>Salve ao menos um fechamento na aba Calculadora para ver os gráficos.</p>
     </div>
   )
 
-  const tabsRanking = [
-    { key: 'filiais', label: 'Filiais — H. Extra 100%' },
-    { key: 'filiais_custo', label: 'Filiais — Custo' },
-    { key: 'func', label: 'Funcionários — H. Extra 100%' },
-    { key: 'func_custo', label: 'Funcionários — Custo' },
+  const totGeral = evolucao.reduce((s, m) => s + (m.total || 0), 0)
+  const totH50 = evolucao.reduce((s, m) => s + (m.horas_normais || 0), 0)
+  const totH100 = evolucao.reduce((s, m) => s + (m.horas_extra_100 || 0), 0)
+  const totT50 = evolucao.reduce((s, m) => s + (m.total_50 || 0), 0)
+  const totT100 = evolucao.reduce((s, m) => s + (m.total_100 || 0), 0)
+  const mediaM = mesesN > 0 ? totGeral / mesesN : 0
+  const pct100 = totGeral > 0 ? (totT100 / totGeral) * 100 : 0
+  const pct50 = totGeral > 0 ? (totT50 / totGeral) * 100 : 0
+  const anoAtual = String(new Date().getFullYear())
+  const resumoAnoAtual = (data.resumo_por_ano || []).find((r) => r.ano === anoAtual)
+  const evoluacaoChartData = evolucao.map((m) => ({ ...m, label: formatMesLabel(m.mes) }))
+
+  const rankTabs = [
+    { key: 'h100', label: 'Top H. Extra 100%' },
+    { key: 'h50', label: 'Top H. Normais 50%' },
+    { key: 'custo', label: 'Top Custo Total' },
   ]
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-      {/* KPIs */}
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-        {[
-          { label: 'Meses fechados', value: mesesN },
-          { label: 'Total H. Extra 100%', value: formatHHMM(totHorasExtra), mono: true },
-          { label: 'Custo acumulado', value: formatBRL(totGeral), color: 'var(--success)' },
-          { label: 'Filiais com horas', value: data.top_filiais?.length || 0 },
-        ].map((k, i) => (
-          <div key={i} style={{ padding: '10px 18px', background: '#fff', border: '1px solid var(--border-light)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', minWidth: 140 }}>
-            <div style={{ fontSize: 10, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{k.label}</div>
-            <div style={{ fontSize: 20, fontWeight: 800, fontFamily: k.mono ? 'monospace' : undefined, color: k.color }}>{k.value}</div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      {/* ── KPIs Linha 1 ── */}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <KpiCard label="Custo Acumulado" value={formatBRL(totGeral)} sub={`${mesesN} mes${mesesN !== 1 ? 'es' : ''} fechados`} color="var(--success)" accent="var(--success-bg)" icon="💰" />
+        <KpiCard label="Média Mensal" value={formatBRL(mediaM)} sub="custo médio por mês" color="var(--primary)" />
+        <KpiCard label="H. Extra 100%" value={formatHHMM(totH100)} sub={`${pct100.toFixed(1)}% do custo total`} color="#d97706" mono />
+        <KpiCard label="H. Normais 50%" value={formatHHMM(totH50)} sub={`${pct50.toFixed(1)}% do custo total`} color="#059669" mono />
+        {resumoAnoAtual && (
+          <KpiCard label={`Total ${anoAtual}`} value={formatBRL(resumoAnoAtual.total)} sub={`${resumoAnoAtual.meses} meses no ano`} color="#7c3aed" accent="#f5f3ff" />
+        )}
+      </div>
+
+      {/* ── Distribuição % 50 x 100 ── */}
+      <div className="surface-card" style={{ padding: '14px 18px' }}>
+        <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--muted)', letterSpacing: '0.06em', marginBottom: 10 }}>Distribuição do custo — 50% vs 100%</div>
+        <div style={{ display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ display: 'flex', height: 22, borderRadius: 6, overflow: 'hidden', background: '#f0f4f8' }}>
+              {totT50 > 0 && <div style={{ width: `${pct50}%`, background: '#059669', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#fff' }}>{pct50.toFixed(0)}%</span>
+              </div>}
+              {totT100 > 0 && <div style={{ width: `${pct100}%`, background: '#d97706', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: '#fff' }}>{pct100.toFixed(0)}%</span>
+              </div>}
+            </div>
           </div>
-        ))}
-      </div>
-
-      {/* Gráficos de linha */}
-      <div className="surface-card">
-        <LineChart title="Evolução mensal — Custo total (R$)" data={(data.evolucao_mensal || []).map((m) => ({ ...m, label: formatMesLabel(m.mes) }))} valueKey="total" labelKey="label" color="var(--primary)" formatValue={(v) => `R$${(v / 1000).toFixed(0)}k`} />
-      </div>
-      <div className="surface-card">
-        <LineChart title="Evolução mensal — Horas extras 100%" data={(data.evolucao_mensal || []).map((m) => ({ ...m, label: formatMesLabel(m.mes) }))} valueKey="horas_extra_100" labelKey="label" color="#f0b429" formatValue={formatHHMM} />
-      </div>
-
-      {/* Rankings */}
-      <div className="surface-card">
-        <div style={{ display: 'flex', gap: 0, marginBottom: 18, borderBottom: '1px solid var(--border-light)', overflowX: 'auto' }}>
-          {tabsRanking.map((t) => (
-            <button key={t.key} onClick={() => setTab(t.key)} type="button"
-              style={{ padding: '7px 13px', fontSize: 11, fontWeight: tab === t.key ? 700 : 400, background: 'none', border: 'none', borderBottom: tab === t.key ? '2px solid var(--primary)' : '2px solid transparent', color: tab === t.key ? 'var(--primary)' : 'var(--muted)', cursor: 'pointer', whiteSpace: 'nowrap', marginBottom: -1 }}>
-              {t.label}
-            </button>
-          ))}
+          <div style={{ display: 'flex', gap: 16, fontSize: 12 }}>
+            <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#059669', borderRadius: 2, marginRight: 5 }} /><strong>{formatBRL(totT50)}</strong> — H. Normais 50%</span>
+            <span><span style={{ display: 'inline-block', width: 10, height: 10, background: '#d97706', borderRadius: 2, marginRight: 5 }} /><strong>{formatBRL(totT100)}</strong> — H. Extra 100%</span>
+          </div>
         </div>
-        {tab === 'filiais' && <BarChart data={data.top_filiais || []} valueKey="horas_extra_100" labelKey="filial" color="#f0b429" formatValue={formatHHMM} title="Filiais com mais horas extras 100%" />}
-        {tab === 'filiais_custo' && <BarChart data={[...(data.top_filiais || [])].sort((a, b) => b.total - a.total)} valueKey="total" labelKey="filial" color="var(--primary)" formatValue={formatBRL} title="Filiais com maior custo" />}
-        {tab === 'func' && <BarChart data={data.top_funcionarios || []} valueKey="horas_extra_100" labelKey="funcionario" color="#f0b429" formatValue={formatHHMM} title="Funcionários com mais horas extras 100%" />}
-        {tab === 'func_custo' && <BarChart data={[...(data.top_funcionarios || [])].sort((a, b) => b.total - a.total)} valueKey="total" labelKey="funcionario" color="var(--primary)" formatValue={formatBRL} title="Funcionários com maior custo" />}
       </div>
+
+      {/* ── Evolução mensal ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+        <div className="surface-card">
+          <LineChart title="Evolução mensal — Custo total (R$)" data={evoluacaoChartData} valueKey="total" labelKey="label" color="var(--primary)" formatValue={(v) => `R$${(v / 1000).toFixed(1)}k`} />
+        </div>
+        <div className="surface-card">
+          <LineChart title="Evolução mensal — Horas extras 100%" data={evoluacaoChartData} valueKey="horas_extra_100" labelKey="label" color="#d97706" formatValue={formatHHMM} />
+        </div>
+      </div>
+
+      {/* ── Rankings colaboradores ── */}
+      <div className="surface-card">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14, flexWrap: 'wrap', gap: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>Top 10 Colaboradores</div>
+          <div style={{ display: 'flex', gap: 0, borderBottom: '2px solid var(--border-light)' }}>
+            {rankTabs.map((t) => (
+              <button key={t.key} onClick={() => setRankTab(t.key)} type="button"
+                style={{ padding: '5px 12px', fontSize: 11, fontWeight: rankTab === t.key ? 700 : 400, background: 'none', border: 'none', borderBottom: rankTab === t.key ? '2px solid var(--primary)' : '2px solid transparent', color: rankTab === t.key ? 'var(--primary)' : 'var(--muted)', cursor: 'pointer', whiteSpace: 'nowrap', marginBottom: -2 }}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </div>
+        {rankTab === 'h100' && <RankingBar items={data.top_funcionarios_100 || []} valueKey="horas_extra_100" labelKey="funcionario" colorBar="#d97706" formatValue={formatHHMM} />}
+        {rankTab === 'h50' && <RankingBar items={data.top_funcionarios_50 || []} valueKey="horas_normais" labelKey="funcionario" colorBar="#059669" formatValue={formatHHMM} />}
+        {rankTab === 'custo' && <RankingBar items={[...(data.top_funcionarios_100 || [])].sort((a, b) => b.total - a.total)} valueKey="total" labelKey="funcionario" colorBar="var(--primary)" formatValue={formatBRL} />}
+      </div>
+
+      {/* ── Top Filiais ── */}
+      <div className="surface-card">
+        <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 14 }}>Top Filiais — Custo total acumulado</div>
+        <RankingBar items={data.top_filiais || []} valueKey="total" labelKey="filial" colorBar="var(--primary)" formatValue={formatBRL} limit={12} />
+      </div>
+
+      {/* ── Resumo por ano ── */}
+      {(data.resumo_por_ano || []).length > 0 && (
+        <div className="surface-card" style={{ padding: 0 }}>
+          <div style={{ padding: '14px 18px', borderBottom: '1px solid var(--border-light)', fontSize: 13, fontWeight: 700 }}>Resumo por Ano</div>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="data-table" style={{ minWidth: 600 }}>
+              <thead>
+                <tr>
+                  <th>Ano</th>
+                  <th style={{ textAlign: 'center' }}>Meses</th>
+                  <th style={{ textAlign: 'right' }}>H. Normais 50%</th>
+                  <th style={{ textAlign: 'right' }}>H. Extra 100%</th>
+                  <th style={{ textAlign: 'right' }}>Total 50%</th>
+                  <th style={{ textAlign: 'right' }}>Total 100%</th>
+                  <th style={{ textAlign: 'right' }}>Total Geral</th>
+                  <th style={{ textAlign: 'right' }}>% 100%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(data.resumo_por_ano || []).map((r) => {
+                  const pct = r.total > 0 ? (r.total_100 / r.total) * 100 : 0
+                  return (
+                    <tr key={r.ano}>
+                      <td><strong style={{ fontSize: 14 }}>{r.ano}</strong></td>
+                      <td style={{ textAlign: 'center' }}>{r.meses}</td>
+                      <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 12 }}>{formatHHMM(r.horas_normais)}</td>
+                      <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 12, color: r.horas_extra_100 > 0 ? '#d97706' : '#ccc', fontWeight: r.horas_extra_100 > 0 ? 700 : undefined }}>{formatHHMM(r.horas_extra_100)}</td>
+                      <td style={{ textAlign: 'right', fontSize: 12 }}>{formatBRL(r.total_50)}</td>
+                      <td style={{ textAlign: 'right', fontSize: 12 }}>{formatBRL(r.total_100)}</td>
+                      <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--success)', fontSize: 14 }}>{formatBRL(r.total)}</td>
+                      <td style={{ textAlign: 'right' }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, padding: '2px 8px', borderRadius: 99, background: pct > 20 ? '#fef3c7' : '#f0fdf4', color: pct > 20 ? '#92400e' : '#059669' }}>{pct.toFixed(1)}%</span>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -460,7 +576,7 @@ export default function HorasExtrasRTMPage() {
   const abas = [
     { key: 'calc', label: 'Calculadora' },
     { key: 'historico', label: 'Histórico' },
-    { key: 'metricas', label: 'Métricas' },
+    { key: 'graficos', label: 'Gráficos' },
   ]
 
   return (
@@ -469,7 +585,7 @@ export default function HorasExtrasRTMPage() {
         <div>
           <span className="eyebrow">Operação RTM</span>
           <h1>Horas Extras</h1>
-          <p>Calculadora, fechamentos mensais e análise de métricas</p>
+          <p>Calculadora, fechamentos mensais e análise gráfica</p>
         </div>
       </div>
 
@@ -485,7 +601,7 @@ export default function HorasExtrasRTMPage() {
 
       {abaAtiva === 'calc' && <AbaCalculadora />}
       {abaAtiva === 'historico' && <AbaHistorico />}
-      {abaAtiva === 'metricas' && <AbaMetricas />}
+      {abaAtiva === 'graficos' && <AbaGraficos />}
     </section>
   )
 }
