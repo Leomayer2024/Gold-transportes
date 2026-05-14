@@ -15,6 +15,12 @@ services:
       - key: VITE_API_URL
         scope: all
         value: "/api"
+      - key: VITE_SUPABASE_URL
+        scope: build
+        value: "https://vwqldtjjtkdzvkdirmam.supabase.co"
+      - key: VITE_SUPABASE_ANON_KEY
+        scope: build
+        value: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3cWxkdGpqdGtkenZrZGlybWFtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4Nzc4MjQsImV4cCI6MjA5MDQ1MzgyNH0.bAJZYfU9oVnt4ibgHRYBGgpb4NwPL9nl0vXYR9rtlY8"
       - key: PORT
         scope: all
         value: "10000"
