@@ -36,6 +36,8 @@ import VeiculosDocumentosPage from './components/VeiculosDocumentosPage'
 import HorasExtrasPage from './components/HorasExtrasPage'
 import AcompanhamentoPage from './components/AcompanhamentoPage'
 import HorasExtrasRTMPage from './components/HorasExtrasRTMPage'
+import HorasExtrasHistoricoPage from './components/HorasExtrasHistoricoPage'
+import HorasExtrasMetricasPage from './components/HorasExtrasMetricasPage'
 
 function PlaceholderPage({ title, text }) {
   return (
@@ -158,6 +160,12 @@ export default function App() {
           </Route>
           <Route element={<AccessRoute requiredScope="menu.horas_extras_rtm" />}>
             <Route path="/horas-extras-rtm" element={<HorasExtrasRTMPage />} />
+          </Route>
+          <Route element={<AccessRoute requiredScope="menu.horas_extras_rtm" />}>
+            <Route path="/horas-extras-historico" element={<HorasExtrasHistoricoPage />} />
+          </Route>
+          <Route element={<AccessRoute requiredScope="menu.horas_extras_rtm" />}>
+            <Route path="/horas-extras-metricas" element={<HorasExtrasMetricasPage />} />
           </Route>
         </Route>
       </Route>

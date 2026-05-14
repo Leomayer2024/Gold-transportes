@@ -9299,6 +9299,133 @@ def create_app():
             app.logger.error('update_approval_config_api: %s', exc)
             return jsonify({'error': translate_database_error(exc)}), 500
 
+    # ============ HORAS EXTRAS RTM — FECHAMENTOS ============
+
+    @app.route('/api/horas-extras-rtm/salvar', methods=['POST'])
+    def salvar_horas_extras_rtm():
+        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        if not token:
+            return jsonify({'error': 'Não autenticado.'}), 401
+        data = request.get_json() or {}
+        mes_referencia = data.get('mes_referencia')
+        registros = data.get('registros', [])
+        if not mes_referencia:
+            return jsonify({'error': 'mes_referencia obrigatório.'}), 400
+        if not registros:
+            return jsonify({'error': 'Nenhum registro para salvar.'}), 400
+        try:
+            supabase.table('horas_extras_rtm_registros').delete().eq('mes_referencia', mes_referencia).execute()
+            rows = []
+            for r in registros:
+                rows.append({
+                    'mes_referencia': mes_referencia,
+                    'funcionario_nome': r.get('funcionario_nome', ''),
+                    'colaborador_id': r.get('colaborador_id'),
+                    'filial_nome': r.get('filial_nome', ''),
+                    'estado': r.get('estado', ''),
+                    'horas_normais': float(r.get('horas_normais') or 0),
+                    'horas_extra_100': float(r.get('horas_extra_100') or 0),
+                    'valor_hora_50': float(r.get('valor_hora_50') or 0),
+                    'valor_hora_100': float(r.get('valor_hora_100') or 0),
+                    'total_50': float(r.get('total_50') or 0),
+                    'total_100': float(r.get('total_100') or 0),
+                    'total_geral': float(r.get('total_geral') or 0),
+                })
+            if rows:
+                supabase.table('horas_extras_rtm_registros').insert(rows).execute()
+            return jsonify({'ok': True, 'count': len(rows)})
+        except Exception as exc:
+            app.logger.error('salvar_horas_extras_rtm: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.route('/api/horas-extras-rtm/meses', methods=['GET'])
+    def listar_meses_horas_extras_rtm():
+        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        if not token:
+            return jsonify({'error': 'Não autenticado.'}), 401
+        try:
+            result = supabase.table('horas_extras_rtm_registros').select(
+                'mes_referencia, horas_normais, horas_extra_100, total_geral'
+            ).order('mes_referencia', desc=True).execute()
+            from collections import defaultdict
+            meses = defaultdict(lambda: {'funcionarios': 0, 'total_horas_normais': 0.0, 'total_horas_100': 0.0, 'total_geral': 0.0})
+            for row in (result.data or []):
+                m = row['mes_referencia']
+                meses[m]['funcionarios'] += 1
+                meses[m]['total_horas_normais'] += float(row.get('horas_normais') or 0)
+                meses[m]['total_horas_100'] += float(row.get('horas_extra_100') or 0)
+                meses[m]['total_geral'] += float(row.get('total_geral') or 0)
+            lista = [{'mes_referencia': k, **v} for k, v in sorted(meses.items(), reverse=True)]
+            return jsonify({'data': lista})
+        except Exception as exc:
+            app.logger.error('listar_meses_horas_extras_rtm: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.route('/api/horas-extras-rtm/detalhe', methods=['GET'])
+    def detalhe_horas_extras_rtm():
+        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        if not token:
+            return jsonify({'error': 'Não autenticado.'}), 401
+        mes = request.args.get('mes')
+        if not mes:
+            return jsonify({'error': 'Parâmetro mes obrigatório.'}), 400
+        try:
+            result = supabase.table('horas_extras_rtm_registros').select('*').eq('mes_referencia', mes).order('funcionario_nome').execute()
+            return jsonify({'data': result.data or []})
+        except Exception as exc:
+            app.logger.error('detalhe_horas_extras_rtm: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.route('/api/horas-extras-rtm/mes/<mes>', methods=['DELETE'])
+    def deletar_mes_horas_extras_rtm(mes):
+        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        if not token:
+            return jsonify({'error': 'Não autenticado.'}), 401
+        try:
+            supabase.table('horas_extras_rtm_registros').delete().eq('mes_referencia', mes).execute()
+            return jsonify({'ok': True})
+        except Exception as exc:
+            app.logger.error('deletar_mes_horas_extras_rtm: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.route('/api/horas-extras-rtm/metricas', methods=['GET'])
+    def metricas_horas_extras_rtm():
+        token = request.headers.get('Authorization', '').replace('Bearer ', '')
+        if not token:
+            return jsonify({'error': 'Não autenticado.'}), 401
+        try:
+            result = supabase.table('horas_extras_rtm_registros').select(
+                'mes_referencia, funcionario_nome, filial_nome, estado, horas_normais, horas_extra_100, total_geral'
+            ).execute()
+            rows = result.data or []
+            from collections import defaultdict
+            filiais = defaultdict(lambda: {'horas_normais': 0.0, 'horas_extra_100': 0.0, 'total': 0.0, 'funcionarios': 0})
+            funcionarios = defaultdict(lambda: {'horas_normais': 0.0, 'horas_extra_100': 0.0, 'total': 0.0, 'meses': 0})
+            meses_map = defaultdict(lambda: {'horas_normais': 0.0, 'horas_extra_100': 0.0, 'total': 0.0, 'funcionarios': 0})
+            for r in rows:
+                f = r.get('filial_nome') or 'Sem filial'
+                filiais[f]['horas_normais'] += float(r.get('horas_normais') or 0)
+                filiais[f]['horas_extra_100'] += float(r.get('horas_extra_100') or 0)
+                filiais[f]['total'] += float(r.get('total_geral') or 0)
+                filiais[f]['funcionarios'] += 1
+                fn = r.get('funcionario_nome') or 'Desconhecido'
+                funcionarios[fn]['horas_normais'] += float(r.get('horas_normais') or 0)
+                funcionarios[fn]['horas_extra_100'] += float(r.get('horas_extra_100') or 0)
+                funcionarios[fn]['total'] += float(r.get('total_geral') or 0)
+                funcionarios[fn]['meses'] += 1
+                m = r.get('mes_referencia') or ''
+                meses_map[m]['horas_normais'] += float(r.get('horas_normais') or 0)
+                meses_map[m]['horas_extra_100'] += float(r.get('horas_extra_100') or 0)
+                meses_map[m]['total'] += float(r.get('total_geral') or 0)
+                meses_map[m]['funcionarios'] += 1
+            top_filiais = sorted([{'filial': k, **v} for k, v in filiais.items()], key=lambda x: x['horas_extra_100'], reverse=True)[:12]
+            top_funcionarios = sorted([{'funcionario': k, **v} for k, v in funcionarios.items()], key=lambda x: x['horas_extra_100'], reverse=True)[:15]
+            evolucao = sorted([{'mes': k, **v} for k, v in meses_map.items()], key=lambda x: x['mes'])
+            return jsonify({'top_filiais': top_filiais, 'top_funcionarios': top_funcionarios, 'evolucao_mensal': evolucao})
+        except Exception as exc:
+            app.logger.error('metricas_horas_extras_rtm: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
     # ============ SERVIR FRONTEND REACT ============
     @app.route('/', defaults={'path': ''})
     @app.route('/<path:path>')

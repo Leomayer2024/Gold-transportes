@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../services/api'
 
 function parseHoras(str) {
@@ -111,6 +112,7 @@ function downloadTemplate(filialLabel) {
 }
 
 export default function HorasExtrasRTMPage() {
+  const navigate = useNavigate()
   const [todosColaboradores, setTodosColaboradores] = useState([])
   const [loadingColab, setLoadingColab] = useState(false)
 
@@ -119,6 +121,12 @@ export default function HorasExtrasRTMPage() {
   const [pasteText, setPasteText] = useState('')
   const [rows, setRows] = useState([])
   const [parsed, setParsed] = useState(false)
+
+  const hoje = new Date()
+  const mesAtual = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}`
+  const [mesReferencia, setMesReferencia] = useState(mesAtual)
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState(null)
 
   const [filterNome, setFilterNome] = useState('')
   const [filterFilial, setFilterFilial] = useState('')
@@ -225,6 +233,36 @@ export default function HorasExtrasRTMPage() {
   const totalMon100 = filteredSelectedRows.reduce((s, r) => s + r.total100, 0)
   const grandTotal = totalMon50 + totalMon100
   const temValores = filteredSelectedRows.some((r) => r.vh50_num > 0 || r.vh100_num > 0)
+
+  async function salvarFechamento() {
+    const selecionados = enrichedRows.filter((r) => r.selected)
+    if (!selecionados.length) { setSaveMsg({ type: 'error', text: 'Selecione ao menos um funcionário.' }); return }
+    if (!mesReferencia) { setSaveMsg({ type: 'error', text: 'Informe o mês de referência.' }); return }
+    setSaving(true)
+    setSaveMsg(null)
+    try {
+      const registros = selecionados.map((r) => ({
+        funcionario_nome: r.funcionario,
+        colaborador_id: r.col?.id || null,
+        filial_nome: r.filial_pasta || '',
+        estado: r.estado || '',
+        horas_normais: r.horas_normais,
+        horas_extra_100: r.horas_extra_100,
+        valor_hora_50: r.vh50_num,
+        valor_hora_100: r.vh100_num,
+        total_50: r.total50,
+        total_100: r.total100,
+        total_geral: r.total50 + r.total100,
+      }))
+      const mes = mesReferencia + '-01'
+      await api.rtmSalvar(mes, registros)
+      setSaveMsg({ type: 'success', text: `Fechamento de ${mesReferencia} salvo com ${registros.length} funcionários.` })
+    } catch (e) {
+      setSaveMsg({ type: 'error', text: e.message || 'Erro ao salvar.' })
+    } finally {
+      setSaving(false)
+    }
+  }
 
   const matchedCount = enrichedRows.filter((r) => r.matched).length
   const inativoCount = enrichedRows.filter((r) => r.inativo).length
@@ -525,6 +563,41 @@ export default function HorasExtrasRTMPage() {
                 </tfoot>
               </table>
             </div>
+          </div>
+
+          {/* Salvar fechamento */}
+          <div className="surface-card" style={{ marginBottom: 12, display: 'flex', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+            <div>
+              <label className="field-label">Mês de referência</label>
+              <input
+                type="month"
+                className="input"
+                value={mesReferencia}
+                onChange={(e) => setMesReferencia(e.target.value)}
+                style={{ width: 160 }}
+              />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
+              <button className="button-primary" onClick={salvarFechamento} disabled={saving} type="button">
+                {saving ? 'Salvando…' : 'Salvar fechamento'}
+              </button>
+              <button className="button-secondary" onClick={() => navigate('/horas-extras-historico')} type="button">
+                Ver histórico
+              </button>
+              <button className="button-secondary" onClick={() => navigate('/horas-extras-metricas')} type="button">
+                Métricas
+              </button>
+            </div>
+            {saveMsg && (
+              <span style={{
+                fontSize: 12, fontWeight: 600,
+                color: saveMsg.type === 'success' ? 'var(--success)' : 'var(--danger)',
+                padding: '4px 10px', borderRadius: 'var(--radius)',
+                background: saveMsg.type === 'success' ? 'var(--success-bg)' : '#fff0f0',
+              }}>
+                {saveMsg.text}
+              </span>
+            )}
           </div>
 
           {temValores && (

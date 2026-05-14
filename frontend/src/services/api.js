@@ -234,4 +234,12 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ resource_type: resourceType, motivo }),
     }),
+  // RTM — Horas Extras fechamentos
+  post: (path, payload) => request(path, { method: 'POST', body: JSON.stringify(payload) }),
+  rtmSalvar: (mes_referencia, registros) =>
+    request('/horas-extras-rtm/salvar', { method: 'POST', body: JSON.stringify({ mes_referencia, registros }) }),
+  rtmMeses: () => request('/horas-extras-rtm/meses'),
+  rtmDetalhe: (mes) => request(`/horas-extras-rtm/detalhe?mes=${mes}`),
+  rtmDeletar: (mes) => request(`/horas-extras-rtm/mes/${mes}`, { method: 'DELETE' }),
+  rtmMetricas: () => request('/horas-extras-rtm/metricas'),
 }
