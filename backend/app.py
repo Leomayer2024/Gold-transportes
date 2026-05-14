@@ -9299,18 +9299,19 @@ def create_app():
             app.logger.error('update_approval_config_api: %s', exc)
             return jsonify({'error': translate_database_error(exc)}), 500
 
-# ============ SERVIR FRONTEND REACT ============
-@app.route('/', defaults={'path': ''})
-@app.route('/<path:path>')
-def serve_frontend(path):
-    """Serve arquivos estáticos do frontend React compilado"""
-    if path != '' and os.path.exists(os.path.join(FRONTEND_DIST_DIR, path)):
-        return send_from_directory(FRONTEND_DIST_DIR, path)
-    elif path.startswith('api/'):
-        return jsonify({'error': 'API endpoint not found'}), 404
-    else:
-        return send_from_directory(FRONTEND_DIST_DIR, 'index.html')
+    # ============ SERVIR FRONTEND REACT ============
+    @app.route('/', defaults={'path': ''})
+    @app.route('/<path:path>')
+    def serve_frontend(path):
+        """Serve arquivos estáticos do frontend React compilado"""
+        if path != '' and os.path.exists(os.path.join(FRONTEND_DIST_DIR, path)):
+            return send_from_directory(FRONTEND_DIST_DIR, path)
+        elif path.startswith('api/'):
+            return jsonify({'error': 'API endpoint not found'}), 404
+        else:
+            return send_from_directory(FRONTEND_DIST_DIR, 'index.html')
 
+    # ─── Inicializar motor de alertas ─────────────────────────────────────────
     if alerts_enabled:
         try:
             refresh_alert_engine_snapshot()
