@@ -1,0 +1,11 @@
+POST https://api.anthropic.com/v1/messages
+Content-Type: application/json
+x-api-key: {{ANTHROPIC_API_KEY}}
+
+{
+  "model": "claude-3-opus-20240229",
+  "max_tokens": 200,
+  "messages": [
+    {"role": "user", "content": "Olá Claude, tudo bem?"}
+  ]
+}

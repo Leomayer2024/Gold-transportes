@@ -1,0 +1,4 @@
+filial;nome_completo;email;cpf;telefone;cargo;turno;escala_servico;horario_padrao_inicio;horario_padrao_fim;tipo_acesso;data_admissao;ativo
+Uberlandia/MG;Maicon Machado;maicon.machado@empresa.com;123.456.789.10;34999990001;Operador de carregamento;manha;6x1;07:00;15:20;app;2026-03-01;true
+Uberlandia/MG;Pablo Leal da Silva dos Santos;pablo.leal@empresa.com;234.567.890.11;34999990002;Conferente;tarde;6x1;13:40;22:00;app;2026-03-01;true
+Catalao/GO;Nicolas de Oliveira Steffen;nicolas.steffen@empresa.com;345.678.901.22;34999990003;Líder de base;administrativo;seg-sex;08:00;17:48;ambos;2026-03-01;true

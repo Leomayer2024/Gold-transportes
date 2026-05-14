@@ -1,0 +1,402 @@
+import { useEffect, useMemo, useState } from 'react'
+import ResourcePage from './ResourcePage'
+import { resourceConfigs } from './resourceConfigs'
+import { api } from '../services/api'
+
+function monthInputValue(date = new Date()) {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  return `${year}-${month}`
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(Number(value || 0))
+}
+
+function formatPercent(value) {
+  if (value === null || value === undefined) return '-'
+  return `${Number(value).toFixed(1)}%`
+}
+
+function marginTone(value) {
+  return Number(value || 0) < 0 ? 'danger' : 'success'
+}
+
+function accuracyTone(value) {
+  if (value === null || value === undefined) return 'neutral'
+  const v = Number(value)
+  if (v >= 95) return 'success'
+  if (v >= 85) return 'warning'
+  return 'danger'
+}
+
+function headcountTone(real, contratado) {
+  if (!contratado) return 'neutral'
+  const ratio = real / contratado
+  if (ratio >= 0.95 && ratio <= 1.05) return 'success'
+  if (ratio >= 0.85) return 'warning'
+  return 'danger'
+}
+
+export default function ContratosOperacionaisPage() {
+  const [activeTab, setActiveTab] = useState('contratos')
+  const [selectedContract, setSelectedContract] = useState(null)
+  const [selectedMonth, setSelectedMonth] = useState(() => monthInputValue())
+  const [contractMetrics, setContractMetrics] = useState(null)
+  const [metricsLoading, setMetricsLoading] = useState(false)
+  const [metricsError, setMetricsError] = useState('')
+  const [showGastosDetail, setShowGastosDetail] = useState(true)
+
+  const contractForcedValues = useMemo(() => {
+    if (!selectedContract) return null
+    return {
+      filial_id: selectedContract.filial_id,
+      contrato_operacional_id: selectedContract.id,
+    }
+  }, [selectedContract])
+
+  async function handleContractItemsChanged() {
+    if (!selectedContract?.id) return
+    try {
+      const dashboard = await api.getCostsRhDashboard({
+        mes: selectedMonth,
+        ...(selectedContract?.filial_id ? { filial_id: selectedContract.filial_id } : {}),
+      })
+      const found = (dashboard.contracts || []).find((c) => Number(c.id) === Number(selectedContract.id))
+      const newValor = found?.valor_mensal_contrato_itens ?? 0
+      const currentValor = parseFloat(selectedContract.valor_mensal_contrato || 0)
+      if (Number(newValor) !== Number(currentValor)) {
+        try {
+          await api.update('contratos_operacionais', selectedContract.id, { valor_mensal_contrato: newValor })
+          setSelectedContract((s) => ({ ...(s || {}), valor_mensal_contrato: newValor }))
+        } catch (err) {
+          // não bloquear a UI se atualização falhar
+          console.error('Falha ao atualizar valor do contrato automaticamente', err)
+        }
+      }
+    } catch (err) {
+      console.error('Falha ao recarregar métricas para atualizar valor do contrato', err)
+    }
+  }
+
+  useEffect(() => {
+    let active = true
+
+    async function loadMetrics() {
+      if (!selectedContract?.id) {
+        setContractMetrics(null)
+        setMetricsError('')
+        return
+      }
+
+      setMetricsLoading(true)
+      setMetricsError('')
+
+      try {
+        const dashboard = await api.getCostsRhDashboard({
+          mes: selectedMonth,
+          ...(selectedContract?.filial_id ? { filial_id: selectedContract.filial_id } : {}),
+        })
+
+        if (!active) return
+
+        const found = (dashboard.contracts || []).find(
+          (c) => Number(c.id) === Number(selectedContract.id),
+        )
+        setContractMetrics(found || null)
+      } catch (error) {
+        if (active) {
+          setMetricsError(error.message || 'Falha ao carregar métricas.')
+          setContractMetrics(null)
+        }
+      } finally {
+        if (active) setMetricsLoading(false)
+      }
+    }
+
+    void loadMetrics()
+    return () => { active = false }
+  }, [selectedContract, selectedMonth])
+
+  const metricsPanel = selectedContract ? (
+    <div className="surface-card contract-metrics-panel">
+      {/* Cabeçalho com seletor de mês */}
+      <div className="contract-metrics-head">
+        <div>
+          <span className="eyebrow">Resultado do mês</span>
+          <p className="contract-metrics-subtitle">
+            {selectedContract.cliente_nome
+              ? `Cliente: ${selectedContract.cliente_nome} · `
+              : ''}
+            {selectedContract.cargos_contrato
+              ? `Cargos: ${selectedContract.cargos_contrato}`
+              : ''}
+          </p>
+        </div>
+        <label className="field">
+          <span>Mês de referência</span>
+          <input
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            type="month"
+            value={selectedMonth}
+          />
+        </label>
+      </div>
+
+      {metricsError && <div className="alert-error">{metricsError}</div>}
+
+      {metricsLoading ? (
+        <div className="empty-state">Carregando métricas...</div>
+      ) : !contractMetrics ? (
+        <div className="empty-state">
+          Sem dados consolidados para este contrato no mês selecionado.<br />
+          <small>Vincule colaboradores na aba "Equipe e valores" e registre gastos na aba "Gastos extras".</small>
+        </div>
+      ) : (
+        <>
+          {/* Linha 1: Headcount + Valor do contrato + Horas extras */}
+          <div className="contract-metrics-grid">
+            <article className={`tone-${headcountTone(contractMetrics.headcount_real, contractMetrics.qtd_colaboradores_contratados)}`}>
+              <span>Efetivo real</span>
+              <strong>{contractMetrics.headcount_real || 0}</strong>
+              <small>Contratado: {contractMetrics.qtd_colaboradores_contratados || 0}</small>
+            </article>
+
+            <article>
+              <span>Valor cobrado</span>
+              <strong>{formatCurrency(contractMetrics.valor_mensal_contrato_itens)}</strong>
+              <small>Ref. cadastro: {formatCurrency(contractMetrics.valor_mensal_contrato_cadastro)}</small>
+            </article>
+
+            {(contractMetrics.horas_50_cobradas_total > 0 || contractMetrics.horas_100_cobradas_total > 0) && (
+              <article>
+                <span>Horas extras cobradas</span>
+                <strong>50%: {contractMetrics.horas_50_cobradas_total || 0}h</strong>
+                <small>100%: {contractMetrics.horas_100_cobradas_total || 0}h</small>
+              </article>
+            )}
+
+            <article className={`tone-${accuracyTone(contractMetrics.acuracidade_headcount)}`}>
+              <span>Acurácia efetivo</span>
+              <strong>{formatPercent(contractMetrics.acuracidade_headcount)}</strong>
+              <small>{contractMetrics.itens_vinculados_total || 0} item(s) vinculado(s)</small>
+            </article>
+          </div>
+
+          {/* Linha 2: Cálculo de custo detalhado */}
+          <div className="contract-metrics-section-title">Composição do custo</div>
+          <div className="contract-metrics-grid">
+            <article>
+              <span>Salários (CLT + adicionais)</span>
+              <strong>{formatCurrency(contractMetrics.gasto_salario_mensal)}</strong>
+            </article>
+
+            <article>
+              <span>Benefícios</span>
+              <strong>{formatCurrency(contractMetrics.gasto_beneficios_sem_bonificacao_mensal)}</strong>
+              {contractMetrics.gasto_bonificacao_mensal > 0 && (
+                <small>+ Bônus: {formatCurrency(contractMetrics.gasto_bonificacao_mensal)}</small>
+              )}
+            </article>
+
+            <article>
+              <span>Custo equipe (contrato)</span>
+              <strong>{formatCurrency(contractMetrics.custo_mensal_vinculos_contrato)}</strong>
+              <small>Colaboradores alocados no contrato</small>
+            </article>
+
+            {contractMetrics.custos_extras_gold_fixo_mensais > 0 && (
+              <article>
+                <span>Custos fixos Gold</span>
+                <strong>{formatCurrency(contractMetrics.custos_extras_gold_fixo_mensais)}</strong>
+                <small>Campo "Custos extras Gold" do contrato</small>
+              </article>
+            )}
+          </div>
+
+          {/* Card separado: Gastos extras */}
+          <div className="contract-metrics-section-title">
+            Gastos extras operacionais
+            <button
+              className="button-ghost button-sm"
+              onClick={() => setShowGastosDetail((v) => !v)}
+              type="button"
+            >
+              {showGastosDetail ? 'Ocultar detalhes' : 'Ver detalhes'}
+            </button>
+          </div>
+          <div className="contract-gastos-extras-card">
+            <div className="contract-gastos-extras-total">
+              <span>Total gastos extras</span>
+              <strong>{formatCurrency(contractMetrics.custos_extras_gold_linhas_mensais)}</strong>
+              <small>Descontado do resultado do contrato</small>
+            </div>
+
+            {showGastosDetail && contractMetrics.gastos_extras_linhas?.length > 0 && (
+              <table className="contract-gastos-table">
+                <thead>
+                  <tr>
+                    <th>Descrição</th>
+                    <th style={{ textAlign: 'right' }}>Valor</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {contractMetrics.gastos_extras_linhas.map((g) => (
+                    <tr key={g.id}>
+                      <td>{g.nome_gasto}</td>
+                      <td style={{ textAlign: 'right' }}>{formatCurrency(g.valor_mensal)}</td>
+                    </tr>
+                  ))}
+                  <tr className="contract-gastos-table-footer">
+                    <td><strong>Total</strong></td>
+                    <td style={{ textAlign: 'right' }}>
+                      <strong>{formatCurrency(contractMetrics.custos_extras_gold_linhas_mensais)}</strong>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            )}
+
+            {showGastosDetail && (!contractMetrics.gastos_extras_linhas || contractMetrics.gastos_extras_linhas.length === 0) && (
+              <p className="contract-gastos-empty">Nenhum gasto extra registrado para este mês.</p>
+            )}
+          </div>
+
+          {/* Linha 3: Resultado final */}
+          <div className="contract-metrics-section-title">Resultado</div>
+          <div className="contract-metrics-grid contract-metrics-result">
+            <article>
+              <span>Custo total Gold</span>
+              <strong>{formatCurrency(contractMetrics.custo_total_gold_real)}</strong>
+              <small>Equipe + gastos extras</small>
+            </article>
+
+            <article className={`tone-${marginTone(contractMetrics.margem_contrato)}`}>
+              <span>Margem do contrato</span>
+              <strong>{formatCurrency(contractMetrics.margem_contrato)}</strong>
+              <small>{formatPercent(contractMetrics.margem_percentual)} sobre o valor cobrado</small>
+            </article>
+
+            <article className={`tone-${accuracyTone(contractMetrics.acuracidade_valor)}`}>
+              <span>Acurácia valor</span>
+              <strong>{formatPercent(contractMetrics.acuracidade_valor)}</strong>
+              <small>Custo real vs valor cobrado</small>
+            </article>
+
+            <article>
+              <span>Valor por colaborador</span>
+              <strong>{formatCurrency(contractMetrics.valor_por_colaborador_real)}</strong>
+              <small>Ref. cadastro: {formatCurrency(contractMetrics.valor_por_colaborador)}</small>
+            </article>
+          </div>
+
+          {/* Equação resumida */}
+          <div className="contract-metrics-equation">
+            <span className="eq-item">
+              <small>Valor cobrado</small>
+              <strong>{formatCurrency(contractMetrics.valor_mensal_contrato_itens)}</strong>
+            </span>
+            <span className="eq-op">−</span>
+            <span className="eq-item">
+              <small>Custo equipe</small>
+              <strong>{formatCurrency(contractMetrics.custo_mensal_vinculos_contrato)}</strong>
+            </span>
+            <span className="eq-op">−</span>
+            <span className="eq-item">
+              <small>Gastos extras</small>
+              <strong>{formatCurrency(contractMetrics.custos_extras_gold_mensais)}</strong>
+            </span>
+            <span className="eq-op">=</span>
+            <span className={`eq-item eq-result tone-${marginTone(contractMetrics.margem_contrato)}`}>
+              <small>Margem</small>
+              <strong>{formatCurrency(contractMetrics.margem_contrato)}</strong>
+            </span>
+          </div>
+        </>
+      )}
+    </div>
+  ) : null
+
+  return (
+    <section className="page-shell">
+      <div className="surface-card contratos-shell-tabbar">
+        <div className="contratos-tab-group">
+          <button
+            className={`button-secondary${activeTab === 'contratos' ? ' active' : ''}`}
+            onClick={() => setActiveTab('contratos')}
+            type="button"
+          >
+            Contratos
+          </button>
+          <button
+            className={`button-secondary${activeTab === 'equipe' ? ' active' : ''}`}
+            disabled={!selectedContract}
+            onClick={() => setActiveTab('equipe')}
+            title={!selectedContract ? 'Selecione um contrato primeiro' : undefined}
+            type="button"
+          >
+            Equipe e valores
+          </button>
+          <button
+            className={`button-secondary${activeTab === 'gastos' ? ' active' : ''}`}
+            disabled={!selectedContract}
+            onClick={() => setActiveTab('gastos')}
+            title={!selectedContract ? 'Selecione um contrato primeiro' : undefined}
+            type="button"
+          >
+            Gastos extras
+          </button>
+        </div>
+
+        {selectedContract && (
+          <div className="contratos-selected-badge">
+            <span className="eyebrow">Contrato selecionado</span>
+            <strong>
+              {selectedContract.codigo_contrato
+                ? `${selectedContract.codigo_contrato} – `
+                : ''}
+              {selectedContract.nome_contrato}
+            </strong>
+          </div>
+        )}
+      </div>
+
+      {activeTab === 'contratos' && (
+        <>
+          <ResourcePage
+            config={resourceConfigs.contratos_operacionais}
+            onSelectedItemChange={setSelectedContract}
+          />
+          {metricsPanel}
+        </>
+      )}
+
+      {activeTab === 'equipe' && (
+        <>
+          <ResourcePage
+            config={resourceConfigs.contratos_colaboradores}
+            forcedFilters={contractForcedValues}
+            forcedFormValues={contractForcedValues}
+            onSaved={handleContractItemsChanged}
+          />
+          {metricsPanel}
+        </>
+      )}
+
+      {activeTab === 'gastos' && (
+        <>
+          <ResourcePage
+            config={resourceConfigs.contratos_gastos_extras}
+            forcedFilters={contractForcedValues}
+            forcedFormValues={contractForcedValues}
+            onSaved={handleContractItemsChanged}
+          />
+          {metricsPanel}
+        </>
+      )}
+    </section>
+  )
+}

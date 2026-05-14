@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: seg-app
+    env: python
+    plan: free
+    buildCommand: >
+      cd frontend &&
+      npm install &&
+      npm run build &&
+      cd ../backend &&
+      pip install -r requirements.txt
+    startCommand: cd backend && python app.py
+    envVars:
+      - key: SUPABASE_URL
+        scope: all
+        value: ${SUPABASE_URL}
+      - key: SUPABASE_KEY
+        scope: all
+        value: ${SUPABASE_KEY}
+      - key: PORT
+        scope: all
+        value: "10000"

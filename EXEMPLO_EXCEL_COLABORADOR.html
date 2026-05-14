@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Exemplo - Presença Colaborador - Excel</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Calibri', 'Segoe UI', sans-serif;
+            background-color: #f0f0f0;
+            padding: 20px;
+        }
+        
+        .excel-container {
+            background: white;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .excel-header {
+            background: #2c3e50;
+            color: white;
+            padding: 15px;
+            text-align: center;
+            font-size: 14px;
+            font-weight: bold;
+            border-radius: 4px;
+            margin-bottom: 15px;
+        }
+        
+        .info-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 10px;
+            font-size: 12px;
+        }
+        
+        .info-cell {
+            background: #ecf0f1;
+            padding: 8px;
+            border-radius: 3px;
+        }
+        
+        .info-cell strong {
+            color: #2c3e50;
+            margin-right: 5px;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        
+        thead {
+            background: #2c3e50;
+            color: white;
+        }
+        
+        thead th {
+            padding: 12px;
+            text-align: center;
+            font-weight: bold;
+            border: 1px solid #000;
+            font-size: 12px;
+        }
+        
+        tbody td {
+            padding: 10px;
+            border: 1px solid #bdc3c7;
+            font-size: 12px;
+            height: 24px;
+        }
+        
+        tbody tr:nth-child(odd) {
+            background: #f9f9f9;
+        }
+        
+        tbody tr:nth-child(even) {
+            background: #ffffff;
+        }
+        
+        .col-data {
+            text-align: center;
+            width: 12%;
+            font-weight: bold;
+        }
+        
+        .col-dia {
+            text-align: center;
+            width: 12%;
+        }
+        
+        .col-status {
+            text-align: center;
+            width: 15%;
+            font-weight: bold;
+            color: white;
+        }
+        
+        .col-entrada, .col-saida {
+            text-align: center;
+            width: 10%;
+        }
+        
+        .col-obs {
+            text-align: left;
+            width: 25%;
+        }
+        
+        /* Status Colors */
+        .presente {
+            background: #27ae60 !important;
+        }
+        
+        .falta {
+            background: #e74c3c !important;
+        }
+        
+        .atraso {
+            background: #f39c12 !important;
+        }
+        
+        .folga {
+            background: #95a5a6 !important;
+        }
+        
+        .fim-semana {
+            background: #95a5a6 !important;
+        }
+        
+        .resumo {
+            margin-top: 30px;
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+        }
+        
+        .resumo-card {
+            background: #ecf0f1;
+            padding: 15px;
+            border-left: 4px solid #2c3e50;
+            border-radius: 4px;
+            text-align: center;
+        }
+        
+        .resumo-label {
+            font-weight: bold;
+            color: #2c3e50;
+            font-size: 12px;
+            margin-bottom: 8px;
+        }
+        
+        .resumo-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .page-info {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 11px;
+            color: #7f8c8d;
+        }
+        
+        @media print {
+            body {
+                background: white;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="excel-container">
+        <div class="excel-header">
+            RELATÓRIO DE PRESENÇA - COLABORADOR
+        </div>
+        
+        <div class="info-row">
+            <div class="info-cell">
+                <strong>Empresa:</strong> GOLD TRANSPORTES LTDA
+            </div>
+            <div class="info-cell">
+                <strong>CNPJ:</strong> 12.345.678/0001-90
+            </div>
+        </div>
+        
+        <div class="info-row">
+            <div class="info-cell">
+                <strong>Colaborador:</strong> ADRIANO SILVA SANTOS
+            </div>
+            <div class="info-cell">
+                <strong>Cargo:</strong> Motorista
+            </div>
+        </div>
+        
+        <div class="info-row">
+            <div class="info-cell">
+                <strong>Turno:</strong> Manhã
+            </div>
+            <div class="info-cell">
+                <strong>Horário:</strong> 06:00 às 14:00
+            </div>
+        </div>
+        
+        <div class="info-row">
+            <div class="info-cell">
+                <strong>Período:</strong> 01/04/2026 a 30/04/2026
+            </div>
+            <div class="info-cell">
+                <strong>Mês:</strong> Abril/2026
+            </div>
+        </div>
+        
+        <table>
+            <thead>
+                <tr>
+                    <th class="col-data">Data</th>
+                    <th class="col-dia">Dia Semana</th>
+                    <th class="col-status">Status</th>
+                    <th class="col-entrada">Entrada</th>
+                    <th class="col-saida">Saída</th>
+                    <th class="col-obs">Observações</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td class="col-data">01/04/2026</td>
+                    <td class="col-dia">Segunda</td>
+                    <td class="col-status presente">Presente</td>
+                    <td class="col-entrada">06:00</td>
+                    <td class="col-saida">14:00</td>
+                    <td class="col-obs">-</td>
+                </tr>
+                <tr>
+                    <td class="col-data">02/04/2026</td>
+                    <td class="col-dia">Terça</td>
+                    <td class="col-status presente">Presente</td>
+                    <td class="col-entrada">06:00</td>
+                    <td class="col-saida">14:00</td>
+                    <td class="col-obs">-</td>
+                </tr>
+                <tr>
+                    <td class="col-data">03/04/2026</td>
+                    <td class="col-dia">Quarta</td>
+                    <td class="col-status presente">Presente</td>
+                    <td class="col-entrada">06:00</td>
+                    <td class="col-saida">14:00</td>
+                    <td class="col-obs">-</td>
+                </tr>
+                <tr>
+                    <td class="col-data">04/04/2026</td>
+                    <td class="col-dia">Quinta</td>
+                    <td class="col-status folga">Folga</td>
+                    <td class="col-entrada">-</td>
+                    <td class="col-saida">-</td>
+                    <td class="col-obs">Conforme escala</td>
+                </tr>
+                <tr>
+                    <td class="col-data">05/04/2026</td>
+                    <td class="col-dia">Sexta</td>
+                    <td class="col-status presente">Presente</td>
+                    <td class="col-entrada">06:00</td>
+                    <td class="col-saida">14:00</td>
+                    <td class="col-obs">-</td>
+                </tr>
+                <tr>
+                    <td class="col-data">06/04/2026</td>
+                    <td class="col-dia">Sábado</td>
+                    <td class="col-status fim-semana">Fim de semana</td>
+                    <td class="col-entrada">-</td>
+                    <td class="col-saida">-</td>
+                    <td class="col-obs">-</td>
+                </tr>
+                <tr>
+                    <td class="col-data">07/04/2026</td>
+                    <td class="col-dia">Domingo</td>
+                    <td class="col-status fim-semana">Fim de semana</td>
+                    <td class="col-entrada">-</td>
+                    <td class="col-saida">-</td>
+                    <td class="col-obs">-</td>
+                </tr>
+                <tr>
+                    <td class="col-data">08/04/2026</td>
+                    <td class="col-dia">Segunda</td>
+                    <td class="col-status presente">Presente</td>
+                    <td class="col-entrada">06:00</td>
+                    <td class="col-saida">14:00</td>
+                    <td class="col-obs">-</td>
+                </tr>
+                <tr>
+                    <td class="col-data">09/04/2026</td>
+                    <td class="col-dia">Terça</td>
+                    <td class="col-status atraso">Atraso</td>
+                    <td class="col-entrada">06:15</td>
+                    <td class="col-saida">14:00</td>
+                    <td class="col-obs">Atraso de 15 minutos</td>
+                </tr>
+                <tr>
+                    <td class="col-data">10/04/2026</td>
+                    <td class="col-dia">Quarta</td>
+                    <td class="col-status presente">Presente</td>
+                    <td class="col-entrada">06:00</td>
+                    <td class="col-saida">14:00</td>
+                    <td class="col-obs">-</td>
+                </tr>
+                <tr>
+                    <td class="col-data">11/04/2026</td>
+                    <td class="col-dia">Quinta</td>
+                    <td class="col-status falta">Falta</td>
+                    <td class="col-entrada">-</td>
+                    <td class="col-saida">-</td>
+                    <td class="col-obs">Sem justificativa</td>
+                </tr>
+                <tr>
+                    <td class="col-data">12/04/2026</td>
+                    <td class="col-dia">Sexta</td>
+                    <td class="col-status presente">Presente</td>
+                    <td class="col-entrada">06:00</td>
+                    <td class="col-saida">14:00</td>
+                    <td class="col-obs">-</td>
+                </tr>
+                <tr>
+                    <td class="col-data">13/04/2026</td>
+                    <td class="col-dia">Sábado</td>
+                    <td class="col-status fim-semana">Fim de semana</td>
+                    <td class="col-entrada">-</td>
+                    <td class="col-saida">-</td>
+                    <td class="col-obs">-</td>
+                </tr>
+                <tr>
+                    <td class="col-data">14/04/2026</td>
+                    <td class="col-dia">Domingo</td>
+                    <td class="col-status fim-semana">Fim de semana</td>
+                    <td class="col-entrada">-</td>
+                    <td class="col-saida">-</td>
+                    <td class="col-obs">-</td>
+                </tr>
+                <tr>
+                    <td class="col-data">15/04/2026</td>
+                    <td class="col-dia">Segunda</td>
+                    <td class="col-status presente">Presente</td>
+                    <td class="col-entrada">06:00</td>
+                    <td class="col-saida">14:00</td>
+                    <td class="col-obs">-</td>
+                </tr>
+                <tr>
+                    <td class="col-data">16/04/2026</td>
+                    <td class="col-dia">Terça</td>
+                    <td class="col-status presente">Presente</td>
+                    <td class="col-entrada">06:00</td>
+                    <td class="col-saida">14:00</td>
+                    <td class="col-obs">-</td>
+                </tr>
+                <tr>
+                    <td class="col-data">17/04/2026</td>
+                    <td class="col-dia">Quarta</td>
+                    <td class="col-status folga">Folga</td>
+                    <td class="col-entrada">-</td>
+                    <td class="col-saida">-</td>
+                    <td class="col-obs">Conforme escala</td>
+                </tr>
+                <tr>
+                    <td class="col-data">18/04/2026</td>
+                    <td class="col-dia">Quinta</td>
+                    <td class="col-status presente">Presente</td>
+                    <td class="col-entrada">06:00</td>
+                    <td class="col-saida">14:00</td>
+                    <td class="col-obs">-</td>
+                </tr>
+                <tr>
+                    <td class="col-data">19/04/2026</td>
+                    <td class="col-dia">Sexta</td>
+                    <td class="col-status presente">Presente</td>
+                    <td class="col-entrada">06:00</td>
+                    <td class="col-saida">14:00</td>
+                    <td class="col-obs">-</td>
+                </tr>
+                <tr>
+                    <td class="col-data">20/04/2026</td>
+                    <td class="col-dia">Sábado</td>
+                    <td class="col-status fim-semana">Fim de semana</td>
+                    <td class="col-entrada">-</td>
+                    <td class="col-saida">-</td>
+                    <td class="col-obs">-</td>
+                </tr>
+                <tr>
+                    <td class="col-data">21/04/2026</td>
+                    <td class="col-dia">Domingo</td>
+                    <td class="col-status folga">Feriado</td>
+                    <td class="col-entrada">-</td>
+                    <td class="col-saida">-</td>
+                    <td class="col-obs">Feriado Nacional (Tiradentes)</td>
+                </tr>
+                <tr>
+                    <td class="col-data">22/04/2026</td>
+                    <td class="col-dia">Segunda</td>
+                    <td class="col-status presente">Presente</td>
+                    <td class="col-entrada">06:00</td>
+                    <td class="col-saida">14:00</td>
+                    <td class="col-obs">-</td>
+                </tr>
+                <tr>
+                    <td class="col-data">23/04/2026</td>
+                    <td class="col-dia">Terça</td>
+                    <td class="col-status presente">Presente</td>
+                    <td class="col-entrada">06:00</td>
+                    <td class="col-saida">14:00</td>
+                    <td class="col-obs">-</td>
+                </tr>
+                <tr>
+                    <td class="col-data">24/04/2026</td>
+                    <td class="col-dia">Quarta</td>
+                    <td class="col-status presente">Presente</td>
+                    <td class="col-entrada">06:00</td>
+                    <td class="col-saida">14:00</td>
+                    <td class="col-obs">-</td>
+                </tr>
+                <tr>
+                    <td class="col-data">25/04/2026</td>
+                    <td class="col-dia">Quinta</td>
+                    <td class="col-status falta">Falta</td>
+                    <td class="col-entrada">-</td>
+                    <td class="col-saida">-</td>
+                    <td class="col-obs">Sem justificativa</td>
+                </tr>
+                <tr>
+                    <td class="col-data">26/04/2026</td>
+                    <td class="col-dia">Sexta</td>
+                    <td class="col-status presente">Presente</td>
+                    <td class="col-entrada">06:00</td>
+                    <td class="col-saida">14:00</td>
+                    <td class="col-obs">-</td>
+                </tr>
+                <tr>
+                    <td class="col-data">27/04/2026</td>
+                    <td class="col-dia">Sábado</td>
+                    <td class="col-status fim-semana">Fim de semana</td>
+                    <td class="col-entrada">-</td>
+                    <td class="col-saida">-</td>
+                    <td class="col-obs">-</td>
+                </tr>
+                <tr>
+                    <td class="col-data">28/04/2026</td>
+                    <td class="col-dia">Domingo</td>
+                    <td class="col-status fim-semana">Fim de semana</td>
+                    <td class="col-entrada">-</td>
+                    <td class="col-saida">-</td>
+                    <td class="col-obs">-</td>
+                </tr>
+                <tr>
+                    <td class="col-data">29/04/2026</td>
+                    <td class="col-dia">Segunda</td>
+                    <td class="col-status presente">Presente</td>
+                    <td class="col-entrada">06:00</td>
+                    <td class="col-saida">14:00</td>
+                    <td class="col-obs">-</td>
+                </tr>
+                <tr>
+                    <td class="col-data">30/04/2026</td>
+                    <td class="col-dia">Terça</td>
+                    <td class="col-status presente">Presente</td>
+                    <td class="col-entrada">06:00</td>
+                    <td class="col-saida">14:00</td>
+                    <td class="col-obs">-</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <div class="resumo">
+            <div class="resumo-card">
+                <div class="resumo-label">Presenças</div>
+                <div class="resumo-value">18</div>
+            </div>
+            <div class="resumo-card">
+                <div class="resumo-label">Faltas</div>
+                <div class="resumo-value">2</div>
+            </div>
+            <div class="resumo-card">
+                <div class="resumo-label">Atrasos</div>
+                <div class="resumo-value">1</div>
+            </div>
+        </div>
+        
+        <div class="page-info">
+            Gerado em: 29/04/2026 14:35 | Sistema de Gestão de Presença - GOLD TRANSPORTES
+        </div>
+    </div>
+</body>
+</html>

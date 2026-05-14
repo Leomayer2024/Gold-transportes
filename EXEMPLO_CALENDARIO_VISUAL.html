@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calendário Visual de Presença - Exemplo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #2C3E50 0%, #34495E 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 5px;
+        }
+        
+        .header p {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .calendar {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .day-header {
+            background: #2C3E50;
+            color: white;
+            padding: 10px;
+            text-align: center;
+            font-weight: bold;
+            border-radius: 4px;
+            font-size: 12px;
+        }
+        
+        .day-cell {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            aspect-ratio: 1;
+            border-radius: 6px;
+            font-weight: bold;
+            color: white;
+            font-size: 20px;
+            border: 2px solid transparent;
+            transition: transform 0.2s;
+        }
+        
+        .day-cell:hover {
+            transform: scale(1.05);
+        }
+        
+        .day-cell.presente {
+            background: linear-gradient(135deg, #27AE60 0%, #1E8449 100%);
+        }
+        
+        .day-cell.atraso {
+            background: linear-gradient(135deg, #F39C12 0%, #D68910 100%);
+        }
+        
+        .day-cell.falta {
+            background: linear-gradient(135deg, #E74C3C 0%, #C0392B 100%);
+        }
+        
+        .day-cell.folga,
+        .day-cell.fim-semana {
+            background: linear-gradient(135deg, #95A5A6 0%, #7F8C8D 100%);
+        }
+        
+        .day-number {
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+        
+        .day-status {
+            font-size: 16px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.2);
+        }
+        
+        .day-obs {
+            font-size: 10px;
+            opacity: 0.8;
+            margin-top: 3px;
+        }
+        
+        .legend {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 20px;
+        }
+        
+        .legend h3 {
+            margin-bottom: 10px;
+            color: #2C3E50;
+            font-size: 14px;
+        }
+        
+        .legend-items {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+        }
+        
+        .legend-color {
+            width: 24px;
+            height: 24px;
+            border-radius: 4px;
+        }
+        
+        .legend-color.presente {
+            background: #27AE60;
+        }
+        
+        .legend-color.atraso {
+            background: #F39C12;
+        }
+        
+        .legend-color.falta {
+            background: #E74C3C;
+        }
+        
+        .legend-color.folga {
+            background: #95A5A6;
+        }
+        
+        .comparison {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 2px solid #eee;
+        }
+        
+        .comparison h2 {
+            color: #2C3E50;
+            margin-bottom: 15px;
+            font-size: 16px;
+        }
+        
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+        
+        .comparison-table th,
+        .comparison-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .comparison-table th {
+            background: #f0f0f0;
+            font-weight: bold;
+            color: #2C3E50;
+        }
+        
+        .comparison-table tr:hover {
+            background: #f9f9f9;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        
+        .badge.novo {
+            background: #27AE60;
+            color: white;
+        }
+        
+        .badge.legado {
+            background: #95A5A6;
+            color: white;
+        }
+        
+        .summary {
+            background: #ecf0f1;
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 20px;
+            border-left: 4px solid #2C3E50;
+        }
+        
+        .summary p {
+            font-size: 13px;
+            margin: 5px 0;
+            color: #34495E;
+        }
+        
+        .summary strong {
+            color: #2C3E50;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+            font-size: 13px;
+        }
+        
+        .info-item {
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        
+        .info-item strong {
+            color: #2C3E50;
+            display: block;
+            margin-bottom: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📅 Calendário Visual de Presença</h1>
+            <p>Exemplo - Avril/2026 - ADRIANO SILVA SANTOS</p>
+        </div>
+        
+        <div class="info-grid">
+            <div class="info-item">
+                <strong>Colaborador:</strong>
+                ADRIANO SILVA SANTOS
+            </div>
+            <div class="info-item">
+                <strong>Cargo:</strong>
+                Motorista
+            </div>
+            <div class="info-item">
+                <strong>Turno:</strong>
+                Manhã (06:00 - 14:00)
+            </div>
+            <div class="info-item">
+                <strong>Período:</strong>
+                01/04/2026 a 30/04/2026
+            </div>
+        </div>
+        
+        <div class="calendar">
+            <!-- Header dos dias -->
+            <div class="day-header">Do</div>
+            <div class="day-header">Se</div>
+            <div class="day-header">Te</div>
+            <div class="day-header">Qu</div>
+            <div class="day-header">Qu</div>
+            <div class="day-header">Se</div>
+            <div class="day-header">Sa</div>
+            
+            <!-- Semana 1 -->
+            <div class="day-cell fim-semana">
+                <div class="day-number">29</div>
+                <div class="day-status">⚫</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell fim-semana">
+                <div class="day-number">30</div>
+                <div class="day-status">⚫</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell fim-semana">
+                <div class="day-number">31</div>
+                <div class="day-status">⚫</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell presente">
+                <div class="day-number">1</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell presente">
+                <div class="day-number">2</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell presente">
+                <div class="day-number">3</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell presente">
+                <div class="day-number">4</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            
+            <!-- Semana 2 -->
+            <div class="day-cell presente">
+                <div class="day-number">5</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell presente">
+                <div class="day-number">6</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell presente">
+                <div class="day-number">7</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell presente">
+                <div class="day-number">8</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell atraso">
+                <div class="day-number">9</div>
+                <div class="day-status">🟠</div>
+                <div class="day-obs">15 min</div>
+            </div>
+            <div class="day-cell presente">
+                <div class="day-number">10</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell fim-semana">
+                <div class="day-number">11</div>
+                <div class="day-status">⚫</div>
+                <div class="day-obs">-</div>
+            </div>
+            
+            <!-- Semana 3 -->
+            <div class="day-cell presente">
+                <div class="day-number">12</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell presente">
+                <div class="day-number">13</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell presente">
+                <div class="day-number">14</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell presente">
+                <div class="day-number">15</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell presente">
+                <div class="day-number">16</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell presente">
+                <div class="day-number">17</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell fim-semana">
+                <div class="day-number">18</div>
+                <div class="day-status">⚫</div>
+                <div class="day-obs">-</div>
+            </div>
+            
+            <!-- Semana 4 -->
+            <div class="day-cell presente">
+                <div class="day-number">19</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell presente">
+                <div class="day-number">20</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell presente">
+                <div class="day-number">21</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell presente">
+                <div class="day-number">22</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell presente">
+                <div class="day-number">23</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell presente">
+                <div class="day-number">24</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell falta">
+                <div class="day-number">25</div>
+                <div class="day-status">🔴</div>
+                <div class="day-obs">OBS</div>
+            </div>
+            
+            <!-- Semana 5 -->
+            <div class="day-cell presente">
+                <div class="day-number">26</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell presente">
+                <div class="day-number">27</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell presente">
+                <div class="day-number">28</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell presente">
+                <div class="day-number">29</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell presente">
+                <div class="day-number">30</div>
+                <div class="day-status">🟢</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell fim-semana" style="opacity: 0.5;">
+                <div class="day-number">1</div>
+                <div class="day-status">⚫</div>
+                <div class="day-obs">-</div>
+            </div>
+            <div class="day-cell fim-semana" style="opacity: 0.5;">
+                <div class="day-number">2</div>
+                <div class="day-status">⚫</div>
+                <div class="day-obs">-</div>
+            </div>
+        </div>
+        
+        <div class="summary">
+            <p><strong>📊 RESUMO MENSAL:</strong></p>
+            <p>✅ Presenças: <strong>24 dias</strong></p>
+            <p>⏱️ Atrasos: <strong>1 dia (15 minutos)</strong></p>
+            <p>❌ Faltas: <strong>1 dia</strong></p>
+            <p>🏖️ Fins de semana/Feriados: <strong>4 dias</strong></p>
+            <p><strong style="color: #27AE60;">✓ Assiduidade: 96%</strong></p>
+        </div>
+        
+        <div class="legend">
+            <h3>🎨 Legenda de Cores</h3>
+            <div class="legend-items">
+                <div class="legend-item">
+                    <div class="legend-color presente"></div>
+                    <span>🟢 Presente</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color atraso"></div>
+                    <span>🟠 Atraso</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color falta"></div>
+                    <span>🔴 Falta</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color folga"></div>
+                    <span>⚫ Folga/Fim de semana</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="comparison">
+            <h2>📊 Comparação de Formatos</h2>
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Aspecto</th>
+                        <th>📅 Calendário Visual <span class="badge novo">NOVO</span></th>
+                        <th>📋 Tabela Detalhada <span class="badge legado">LEGADO</span></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Layout</strong></td>
+                        <td>Grid 7x6 (Parede)</td>
+                        <td>Tabela tradicional</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Visualização</strong></td>
+                        <td>Muito rápida</td>
+                        <td>Mais detalhada</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Impressão</strong></td>
+                        <td>✅ Excelente (A4)</td>
+                        <td>✅ Bom (requer ajustes)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Cores</strong></td>
+                        <td>✅ Vibrantes</td>
+                        <td>✅ Sutis</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Horários</strong></td>
+                        <td>Observações curtas</td>
+                        <td>✅ Entrada/Saída completa</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Parede</strong></td>
+                        <td>✅ Perfeito</td>
+                        <td>⚠️ Muito denso</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Análise</strong></td>
+                        <td>✅ Padrões visuais</td>
+                        <td>✅ Dados completos</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <div style="text-align: center; margin-top: 30px; padding-top: 20px; border-top: 2px solid #eee; color: #7F8C8D; font-size: 12px;">
+            <p>Este é um exemplo visual do novo formato de calendário gerado pelo endpoint</p>
+            <p><code>/api/presenca-colaborador-calendario</code></p>
+            <p style="margin-top: 10px;"><strong>Versão 1.0 • 29 de Abril de 2026</strong></p>
+        </div>
+    </div>
+</body>
+</html>
