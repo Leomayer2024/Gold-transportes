@@ -4,6 +4,7 @@ services:
     env: python
     plan: free
     buildCommand: >
+      python build.py &&
       cd frontend &&
       npm install &&
       npm run build &&
@@ -17,6 +18,9 @@ services:
       - key: SUPABASE_KEY
         scope: all
         value: ${SUPABASE_KEY}
+      - key: VITE_API_URL
+        scope: all
+        value: "/api"
       - key: PORT
         scope: all
         value: "10000"
