@@ -28,6 +28,8 @@ export const navigationGroups = [
   {
     title: 'Financeiro',
     items: [
+      { to: '/contas-a-receber', label: 'Contas a Receber', scope: 'menu.contas_a_receber' },
+      { to: '/contas-a-pagar', label: 'Contas a Pagar', scope: 'menu.contas_a_pagar' },
       { to: '/notas-cte', label: 'Notas Fiscais / CT-e', scope: 'menu.notas_cte' },
     ],
   },

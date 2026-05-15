@@ -670,6 +670,63 @@ RESOURCE_DEFINITIONS = {
         'create_scope': 'create.horas_extras',
         'filial_scope_field': 'filial_id',
     },
+    'contas_a_receber': {
+        'table': 'contas_a_receber',
+        'order': 'competencia',
+        'pk_type': 'uuid',
+        'required_fields': ['filial_id', 'competencia', 'obrigacao'],
+        'allowed_fields': [
+            'filial_id', 'filial_nome', 'competencia', 'obrigacao', 'descricao',
+            'limite_dia', 'data_limite', 'ult_dia_competencia', 'prazo_envio',
+            'valor_gold', 'data_pagamento_gold', 'cobrado_wm', 'data_envio',
+            'data_ajuste', 'vlr_ajustado_wm', 'frete', 'vlr_cte', 'vlr_fixo_icms',
+            'emissao', 'nd', 'cte', 'tipo_documento', 'ferramenta', 'prestacao',
+            'contato', 'double_check', 'autorizacao', 'o_que_falta',
+            'motivo_pendencia', 'setor_responsavel', 'previsao', 'status_fat',
+            'status', 'data_vencimento', 'sla', 'horas_extras_rtm_mes',
+            'tipo_hora', 'cliente_nome', 'contrato_operacional_id', 'contrato_nome',
+        ],
+        'partial_match_fields': [
+            'obrigacao', 'descricao', 'nd', 'cte', 'cliente_nome', 'contrato_nome',
+            'contato', 'autorizacao', 'o_que_falta', 'motivo_pendencia',
+        ],
+        'nullable_fields': [
+            'filial_nome', 'descricao', 'limite_dia', 'data_limite', 'ult_dia_competencia',
+            'prazo_envio', 'valor_gold', 'data_pagamento_gold', 'cobrado_wm', 'data_envio',
+            'data_ajuste', 'vlr_ajustado_wm', 'frete', 'vlr_cte', 'vlr_fixo_icms',
+            'emissao', 'nd', 'cte', 'tipo_documento', 'ferramenta', 'prestacao',
+            'contato', 'double_check', 'autorizacao', 'o_que_falta', 'motivo_pendencia',
+            'setor_responsavel', 'previsao', 'status_fat', 'status', 'data_vencimento',
+            'sla', 'horas_extras_rtm_mes', 'tipo_hora', 'cliente_nome',
+            'contrato_operacional_id', 'contrato_nome',
+        ],
+        'view_scope': 'menu.contas_a_receber',
+        'create_scope': 'create.contas_a_receber',
+        'filial_scope_field': 'filial_id',
+    },
+    'contas_a_pagar': {
+        'table': 'contas_a_pagar',
+        'order': 'competencia',
+        'pk_type': 'uuid',
+        'required_fields': ['filial_id', 'competencia', 'tipo_despesa', 'valor'],
+        'allowed_fields': [
+            'filial_id', 'filial_nome', 'competencia', 'tipo_despesa', 'descricao',
+            'fornecedor_nome', 'colaborador_id', 'valor', 'data_vencimento',
+            'data_pagamento', 'valor_pago', 'status', 'tipo_documento',
+            'numero_documento', 'observacoes', 'horas_extras_rtm_mes',
+            'colaboradores_count',
+        ],
+        'partial_match_fields': ['tipo_despesa', 'descricao', 'fornecedor_nome', 'numero_documento', 'observacoes'],
+        'nullable_fields': [
+            'filial_nome', 'descricao', 'fornecedor_nome', 'colaborador_id',
+            'data_vencimento', 'data_pagamento', 'valor_pago', 'status',
+            'tipo_documento', 'numero_documento', 'observacoes',
+            'horas_extras_rtm_mes', 'colaboradores_count',
+        ],
+        'view_scope': 'menu.contas_a_pagar',
+        'create_scope': 'create.contas_a_pagar',
+        'filial_scope_field': 'filial_id',
+    },
 }
 
 PERMISSION_SCOPE_GROUPS = [
@@ -701,6 +758,8 @@ PERMISSION_SCOPE_GROUPS = [
             {'name': 'menu.pedidos_compra', 'label': 'Pedidos de compra', 'description': 'Permite lançar pedidos de compra por base com itens, fornecedor, forma de pagamento e geração de PDF.'},
             {'name': 'menu.feriados', 'label': 'Feriados', 'description': 'Permite visualizar e gerenciar feriados por UF, município e filial no calendário.'},
             {'name': 'menu.notas_cte', 'label': 'Notas / CT-e', 'description': 'Permite lançar e controlar notas fiscais, CT-e e faturas pendentes de pagamento.'},
+            {'name': 'menu.contas_a_receber', 'label': 'Contas a Receber', 'description': 'Mostra o controle de faturamento por obrigação, competência e status (planilha financeira fiel).'},
+            {'name': 'menu.contas_a_pagar', 'label': 'Contas a Pagar', 'description': 'Mostra os gastos extras Gold e despesas a pagar por competência e tipo.'},
             {'name': 'menu.gestao_acessos', 'label': 'Gestão de acessos', 'description': 'Exclusivo do administrador master: visualizar colaboradores com acesso e redefinir senhas.'},
             {'name': 'menu.manutencoes', 'label': 'Manutenção de frota', 'description': 'Mostra o módulo de ordens de serviço de manutenção de veículos.'},
             {'name': 'menu.abastecimentos', 'label': 'Abastecimentos', 'description': 'Mostra o histórico de abastecimentos por veículo e filial.'},
@@ -732,6 +791,8 @@ PERMISSION_SCOPE_GROUPS = [
             {'name': 'create.pedidos_compra', 'label': 'Lançar pedidos de compra', 'description': 'Permite criar pedidos de compra, adicionar itens e alterar status.'},
             {'name': 'create.feriados', 'label': 'Cadastrar feriados', 'description': 'Permite criar e editar feriados no calendário.'},
             {'name': 'create.notas_cte', 'label': 'Lançar notas / CT-e', 'description': 'Permite criar, editar e quitar notas fiscais, CT-e e faturas.'},
+            {'name': 'create.contas_a_receber', 'label': 'Lançar contas a receber', 'description': 'Permite criar, editar e quitar lançamentos de Contas a Receber.'},
+            {'name': 'create.contas_a_pagar', 'label': 'Lançar contas a pagar', 'description': 'Permite criar, editar e quitar lançamentos de Contas a Pagar.'},
             {'name': 'create.manutencoes', 'label': 'Abrir OS de manutenção', 'description': 'Permite criar ordens de serviço de manutenção e adicionar peças/serviços.'},
             {'name': 'create.abastecimentos', 'label': 'Registrar abastecimento', 'description': 'Permite lançar abastecimentos de combustível por veículo.'},
             {'name': 'create.pneus', 'label': 'Gerenciar pneus', 'description': 'Permite cadastrar e atualizar o controle de pneus dos veículos.'},
@@ -5559,10 +5620,7 @@ def create_app():
             write_audit_event(profile, 'create', resource_name, status='error', details={'error': str(exc)[:300]})
             return jsonify({'error': translate_database_error(exc)}), 400
 
-    @app.patch('/api/<resource_name>/<int:item_id>')
-    @rate_limit_endpoint(max_requests=60)
-    @require_auth
-    def update_resource(profile, resource_name, item_id):
+    def _update_resource_impl(profile, resource_name, item_id):
         config = RESOURCE_DEFINITIONS.get(resource_name)
         if not config:
             return jsonify({'error': 'Recurso não encontrado.'}), 404
@@ -5620,10 +5678,7 @@ def create_app():
             write_audit_event(profile, 'update', resource_name, item_id, status='error', details={'error': str(exc)[:300]})
             return jsonify({'error': translate_database_error(exc)}), 400
 
-    @app.delete('/api/<resource_name>/<int:item_id>')
-    @rate_limit_endpoint(max_requests=30)
-    @require_auth
-    def delete_resource(profile, resource_name, item_id):
+    def _delete_resource_impl(profile, resource_name, item_id):
         config = RESOURCE_DEFINITIONS.get(resource_name)
         if not config:
             return jsonify({'error': 'Recurso não encontrado.'}), 404
@@ -5648,6 +5703,30 @@ def create_app():
             app.logger.error('Erro ao excluir recurso %s: %s', resource_name, exc)
             write_audit_event(profile, 'delete', resource_name, item_id, status='error', details={'error': str(exc)[:300]})
             return jsonify({'error': translate_database_error(exc)}), 400
+
+    @app.patch('/api/<resource_name>/<int:item_id>')
+    @rate_limit_endpoint(max_requests=60)
+    @require_auth
+    def update_resource(profile, resource_name, item_id):
+        return _update_resource_impl(profile, resource_name, item_id)
+
+    @app.delete('/api/<resource_name>/<int:item_id>')
+    @rate_limit_endpoint(max_requests=30)
+    @require_auth
+    def delete_resource(profile, resource_name, item_id):
+        return _delete_resource_impl(profile, resource_name, item_id)
+
+    @app.patch('/api/<resource_name>/<uuid:item_id>')
+    @rate_limit_endpoint(max_requests=60)
+    @require_auth
+    def update_resource_uuid(profile, resource_name, item_id):
+        return _update_resource_impl(profile, resource_name, str(item_id))
+
+    @app.delete('/api/<resource_name>/<uuid:item_id>')
+    @rate_limit_endpoint(max_requests=30)
+    @require_auth
+    def delete_resource_uuid(profile, resource_name, item_id):
+        return _delete_resource_impl(profile, resource_name, str(item_id))
 
     @app.get('/api/cargos/modelos')
     @require_auth
@@ -9301,6 +9380,174 @@ def create_app():
 
     # ============ HORAS EXTRAS RTM — FECHAMENTOS ============
 
+    def _rtm_month_bounds(mes_referencia):
+        """Recebe 'YYYY-MM-01' e retorna (inicio_date, fim_date) do mês como strings ISO."""
+        from datetime import date as _date
+        from calendar import monthrange as _monthrange
+        try:
+            partes = str(mes_referencia).split('-')
+            ano = int(partes[0]); mes = int(partes[1])
+            inicio = _date(ano, mes, 1)
+            ultimo = _date(ano, mes, _monthrange(ano, mes)[1])
+            return inicio.isoformat(), ultimo.isoformat()
+        except Exception:
+            return mes_referencia, mes_referencia
+
+    def _rtm_lancamentos_filial_filter(profile):
+        """Retorna a lista de filial_ids permitidos, ou None se sem escopo (ver todas)."""
+        if profile_has_filial_scope(profile):
+            return list(profile.get('allowed_filial_ids') or [])
+        return None
+
+    def _sincronizar_lancamentos_rtm_mes(mes_referencia, profile):
+        """
+        Idempotente. Apaga e regrava os lançamentos financeiros (contas_a_pagar e
+        contas_a_receber) gerados a partir de horas_extras_rtm_registros para o mês.
+
+        Regra de roteamento:
+          - Se o colaborador tem QUALQUER contratos_colaboradores com ativo=true
+            cuja vigência intersecta o mês de referência → contas_a_receber
+            (cliente do contrato paga as horas).
+          - Caso contrário → contas_a_pagar (gasto extra Gold).
+        """
+        if not mes_referencia:
+            return
+        inicio_mes, fim_mes = _rtm_month_bounds(mes_referencia)
+        allowed = _rtm_lancamentos_filial_filter(profile)
+
+        # 1) Remove lançamentos antigos do mês (apenas os gerados a partir do RTM)
+        del_cp = supabase.table('contas_a_pagar').delete() \
+            .eq('horas_extras_rtm_mes', mes_referencia) \
+            .eq('tipo_despesa', 'horas_extras_rtm')
+        del_cr = supabase.table('contas_a_receber').delete() \
+            .eq('horas_extras_rtm_mes', mes_referencia) \
+            .eq('obrigacao', 'HORAS EXTRAS RTM')
+        if allowed is not None:
+            if not allowed:
+                return
+            del_cp = del_cp.in_('filial_id', allowed)
+            del_cr = del_cr.in_('filial_id', allowed)
+        try:
+            del_cp.execute()
+            del_cr.execute()
+        except Exception as exc:
+            app.logger.error('sincronizar_lancamentos_rtm (delete antigos): %s', exc)
+            raise
+
+        # 2) Lê os registros RTM do mês
+        sel = supabase.table('horas_extras_rtm_registros').select(
+            'id, mes_referencia, funcionario_nome, colaborador_id, filial_id, filial_nome, '
+            'horas_normais, horas_extra_100, valor_hora_50, valor_hora_100, '
+            'total_50, total_100, total_geral'
+        ).eq('mes_referencia', mes_referencia)
+        if allowed is not None:
+            sel = sel.in_('filial_id', allowed)
+        registros = (sel.execute().data or [])
+        if not registros:
+            return
+
+        # 3) Busca contratos ativos dos colaboradores envolvidos
+        colab_ids = sorted({int(r['colaborador_id']) for r in registros if r.get('colaborador_id')})
+        contratos_por_colab = {}  # colaborador_id -> dict com contrato_operacional_id, cliente_nome, contrato_nome
+        if colab_ids:
+            cc_resp = supabase.table('contratos_colaboradores').select(
+                'colaborador_id, contrato_operacional_id, ativo, inicio_vigencia, fim_vigencia'
+            ).in_('colaborador_id', colab_ids).eq('ativo', True).execute()
+            vinculos = cc_resp.data or []
+
+            # Filtra por intersecção com o mês (vínculo cobre QUALQUER dia do mês)
+            vinculos_validos = []
+            for v in vinculos:
+                ini_v = v.get('inicio_vigencia')
+                fim_v = v.get('fim_vigencia')
+                if ini_v and ini_v > fim_mes:
+                    continue
+                if fim_v and fim_v < inicio_mes:
+                    continue
+                vinculos_validos.append(v)
+
+            contrato_ids = sorted({int(v['contrato_operacional_id']) for v in vinculos_validos if v.get('contrato_operacional_id')})
+            contratos_map = {}
+            if contrato_ids:
+                co_resp = supabase.table('contratos_operacionais').select(
+                    'id, nome_contrato, cliente_nome, ativo'
+                ).in_('id', contrato_ids).execute()
+                for c in (co_resp.data or []):
+                    if c.get('ativo') is False:
+                        continue
+                    contratos_map[int(c['id'])] = {
+                        'nome_contrato': c.get('nome_contrato'),
+                        'cliente_nome': c.get('cliente_nome'),
+                    }
+
+            for v in vinculos_validos:
+                cid = int(v['colaborador_id'])
+                contrato_id = v.get('contrato_operacional_id')
+                if contrato_id and int(contrato_id) in contratos_map and cid not in contratos_por_colab:
+                    info = contratos_map[int(contrato_id)]
+                    contratos_por_colab[cid] = {
+                        'contrato_operacional_id': int(contrato_id),
+                        'cliente_nome': info.get('cliente_nome'),
+                        'contrato_nome': info.get('nome_contrato'),
+                    }
+
+        # 4) Monta inserts
+        cp_rows = []
+        cr_rows = []
+        for r in registros:
+            total = float(r.get('total_geral') or 0)
+            if total <= 0:
+                continue
+            cid = int(r['colaborador_id']) if r.get('colaborador_id') else None
+            funcionario = r.get('funcionario_nome') or 'Sem nome'
+            filial_id = r.get('filial_id')
+            filial_nome = r.get('filial_nome') or ''
+            t50 = float(r.get('total_50') or 0)
+            t100 = float(r.get('total_100') or 0)
+            descricao = f"Horas extras RTM — {funcionario} ({mes_referencia[:7]})"
+
+            contrato_info = contratos_por_colab.get(cid) if cid else None
+            if contrato_info:
+                cr_rows.append({
+                    'filial_id': filial_id,
+                    'filial_nome': filial_nome,
+                    'competencia': mes_referencia,
+                    'obrigacao': 'HORAS EXTRAS RTM',
+                    'descricao': descricao,
+                    'valor_gold': total,
+                    'cobrado_wm': total,
+                    'status': 'AGUARDANDO',
+                    'status_fat': 'NÃO FATURADO',
+                    'horas_extras_rtm_mes': mes_referencia,
+                    'tipo_hora': 'extra',
+                    'contrato_operacional_id': contrato_info['contrato_operacional_id'],
+                    'cliente_nome': contrato_info.get('cliente_nome'),
+                    'contrato_nome': contrato_info.get('contrato_nome'),
+                })
+            else:
+                cp_rows.append({
+                    'filial_id': filial_id,
+                    'filial_nome': filial_nome,
+                    'competencia': mes_referencia,
+                    'tipo_despesa': 'horas_extras_rtm',
+                    'descricao': descricao,
+                    'colaborador_id': cid,
+                    'valor': total,
+                    'status': 'PENDENTE',
+                    'horas_extras_rtm_mes': mes_referencia,
+                    'colaboradores_count': 1,
+                    'observacoes': f"50%: R$ {t50:.2f} | 100%: R$ {t100:.2f}",
+                })
+
+        try:
+            if cp_rows:
+                supabase.table('contas_a_pagar').insert(cp_rows).execute()
+            if cr_rows:
+                supabase.table('contas_a_receber').insert(cr_rows).execute()
+        except Exception as exc:
+            app.logger.error('sincronizar_lancamentos_rtm (insert): %s', exc)
+            raise
+
     @app.route('/api/horas-extras-rtm/salvar', methods=['POST'])
     @require_auth
     def salvar_horas_extras_rtm(profile):
@@ -9354,7 +9601,19 @@ def create_app():
 
             if rows:
                 supabase.table('horas_extras_rtm_registros').insert(rows).execute()
-            return jsonify({'ok': True, 'count': len(rows)})
+
+            # Roteia horas extras → contas_a_receber (contrato ativo) ou contas_a_pagar
+            lanc_warning = None
+            try:
+                _sincronizar_lancamentos_rtm_mes(mes_referencia, profile)
+            except Exception as exc_lanc:
+                app.logger.error('salvar_horas_extras_rtm (lancamentos): %s', exc_lanc)
+                lanc_warning = translate_database_error(exc_lanc)
+
+            resp = {'ok': True, 'count': len(rows)}
+            if lanc_warning:
+                resp['lancamentos_warning'] = lanc_warning
+            return jsonify(resp)
         except Exception as exc:
             app.logger.error('salvar_horas_extras_rtm: %s', exc)
             return jsonify({'error': translate_database_error(exc)}), 500
@@ -9432,6 +9691,16 @@ def create_app():
                 'total_geral': t50 + t100,
             }
             supabase.table('horas_extras_rtm_registros').update(update).eq('id', registro_id).execute()
+
+            # Re-sincroniza lançamentos do mês desse registro
+            try:
+                reg_resp = supabase.table('horas_extras_rtm_registros').select('mes_referencia').eq('id', registro_id).limit(1).execute()
+                reg_mes = (reg_resp.data or [{}])[0].get('mes_referencia')
+                if reg_mes:
+                    _sincronizar_lancamentos_rtm_mes(reg_mes, profile)
+            except Exception as exc_lanc:
+                app.logger.error('editar_registro_horas_extras_rtm (lancamentos): %s', exc_lanc)
+
             return jsonify({'ok': True})
         except Exception as exc:
             app.logger.error('editar_registro_horas_extras_rtm: %s', exc)
@@ -9448,6 +9717,25 @@ def create_app():
                     return jsonify({'error': 'Sem filiais permitidas.'}), 403
                 del_query = del_query.in_('filial_id', allowed_ids)
             del_query.execute()
+
+            # Limpa também os lançamentos financeiros gerados para esse mês
+            try:
+                allowed = _rtm_lancamentos_filial_filter(profile)
+                del_cp = supabase.table('contas_a_pagar').delete() \
+                    .eq('horas_extras_rtm_mes', mes) \
+                    .eq('tipo_despesa', 'horas_extras_rtm')
+                del_cr = supabase.table('contas_a_receber').delete() \
+                    .eq('horas_extras_rtm_mes', mes) \
+                    .eq('obrigacao', 'HORAS EXTRAS RTM')
+                if allowed is not None:
+                    if allowed:
+                        del_cp = del_cp.in_('filial_id', allowed)
+                        del_cr = del_cr.in_('filial_id', allowed)
+                del_cp.execute()
+                del_cr.execute()
+            except Exception as exc_lanc:
+                app.logger.error('deletar_mes_horas_extras_rtm (lancamentos): %s', exc_lanc)
+
             return jsonify({'ok': True})
         except Exception as exc:
             app.logger.error('deletar_mes_horas_extras_rtm: %s', exc)
@@ -9516,6 +9804,180 @@ def create_app():
             })
         except Exception as exc:
             app.logger.error('metricas_horas_extras_rtm: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    # ============ CONTAS A RECEBER / A PAGAR — MÉTRICAS ============
+
+    @app.route('/api/contas-a-receber/metricas', methods=['GET'])
+    @require_auth
+    def metricas_contas_a_receber(profile):
+        scope_error = require_scope_permission(profile, 'menu.contas_a_receber')
+        if scope_error:
+            return scope_error
+        try:
+            query = supabase.table('contas_a_receber').select(
+                'filial_id, filial_nome, competencia, obrigacao, status, status_fat, '
+                'valor_gold, cobrado_wm, vlr_ajustado_wm, data_vencimento'
+            )
+            if profile_has_filial_scope(profile):
+                allowed_ids = profile.get('allowed_filial_ids') or []
+                if not allowed_ids:
+                    return jsonify({
+                        'resumo': {'total_a_receber': 0, 'total_faturado': 0, 'total_nao_faturado': 0, 'total_vencido': 0, 'qtd_total': 0},
+                        'por_obrigacao': [], 'por_filial': [], 'por_mes': [], 'por_status': [],
+                    })
+                query = query.in_('filial_id', allowed_ids)
+            rows = (query.execute().data or [])
+            from collections import defaultdict
+            from datetime import date as _date
+            hoje = _date.today().isoformat()
+
+            def valor_a_receber(r):
+                v = float(r.get('vlr_ajustado_wm') or 0)
+                if v > 0:
+                    return v
+                v = float(r.get('cobrado_wm') or 0)
+                if v > 0:
+                    return v
+                return float(r.get('valor_gold') or 0)
+
+            total_a_receber = 0.0
+            total_faturado = 0.0
+            total_nao_faturado = 0.0
+            total_vencido = 0.0
+            qtd_total = 0
+            by_obrig = defaultdict(lambda: {'valor': 0.0, 'qtd': 0})
+            by_fil = defaultdict(lambda: {'valor': 0.0, 'qtd': 0})
+            by_mes = defaultdict(lambda: {'valor': 0.0, 'qtd': 0})
+            by_status = defaultdict(lambda: {'valor': 0.0, 'qtd': 0})
+
+            for r in rows:
+                v = valor_a_receber(r)
+                total_a_receber += v
+                qtd_total += 1
+                status_fat = (r.get('status_fat') or '').upper()
+                if 'FATURADO' in status_fat and 'NÃO' not in status_fat and 'NAO' not in status_fat:
+                    total_faturado += v
+                else:
+                    total_nao_faturado += v
+                dv = r.get('data_vencimento')
+                if dv and dv < hoje:
+                    total_vencido += v
+                obrig = r.get('obrigacao') or 'SEM OBRIGAÇÃO'
+                by_obrig[obrig]['valor'] += v
+                by_obrig[obrig]['qtd'] += 1
+                fil = r.get('filial_nome') or 'SEM FILIAL'
+                by_fil[fil]['valor'] += v
+                by_fil[fil]['qtd'] += 1
+                comp = r.get('competencia') or ''
+                if comp:
+                    mes = comp[:7]
+                    by_mes[mes]['valor'] += v
+                    by_mes[mes]['qtd'] += 1
+                stt = (r.get('status') or 'SEM STATUS').upper()
+                by_status[stt]['valor'] += v
+                by_status[stt]['qtd'] += 1
+
+            return jsonify({
+                'resumo': {
+                    'total_a_receber': round(total_a_receber, 2),
+                    'total_faturado': round(total_faturado, 2),
+                    'total_nao_faturado': round(total_nao_faturado, 2),
+                    'total_vencido': round(total_vencido, 2),
+                    'qtd_total': qtd_total,
+                },
+                'por_obrigacao': sorted(
+                    [{'obrigacao': k, **v} for k, v in by_obrig.items()],
+                    key=lambda x: x['valor'], reverse=True
+                ),
+                'por_filial': sorted(
+                    [{'filial': k, **v} for k, v in by_fil.items()],
+                    key=lambda x: x['valor'], reverse=True
+                ),
+                'por_mes': sorted(
+                    [{'mes': k, **v} for k, v in by_mes.items()],
+                    key=lambda x: x['mes']
+                ),
+                'por_status': sorted(
+                    [{'status': k, **v} for k, v in by_status.items()],
+                    key=lambda x: x['valor'], reverse=True
+                ),
+            })
+        except Exception as exc:
+            app.logger.error('metricas_contas_a_receber: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.route('/api/contas-a-pagar/metricas', methods=['GET'])
+    @require_auth
+    def metricas_contas_a_pagar(profile):
+        scope_error = require_scope_permission(profile, 'menu.contas_a_pagar')
+        if scope_error:
+            return scope_error
+        try:
+            query = supabase.table('contas_a_pagar').select(
+                'filial_id, filial_nome, competencia, tipo_despesa, status, valor, valor_pago, data_vencimento, data_pagamento'
+            )
+            if profile_has_filial_scope(profile):
+                allowed_ids = profile.get('allowed_filial_ids') or []
+                if not allowed_ids:
+                    return jsonify({
+                        'resumo': {'total_a_pagar': 0, 'total_pago': 0, 'total_pendente': 0, 'total_vencido': 0, 'qtd_total': 0},
+                        'por_tipo': [], 'por_filial': [], 'por_mes': [],
+                    })
+                query = query.in_('filial_id', allowed_ids)
+            rows = (query.execute().data or [])
+            from collections import defaultdict
+            from datetime import date as _date
+            hoje = _date.today().isoformat()
+
+            total_a_pagar = 0.0
+            total_pago = 0.0
+            total_pendente = 0.0
+            total_vencido = 0.0
+            qtd_total = 0
+            by_tipo = defaultdict(lambda: {'valor': 0.0, 'qtd': 0})
+            by_fil = defaultdict(lambda: {'valor': 0.0, 'qtd': 0})
+            by_mes = defaultdict(lambda: {'valor': 0.0, 'qtd': 0})
+
+            for r in rows:
+                v = float(r.get('valor') or 0)
+                vp = float(r.get('valor_pago') or 0)
+                total_a_pagar += v
+                qtd_total += 1
+                stt = (r.get('status') or '').upper()
+                if stt == 'PAGO' or vp >= v and vp > 0:
+                    total_pago += v
+                else:
+                    total_pendente += v
+                    dv = r.get('data_vencimento')
+                    if dv and dv < hoje:
+                        total_vencido += v
+                tipo = r.get('tipo_despesa') or 'SEM TIPO'
+                by_tipo[tipo]['valor'] += v
+                by_tipo[tipo]['qtd'] += 1
+                fil = r.get('filial_nome') or 'SEM FILIAL'
+                by_fil[fil]['valor'] += v
+                by_fil[fil]['qtd'] += 1
+                comp = r.get('competencia') or ''
+                if comp:
+                    mes = comp[:7]
+                    by_mes[mes]['valor'] += v
+                    by_mes[mes]['qtd'] += 1
+
+            return jsonify({
+                'resumo': {
+                    'total_a_pagar': round(total_a_pagar, 2),
+                    'total_pago': round(total_pago, 2),
+                    'total_pendente': round(total_pendente, 2),
+                    'total_vencido': round(total_vencido, 2),
+                    'qtd_total': qtd_total,
+                },
+                'por_tipo': sorted([{'tipo': k, **v} for k, v in by_tipo.items()], key=lambda x: x['valor'], reverse=True),
+                'por_filial': sorted([{'filial': k, **v} for k, v in by_fil.items()], key=lambda x: x['valor'], reverse=True),
+                'por_mes': sorted([{'mes': k, **v} for k, v in by_mes.items()], key=lambda x: x['mes']),
+            })
+        except Exception as exc:
+            app.logger.error('metricas_contas_a_pagar: %s', exc)
             return jsonify({'error': translate_database_error(exc)}), 500
 
     # ============ SERVIR FRONTEND REACT ============

@@ -243,4 +243,6 @@ export const api = {
   rtmDeletar: (mes) => request(`/horas-extras-rtm/mes/${mes}`, { method: 'DELETE' }),
   rtmEditarRegistro: (id, payload) => request(`/horas-extras-rtm/registro/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   rtmMetricas: () => request('/horas-extras-rtm/metricas'),
+  getContasAReceberMetricas: () => request('/contas-a-receber/metricas'),
+  getContasAPagarMetricas: () => request('/contas-a-pagar/metricas'),
 }

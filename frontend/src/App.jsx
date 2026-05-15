@@ -38,6 +38,8 @@ import AcompanhamentoPage from './components/AcompanhamentoPage'
 import HorasExtrasRTMPage from './components/HorasExtrasRTMPage'
 import HorasExtrasHistoricoPage from './components/HorasExtrasHistoricoPage'
 import HorasExtrasMetricasPage from './components/HorasExtrasMetricasPage'
+import ContasAReceberPage from './components/ContasAReceberPage'
+import ContasAPagarPage from './components/ContasAPagarPage'
 
 function PlaceholderPage({ title, text }) {
   return (
@@ -166,6 +168,12 @@ export default function App() {
           </Route>
           <Route element={<AccessRoute requiredScope="menu.horas_extras_rtm" />}>
             <Route path="/horas-extras-metricas" element={<HorasExtrasMetricasPage />} />
+          </Route>
+          <Route element={<AccessRoute requiredScope="menu.contas_a_receber" />}>
+            <Route path="/contas-a-receber" element={<ContasAReceberPage />} />
+          </Route>
+          <Route element={<AccessRoute requiredScope="menu.contas_a_pagar" />}>
+            <Route path="/contas-a-pagar" element={<ContasAPagarPage />} />
           </Route>
         </Route>
       </Route>
