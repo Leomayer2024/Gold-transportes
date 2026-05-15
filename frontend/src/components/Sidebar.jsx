@@ -1,9 +1,18 @@
 import { NavLink } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { getVisibleNavigation } from '../lib/permissions'
+import { getAllNavigation } from '../lib/permissions'
 import logoGold from '../../assets/logo_gold.png'
 import packageInfo from '../../package.json'
+
+function LockIcon() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0, marginLeft: 'auto', opacity: 0.6 }}>
+      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+    </svg>
+  )
+}
 
 // ─── Persistência da ordem do menu ───────────────────────────────────────────
 
@@ -24,14 +33,14 @@ function saveNavOrder(userId, order) {
   } catch {}
 }
 
-// Aplica ordem salva sobre a navegação visível, respeitando permissões atuais
-function applyOrder(visibleGroups, savedOrder) {
-  if (!savedOrder) return visibleGroups
+// Aplica ordem salva sobre todos os itens de navegação
+function applyOrder(allGroups, savedOrder) {
+  if (!savedOrder) return allGroups
   const { groupOrder = [], groupItems = {} } = savedOrder
 
-  const visibleByTo = {}
-  for (const g of visibleGroups) {
-    for (const item of g.items) visibleByTo[item.to] = item
+  const byTo = {}
+  for (const g of allGroups) {
+    for (const item of g.items) byTo[item.to] = item
   }
 
   const placed = new Set()
@@ -40,13 +49,13 @@ function applyOrder(visibleGroups, savedOrder) {
   for (const title of groupOrder) {
     const keys = groupItems[title] || []
     const items = keys
-      .filter((to) => visibleByTo[to])
-      .map((to) => { placed.add(to); return visibleByTo[to] })
+      .filter((to) => byTo[to])
+      .map((to) => { placed.add(to); return byTo[to] })
     if (items.length > 0) result.push({ title, items })
   }
 
-  // Itens com nova permissão não presentes no save salvo
-  for (const g of visibleGroups) {
+  // Itens novos não presentes no save salvo
+  for (const g of allGroups) {
     const unplaced = g.items.filter((item) => !placed.has(item.to))
     if (!unplaced.length) continue
     const ex = result.find((r) => r.title === g.title)
@@ -81,7 +90,7 @@ export default function Sidebar() {
   })
 
   const [groups, setGroups] = useState(() =>
-    applyOrder(getVisibleNavigation(profile), loadNavOrder(userId)),
+    applyOrder(getAllNavigation(profile), loadNavOrder(userId)),
   )
 
   const [organizing, setOrganizing] = useState(false)
@@ -90,7 +99,7 @@ export default function Sidebar() {
   const dragRef = useRef(null)
 
   useEffect(() => {
-    setGroups(applyOrder(getVisibleNavigation(profile), loadNavOrder(userId)))
+    setGroups(applyOrder(getAllNavigation(profile), loadNavOrder(userId)))
   }, [profile, userId])
 
   const initials = (profile?.nome_completo || 'Operador')
@@ -216,7 +225,7 @@ export default function Sidebar() {
   function resetOrder() {
     if (!window.confirm('Restaurar a ordem padrão do menu?')) return
     saveNavOrder(userId, null)
-    setGroups(getVisibleNavigation(profile))
+    setGroups(getAllNavigation(profile))
   }
 
   return (
@@ -312,17 +321,39 @@ export default function Sidebar() {
                           transition: 'opacity .15s',
                         }}
                       >
-                        <NavLink
-                          className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
-                          onClick={organizing ? (e) => e.preventDefault() : confirmNav}
-                          style={{ cursor: organizing ? 'grab' : undefined }}
-                          to={item.to}
-                        >
-                          {organizing && (
-                            <span style={{ marginRight: 6, opacity: 0.4, fontSize: 12 }}>⠿</span>
-                          )}
-                          {item.label}
-                        </NavLink>
+                        {item.locked ? (
+                          <div
+                            className="nav-link"
+                            title="Sem permissão de acesso"
+                            style={{
+                              cursor: 'not-allowed',
+                              opacity: 0.42,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 6,
+                              userSelect: 'none',
+                              pointerEvents: organizing ? undefined : 'none',
+                            }}
+                          >
+                            {organizing && (
+                              <span style={{ opacity: 0.4, fontSize: 12 }}>⠿</span>
+                            )}
+                            <span style={{ flex: 1 }}>{item.label}</span>
+                            <LockIcon />
+                          </div>
+                        ) : (
+                          <NavLink
+                            className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`}
+                            onClick={organizing ? (e) => e.preventDefault() : confirmNav}
+                            style={{ cursor: organizing ? 'grab' : undefined }}
+                            to={item.to}
+                          >
+                            {organizing && (
+                              <span style={{ marginRight: 6, opacity: 0.4, fontSize: 12 }}>⠿</span>
+                            )}
+                            {item.label}
+                          </NavLink>
+                        )}
                       </div>
                     )
                   })}

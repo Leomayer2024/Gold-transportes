@@ -34,6 +34,12 @@ export default function WorkforceBoardPage() {
   const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => {
+    if (board.filiais?.length === 1 && !selectedFilial) {
+      setSelectedFilial(String(board.filiais[0].id))
+    }
+  }, [board.filiais])
+
+  useEffect(() => {
     let active = true
 
     async function loadBoard() {
@@ -101,7 +107,7 @@ export default function WorkforceBoardPage() {
             <label className="field filter-field">
               <span>Base</span>
               <select onChange={(event) => setSelectedFilial(event.target.value)} value={selectedFilial}>
-                <option value="">Todas</option>
+                {(board.filiais || []).length !== 1 && <option value="">Todas</option>}
                 {(board.filiais || []).map((filial) => (
                   <option key={filial.id} value={filial.id}>
                     {filial.cidade}/{filial.uf}

@@ -45,7 +45,6 @@ RESOURCE_DEFINITIONS = {
         'partial_match_fields': ['cidade', 'uf', 'parceira'],
         'view_scope': 'menu.filiais',
         'create_scope': 'create.filiais',
-        'filial_scope_field': 'id',
     },
     'colaboradores': {
         'table': 'colaboradores',
@@ -710,6 +709,9 @@ PERMISSION_SCOPE_GROUPS = [
             {'name': 'menu.horas_extras', 'label': 'Horas extras', 'description': 'Mostra o registro e aprovação de horas extras por colaborador e filial.'},
             {'name': 'menu.horas_extras_rtm', 'label': 'Calc. Horas Extras (RTM)', 'description': 'Calculadora RTM: cola dados da planilha e calcula totais de horas extras com valores hora lidos automaticamente do contrato de cada colaborador.'},
             {'name': 'menu.acompanhamento', 'label': 'Acompanhamento de solicitações', 'description': 'Mostra a tela centralizada de aprovação de manutenções, pedidos de compra e horas extras.'},
+            {'name': 'menu.contas_receber', 'label': 'Contas a Receber', 'description': 'Controle de obrigações a receber de clientes (White Martins e outros), com status, documentos, SLA e alertas.'},
+            {'name': 'menu.contas_pagar', 'label': 'Contas a Pagar', 'description': 'Controle de obrigações a pagar: fornecedores, horas extras Gold, hospedagens e outras despesas.'},
+            {'name': 'menu.banco', 'label': 'Banco / Conciliação', 'description': 'Gestão de contas bancárias, lançamentos e conciliação com contas a receber e pagar.'},
         ],
     },
     {
@@ -732,6 +734,9 @@ PERMISSION_SCOPE_GROUPS = [
             {'name': 'create.pedidos_compra', 'label': 'Lançar pedidos de compra', 'description': 'Permite criar pedidos de compra, adicionar itens e alterar status.'},
             {'name': 'create.feriados', 'label': 'Cadastrar feriados', 'description': 'Permite criar e editar feriados no calendário.'},
             {'name': 'create.notas_cte', 'label': 'Lançar notas / CT-e', 'description': 'Permite criar, editar e quitar notas fiscais, CT-e e faturas.'},
+            {'name': 'create.contas_receber', 'label': 'Lançar contas a receber', 'description': 'Permite criar e editar lançamentos de contas a receber.'},
+            {'name': 'create.contas_pagar', 'label': 'Lançar contas a pagar', 'description': 'Permite criar e editar lançamentos de contas a pagar.'},
+            {'name': 'create.banco', 'label': 'Lançar no banco', 'description': 'Permite cadastrar contas bancárias, lançamentos e marcar conciliações.'},
             {'name': 'create.manutencoes', 'label': 'Abrir OS de manutenção', 'description': 'Permite criar ordens de serviço de manutenção e adicionar peças/serviços.'},
             {'name': 'create.abastecimentos', 'label': 'Registrar abastecimento', 'description': 'Permite lançar abastecimentos de combustível por veículo.'},
             {'name': 'create.pneus', 'label': 'Gerenciar pneus', 'description': 'Permite cadastrar e atualizar o controle de pneus dos veículos.'},
@@ -1433,7 +1438,25 @@ def create_app():
 
     def is_transient_disconnect_error(exc):
         message = str(exc).lower()
-        return 'server disconnected' in message or 'connection reset' in message or 'remoteprotocolerror' in message
+        return any(kw in message for kw in (
+            'server disconnected', 'connection reset', 'remoteprotocolerror',
+            'getaddrinfo failed', 'name or service not known', 'temporary failure',
+            'connection refused', 'timed out', 'connection aborted',
+        ))
+
+    def supabase_retry(fn, attempts=3, base_delay=0.5):
+        """Call fn() with exponential-backoff retry on transient network errors."""
+        last_exc = None
+        for i in range(attempts):
+            try:
+                return fn()
+            except Exception as exc:
+                last_exc = exc
+                if is_transient_disconnect_error(exc):
+                    time.sleep(base_delay * (2 ** i))
+                    continue
+                raise
+        raise last_exc
 
     def table_exists_ready(table_name, retry_attempts=3):
         cache_entry = table_ready_cache.get(table_name)
@@ -1469,6 +1492,8 @@ def create_app():
 
         if last_error and is_transient_disconnect_error(last_error):
             app.logger.warning('Instabilidade ao verificar tabela %s, mantendo disponibilidade para evitar falso alerta.', table_name)
+            # Cache "assume available" for 30s so we don't hammer DNS while it's down
+            table_ready_cache[table_name] = {'value': True, 'expires_at': now_ts + 30}
             return True
 
         table_ready_cache[table_name] = {
@@ -1480,7 +1505,7 @@ def create_app():
     def audit_table_ready():
         return table_exists_ready('auditoria_movimentacoes')
 
-    def write_audit_event(profile, action, resource_name, entity_id=None, status='ok', details=None):
+    def write_audit_event(profile, action, resource_name, entity_id=None, status='ok', details=None, filial_id=None):
         if not audit_table_ready():
             return
 
@@ -1494,7 +1519,7 @@ def create_app():
                 'colaborador_id': profile.get('id') if profile else None,
                 'usuario_id': profile.get('user_id') if profile else None,
                 'nome_colaborador': profile.get('nome_completo') if profile else None,
-                'filial_id': profile.get('filial_id') if profile else None,
+                'filial_id': filial_id or (profile.get('filial_id') if profile else None),
                 'ip_origem': (request.headers.get('X-Forwarded-For', '') or request.remote_addr).split(',')[0].strip() or request.remote_addr,
                 'criado_em': now_iso(),
             }
@@ -1581,8 +1606,10 @@ def create_app():
             if key in config['allowed_fields']
         }
 
-        if resource_name == 'filiais' and 'uf' in sanitized and isinstance(sanitized['uf'], str):
-            sanitized['uf'] = sanitized['uf'].strip().upper()
+        if resource_name == 'filiais':
+            for _f in ('cidade', 'uf', 'parceira'):
+                if _f in sanitized and isinstance(sanitized[_f], str):
+                    sanitized[_f] = sanitized[_f].strip().upper()
 
         if resource_name in {'colaborador_documentos', 'eventos_rh'}:
             if not sanitized.get('filial_id') and sanitized.get('colaborador_id'):
@@ -4417,10 +4444,15 @@ def create_app():
             try:
                 refresh_alert_engine_snapshot()
             except Exception as exc:
-                app.logger.error('Falha no motor de alertas: %s', exc)
                 with alert_engine_lock:
                     alert_engine_state['last_error'] = str(exc)
                     alert_engine_state['last_run_at'] = datetime.now().astimezone().isoformat()
+                if is_transient_disconnect_error(exc):
+                    # Network hiccup — retry sooner (60 s) instead of waiting full interval
+                    app.logger.warning('Motor de alertas: falha de rede transitória (%s). Tentando novamente em 60s.', exc)
+                    time.sleep(60)
+                    continue
+                app.logger.error('Falha no motor de alertas: %s', exc)
             time.sleep(alerts_interval_minutes * 60)
 
     def filter_alert_items_for_profile(profile, items):
@@ -5552,11 +5584,12 @@ def create_app():
                     'removed_columns': removed_columns,
                     'numero_solicitacao': created.get('numero_solicitacao'),
                 },
+                filial_id=created.get('filial_id'),
             )
             return jsonify(created), 201
         except Exception as exc:
             app.logger.error('Erro ao criar recurso %s: %s', resource_name, exc)
-            write_audit_event(profile, 'create', resource_name, status='error', details={'error': str(exc)[:300]})
+            write_audit_event(profile, 'create', resource_name, status='error', details={'error': str(exc)[:300]}, filial_id=payload.get('filial_id'))
             return jsonify({'error': translate_database_error(exc)}), 400
 
     @app.patch('/api/<resource_name>/<int:item_id>')
@@ -5604,6 +5637,19 @@ def create_app():
             else:
                 response = supabase.table(config['table']).update(payload).eq('id', item_id).execute()
             updated = response.data[0] if response.data else {'id': item_id}
+
+            # Cascata de status: reflete ativo/inativo do colaborador nos vínculos de contrato
+            if resource_name == 'colaboradores' and ('data_desligamento' in payload or 'ativo' in payload):
+                colaborador_ativo = payload.get('ativo', True)
+                cascade_payload = {'ativo': colaborador_ativo}
+                data_desligamento = payload.get('data_desligamento')
+                if not colaborador_ativo and data_desligamento:
+                    cascade_payload['data_fim_vinculo'] = data_desligamento
+                try:
+                    supabase.table('contratos_colaboradores').update(cascade_payload).eq('colaborador_id', item_id).execute()
+                except Exception as cascade_exc:
+                    app.logger.warning('Falha ao cascatear status para contratos_colaboradores (colaborador %s): %s', item_id, cascade_exc)
+
             write_audit_event(
                 profile,
                 action='update',
@@ -5613,11 +5659,12 @@ def create_app():
                     'payload_keys': sorted(list(payload.keys())),
                     'removed_columns': removed_columns,
                 },
+                filial_id=updated.get('filial_id'),
             )
             return jsonify(updated)
         except Exception as exc:
             app.logger.error('Erro ao atualizar recurso %s: %s', resource_name, exc)
-            write_audit_event(profile, 'update', resource_name, item_id, status='error', details={'error': str(exc)[:300]})
+            write_audit_event(profile, 'update', resource_name, item_id, status='error', details={'error': str(exc)[:300]}, filial_id=payload.get('filial_id'))
             return jsonify({'error': translate_database_error(exc)}), 400
 
     @app.delete('/api/<resource_name>/<int:item_id>')
@@ -5641,8 +5688,12 @@ def create_app():
             return permission_error
 
         try:
+            # Busca filial_id antes de deletar para auditoria
+            item_response = supabase.table(config['table']).select('filial_id').eq('id', item_id).execute()
+            item_filial_id = item_response.data[0].get('filial_id') if item_response.data else None
+
             supabase.table(config['table']).delete().eq('id', item_id).execute()
-            write_audit_event(profile, 'delete', resource_name, item_id)
+            write_audit_event(profile, 'delete', resource_name, item_id, filial_id=item_filial_id)
             return jsonify({'status': 'ok'})
         except Exception as exc:
             app.logger.error('Erro ao excluir recurso %s: %s', resource_name, exc)
@@ -8595,7 +8646,7 @@ def create_app():
         try:
             colab_row = (
                 supabase.table('colaboradores')
-                .select('id, nome_completo, user_id')
+                .select('id, nome_completo, user_id, filial_id')
                 .eq('id', colaborador_id)
                 .limit(1)
                 .execute()
@@ -8613,6 +8664,7 @@ def create_app():
             write_audit_event(
                 profile, 'update', 'colaboradores', colaborador_id,
                 details={'acao': 'reset_senha', 'nome': colab_row[0].get('nome_completo', '')},
+                filial_id=colab_row[0].get('filial_id'),
             )
             return jsonify({'status': 'ok', 'mensagem': 'Senha redefinida com sucesso.'})
 
@@ -8644,7 +8696,7 @@ def create_app():
         try:
             colab_row = (
                 supabase.table('colaboradores')
-                .select('id, nome_completo, user_id')
+                .select('id, nome_completo, user_id, filial_id')
                 .eq('id', colaborador_id)
                 .limit(1)
                 .execute()
@@ -8662,6 +8714,7 @@ def create_app():
             write_audit_event(
                 profile, 'update', 'colaboradores', colaborador_id,
                 details={'acao': 'atualizar_email', 'nome': colab_row[0].get('nome_completo', '')},
+                filial_id=colab_row[0].get('filial_id'),
             )
             return jsonify({'status': 'ok', 'mensagem': 'E-mail atualizado com sucesso.'})
 
@@ -9312,27 +9365,215 @@ def create_app():
         if not registros:
             return jsonify({'error': 'Nenhum registro para salvar.'}), 400
         try:
-            # Resolve filial_id for each colaborador being saved
-            colab_ids = [r.get('colaborador_id') for r in registros if r.get('colaborador_id')]
-            collab_filial_map = {}
-            if colab_ids:
-                resp = supabase.table('colaboradores').select('id, filial_id').in_('id', colab_ids).execute()
-                for c in (resp.data or []):
-                    collab_filial_map[int(c['id'])] = c.get('filial_id')
+            import unicodedata, re as _re
             user_filial_id = profile.get('filial_id')
+
+            # Fetch ALL collaborators for filial resolution and name-based matching
+            todos_colaboradores_db = []
+            collab_filial_map = {}
+            try:
+                colab_resp = supabase.table('colaboradores').select('id, nome_completo, filial_id, ativo').execute()
+                todos_colaboradores_db = colab_resp.data or []
+                for c in todos_colaboradores_db:
+                    collab_filial_map[int(c['id'])] = c.get('filial_id')
+            except Exception:
+                pass
+
+            # Resolve tipo_hora via contratos_colaboradores — same logic as tipo_hora_mapa_rtm
+            # Fetch ALL active contracts (no colab_id filter) to guarantee consistency with the calculator display
+            tipo_hora_map = {}   # colaborador_id (str) -> 'fixo' | 'extra'
+            colab_contrato_map = {}  # colaborador_id (str) -> contrato_operacional_id (fixo only)
+            mes_dt = (mes_referencia[:7] + '-01') if len(mes_referencia) >= 7 else mes_referencia
+            mes_prefix = mes_referencia[:7]
+            cc_resp = supabase.table('contratos_colaboradores').select(
+                'colaborador_id, tipo_item, inicio_vigencia, contrato_operacional_id'
+            ).execute()
+            for cc in (cc_resp.data or []):
+                cid_cc = cc.get('colaborador_id')
+                if cid_cc is None:
+                    continue
+                iv = cc.get('inicio_vigencia')
+                # Compare by month only — a contract starting mid-month still counts for that month.
+                if iv is not None and iv[:7] > mes_prefix:
+                    continue
+                ti = cc.get('tipo_item', '')
+                cid_str = str(cid_cc)
+                if ti.lower() == 'colaborador':
+                    tipo_hora_map[cid_str] = 'fixo'
+                    if cc.get('contrato_operacional_id'):
+                        colab_contrato_map[cid_str] = cc['contrato_operacional_id']
+                elif cid_str not in tipo_hora_map:
+                    tipo_hora_map[cid_str] = 'extra'
+
+            # Build name-keyed map for cases where colaborador_id doesn't align between tables
+            import unicodedata as _ud, re as _re2
+            def _nrm(n):
+                if not n: return ''
+                nfd = _ud.normalize('NFD', str(n).upper().strip())
+                a = ''.join(c for c in nfd if _ud.category(c) != 'Mn')
+                return _re2.sub(r'\s+', ' ', _re2.sub(r'[^A-Z0-9 ]', ' ', a)).strip()
+            # Cross-reference: for each collaborator in DB, if their id is in tipo_hora_map, index by name
+            tipo_hora_nome_map = {}
+            for c in todos_colaboradores_db:
+                cid_str2 = str(c.get('id', ''))
+                if cid_str2 in tipo_hora_map:
+                    tipo_hora_nome_map[_nrm(c.get('nome_completo', ''))] = tipo_hora_map[cid_str2]
+
+            # Fetch cliente_nome for each contrato referenced by fixo collaborators
+            contrato_cliente_map = {}  # contrato_id -> {cliente_nome, contrato_nome}
+            fixo_contrato_ids = list({v for v in colab_contrato_map.values() if v})
+            if fixo_contrato_ids:
+                try:
+                    cont_resp = supabase.table('contratos_operacionais').select(
+                        'id, cliente_nome, nome_contrato'
+                    ).in_('id', fixo_contrato_ids).execute()
+                    for c in (cont_resp.data or []):
+                        contrato_cliente_map[c['id']] = {
+                            'cliente_nome': c.get('cliente_nome') or c.get('nome_contrato', ''),
+                            'contrato_nome': c.get('nome_contrato', ''),
+                        }
+                except Exception:
+                    pass
+
+            # Build filial name lookup: nome (pasta/arquivo) → filial_id com matching flexível
+            filial_nome_to_id_map = {}  # 'JOINVILLE' → filial_id, 'CUIABÁ' → filial_id, etc
+            filiais_cadastradas = []  # Guardar todas as filiais para matching fuzzy
+            try:
+                fil_resp = supabase.table('filiais').select('id, cidade').execute()
+                for f in (fil_resp.data or []):
+                    filiais_cadastradas.append({'id': f['id'], 'cidade': f.get('cidade', '').upper().strip()})
+                    # Map by exact cidade match
+                    filial_nome_to_id_map[f.get('cidade', '').upper().strip()] = f['id']
+            except Exception:
+                pass
+
+            # Função para buscar filial com matching fuzzy
+            def find_filial_id(filial_nome_arquivo):
+                if not filial_nome_arquivo:
+                    return None
+                filial_nome_arquivo = filial_nome_arquivo.upper().strip()
+                # Primeiro tenta match exato
+                if filial_nome_arquivo in filial_nome_to_id_map:
+                    return filial_nome_to_id_map[filial_nome_arquivo]
+                # Tenta match parcial (contains)
+                for f in filiais_cadastradas:
+                    if filial_nome_arquivo in f['cidade'] or f['cidade'] in filial_nome_arquivo:
+                        return f['id']
+                # Tenta remover acentos
+                import unicodedata
+                filial_norm = ''.join(c for c in unicodedata.normalize('NFD', filial_nome_arquivo) if unicodedata.category(c) != 'Mn')
+                for f in filiais_cadastradas:
+                    f_norm = ''.join(c for c in unicodedata.normalize('NFD', f['cidade']) if unicodedata.category(c) != 'Mn')
+                    if filial_norm == f_norm or filial_norm in f_norm or f_norm in filial_norm:
+                        return f['id']
+                return None
+
+            # Build filial name lookup: filial_id → cidade (all branches, from the list already fetched)
+            filial_nome_map = {f['id']: f['cidade'] for f in filiais_cadastradas}
+
+            # ── Fuzzy name matching (mirrors frontend matchColaborador) ────────────
+            _STOP_WORDS = {'DE', 'DA', 'DO', 'DAS', 'DOS', 'E', 'EM', 'OS', 'AS', 'A'}
+
+            def _norm(name):
+                if not name:
+                    return ''
+                nfd = unicodedata.normalize('NFD', name.upper().strip())
+                ascii_ = ''.join(c for c in nfd if unicodedata.category(c) != 'Mn')
+                return _re.sub(r'\s+', ' ', _re.sub(r'[^A-Z0-9 ]', ' ', ascii_)).strip()
+
+            def _tokens(name):
+                return [w for w in _norm(name).split() if len(w) > 2 and w not in _STOP_WORDS]
+
+            def _overlap(ta, tb):
+                if not ta or not tb:
+                    return 0.0
+                sa, sb = set(ta), set(tb)
+                return len(sa & sb) / min(len(sa), len(sb))
+
+            def match_colab_nome(nome_pasta):
+                """Return collaborator dict from DB that best matches nome_pasta, or None."""
+                n = _norm(nome_pasta)
+                if not n:
+                    return None
+                # Stage 1: exact
+                for c in todos_colaboradores_db:
+                    if _norm(c.get('nome_completo', '')) == n:
+                        return c
+                # Stage 2: one contains the other
+                for c in todos_colaboradores_db:
+                    cn = _norm(c.get('nome_completo', ''))
+                    if cn and (n in cn or cn in n):
+                        return c
+                # Stage 3: all words of shorter name appear in longer
+                n_tok = _tokens(n)
+                for c in todos_colaboradores_db:
+                    cn_tok = _tokens(c.get('nome_completo', ''))
+                    if not n_tok or not cn_tok:
+                        continue
+                    shorter = n_tok if len(n_tok) <= len(cn_tok) else cn_tok
+                    longer = cn_tok if shorter is n_tok else n_tok
+                    if all(w in longer for w in shorter):
+                        return c
+                # Stage 4: word overlap >= 60%
+                for c in todos_colaboradores_db:
+                    if _overlap(n_tok, _tokens(c.get('nome_completo', ''))) >= 0.6:
+                        return c
+                # Stage 5: first + last word match
+                parts = n.split()
+                if len(parts) >= 2:
+                    first, last = parts[0], parts[-1]
+                    for c in todos_colaboradores_db:
+                        cp = _norm(c.get('nome_completo', '')).split()
+                        if len(cp) >= 2 and cp[0] == first and cp[-1] == last:
+                            return c
+                return None
 
             rows = []
             for r in registros:
                 cid = r.get('colaborador_id')
-                filial_id = collab_filial_map.get(int(cid)) if cid else None
+                filial_id = None
+                filial_nome_arquivo = r.get('filial_nome', '')
+
+                # Resolve tipo_hora: try stored colaborador_id first
+                tipo_hora = tipo_hora_map.get(str(cid), None) if cid else None
+
+                # Fallback: if no ID or ID not in contract map, try server-side name matching
+                if tipo_hora is None:
+                    nome_func = r.get('funcionario_nome', '') or r.get('funcionario', '')
+                    matched_c = match_colab_nome(nome_func)
+                    if matched_c:
+                        alt_cid = matched_c.get('id')
+                        tipo_hora = tipo_hora_map.get(str(alt_cid), None)
+                        if tipo_hora is None:
+                            # Try name-keyed map (handles ID mismatches between tables)
+                            tipo_hora = tipo_hora_nome_map.get(_nrm(matched_c.get('nome_completo', '')), None)
+                        if alt_cid and not cid:
+                            cid = alt_cid
+                # Final fallback: try direct name lookup in nome_map
+                if tipo_hora is None:
+                    nome_func2 = r.get('funcionario_nome', '') or r.get('funcionario', '')
+                    tipo_hora = tipo_hora_nome_map.get(_nrm(nome_func2), None)
+                tipo_hora = tipo_hora or 'extra'
+
+                # Prioridade 1: tentar resolver filial_id pela filial_nome do arquivo (com matching fuzzy)
+                if filial_nome_arquivo:
+                    filial_id = find_filial_id(filial_nome_arquivo)
+
+                # Prioridade 2: usar filial_id do colaborador se encontrado
+                if filial_id is None:
+                    filial_id = collab_filial_map.get(int(cid)) if cid else None
+
+                # Prioridade 3: usar filial_id do usuário logado
                 if filial_id is None:
                     filial_id = user_filial_id
+                # Prioriza o filial_nome do arquivo; usa o do banco só se não tiver no arquivo
+                filial_nome = r.get('filial_nome', '') or filial_nome_map.get(filial_id) or ''
                 rows.append({
                     'mes_referencia': mes_referencia,
                     'funcionario_nome': r.get('funcionario_nome', ''),
                     'colaborador_id': cid,
                     'filial_id': filial_id,
-                    'filial_nome': r.get('filial_nome', ''),
+                    'filial_nome': filial_nome,
                     'estado': r.get('estado', ''),
                     'horas_normais': float(r.get('horas_normais') or 0),
                     'horas_extra_100': float(r.get('horas_extra_100') or 0),
@@ -9341,6 +9582,7 @@ def create_app():
                     'total_50': float(r.get('total_50') or 0),
                     'total_100': float(r.get('total_100') or 0),
                     'total_geral': float(r.get('total_geral') or 0),
+                    'tipo_hora': tipo_hora,
                 })
 
             # Delete only allowed filial's existing records for this month
@@ -9354,6 +9596,107 @@ def create_app():
 
             if rows:
                 supabase.table('horas_extras_rtm_registros').insert(rows).execute()
+
+            # Registra auditoria com filiais corretas dos registros
+            unique_filiais = {r.get('filial_id') for r in rows if r.get('filial_id')}
+            for filial_id in unique_filiais:
+                write_audit_event(
+                    profile,
+                    action='create',
+                    resource_name='horas_extras_rtm_registros',
+                    entity_id=None,
+                    details={'mes_referencia': mes_referencia, 'registros_count': len([r for r in rows if r.get('filial_id') == filial_id])},
+                    filial_id=filial_id,
+                )
+
+            # Auto-create Contas a Receber (fixo only) and Contas a Pagar (extra only)
+            try:
+                from collections import defaultdict
+                # Group by filial_nome (not filial_id) so that each branch gets its own CP/CR
+                # even when filial_id resolution falls back to the user's home branch
+                fixo_groups = defaultdict(lambda: {
+                    'total': 0.0, 'count': 0, 'filial_nome': '', 'filial_id': None,
+                    'contrato_id': None, 'cliente_nome': '', 'contrato_nome': '',
+                })
+                extra_groups = defaultdict(lambda: {'total': 0.0, 'count': 0, 'filial_nome': '', 'filial_id': None})
+                for r in rows:
+                    fname = r.get('filial_nome') or 'Sem filial'
+                    total = float(r.get('total_geral') or 0)
+                    cid = r.get('colaborador_id')
+                    if r.get('tipo_hora') == 'fixo':
+                        contrato_id = colab_contrato_map.get(str(cid)) if cid else None
+                        key = (fname, contrato_id)
+                        info = fixo_groups[key]
+                        info['total'] += total
+                        info['count'] += 1
+                        info['filial_nome'] = r.get('filial_nome', '')
+                        info['filial_id'] = r.get('filial_id')
+                        info['contrato_id'] = contrato_id
+                        if contrato_id and contrato_id in contrato_cliente_map:
+                            info['cliente_nome'] = contrato_cliente_map[contrato_id]['cliente_nome']
+                            info['contrato_nome'] = contrato_cliente_map[contrato_id]['contrato_nome']
+                    else:
+                        info = extra_groups[fname]
+                        info['total'] += total
+                        info['count'] += 1
+                        info['filial_nome'] = r.get('filial_nome', '')
+                        info['filial_id'] = r.get('filial_id')
+
+                # Remove auto-generated CR/CP for this month before recreating
+                supabase.table('contas_a_receber').delete().eq('horas_extras_rtm_mes', mes_referencia).execute()
+                supabase.table('contas_a_pagar').delete().eq('horas_extras_rtm_mes', mes_referencia).execute()
+
+                mes_label = mes_referencia[:7]  # YYYY-MM
+                cr_rows, cp_rows = [], []
+
+                # FIXO → Contas a Receber (client reimburses Gold)
+                for _key, info in fixo_groups.items():
+                    if info['total'] <= 0:
+                        continue
+                    fid_cr = info['filial_id'] or find_filial_id(info.get('filial_nome', ''))
+                    cliente = info.get('cliente_nome') or ''
+                    cr_rows.append({
+                        'filial_id': fid_cr,
+                        'filial_nome': info['filial_nome'],
+                        'competencia': mes_referencia,
+                        'obrigacao': 'HORA EXTRA',
+                        'descricao': f"Horas Extras – Fixo Contrato ({mes_label}) – {info['filial_nome']}",
+                        'cliente_nome': cliente,
+                        'contrato_operacional_id': info.get('contrato_id'),
+                        'contrato_nome': info.get('contrato_nome', ''),
+                        'valor_gold': round(info['total'], 2),
+                        'status_fat': 'NÃO FATURADO',
+                        'status': 'FALTA COBRAR',
+                        'horas_extras_rtm_mes': mes_referencia,
+                        'tipo_hora': 'fixo',
+                        'limite_dia': 10,
+                        'prazo_envio': 'ATÉ O DIA 10 - SUB',
+                    })
+
+                # EXTRA → Contas a Pagar only (Gold absorbs cost, no CR created)
+                for _fid, info in extra_groups.items():
+                    if info['total'] <= 0:
+                        continue
+                    fid_cp = info['filial_id'] or find_filial_id(info.get('filial_nome', ''))
+                    cp_rows.append({
+                        'filial_id': fid_cp,
+                        'filial_nome': info['filial_nome'],
+                        'competencia': mes_referencia,
+                        'tipo_despesa': 'HORAS EXTRAS',
+                        'descricao': f"Horas Extras Fora Contrato ({mes_label}) – {info['filial_nome']} – {info['count']} funcionários",
+                        'valor': round(info['total'], 2),
+                        'status': 'PENDENTE',
+                        'horas_extras_rtm_mes': mes_referencia,
+                        'colaboradores_count': info['count'],
+                    })
+
+                if cr_rows:
+                    supabase.table('contas_a_receber').insert(cr_rows).execute()
+                if cp_rows:
+                    supabase.table('contas_a_pagar').insert(cp_rows).execute()
+            except Exception as fin_exc:
+                app.logger.warning('auto_create_financeiro_rtm: %s', fin_exc)
+
             return jsonify({'ok': True, 'count': len(rows)})
         except Exception as exc:
             app.logger.error('salvar_horas_extras_rtm: %s', exc)
@@ -9371,7 +9714,7 @@ def create_app():
                 if not allowed_ids:
                     return jsonify({'data': []})
                 query = query.in_('filial_id', allowed_ids)
-            result = query.execute()
+            result = supabase_retry(query.execute)
             from collections import defaultdict
             meses = defaultdict(lambda: {'funcionarios': 0, 'total_horas_normais': 0.0, 'total_horas_100': 0.0, 'total_geral': 0.0})
             for row in (result.data or []):
@@ -9384,6 +9727,40 @@ def create_app():
             return jsonify({'data': lista})
         except Exception as exc:
             app.logger.error('listar_meses_horas_extras_rtm: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.route('/api/horas-extras-rtm/meses-filiais', methods=['GET'])
+    @require_auth
+    def listar_meses_filiais_horas_extras_rtm(profile):
+        try:
+            query = supabase.table('horas_extras_rtm_registros').select(
+                'mes_referencia, filial_nome, horas_normais, horas_extra_100, total_geral, tipo_hora'
+            ).order('mes_referencia', desc=True)
+            if profile_has_filial_scope(profile):
+                allowed_ids = profile.get('allowed_filial_ids') or []
+                if not allowed_ids:
+                    return jsonify({'data': []})
+                query = query.in_('filial_id', allowed_ids)
+            result = supabase_retry(query.execute)
+            from collections import defaultdict
+            groups = defaultdict(lambda: {'funcionarios': 0, 'total_horas_normais': 0.0, 'total_horas_100': 0.0, 'total_geral': 0.0, 'total_fixo': 0.0, 'total_extra': 0.0})
+            for row in (result.data or []):
+                key = (row['mes_referencia'], row.get('filial_nome') or 'Sem filial')
+                g = groups[key]
+                g['funcionarios'] += 1
+                g['total_horas_normais'] += float(row.get('horas_normais') or 0)
+                g['total_horas_100'] += float(row.get('horas_extra_100') or 0)
+                g['total_geral'] += float(row.get('total_geral') or 0)
+                if row.get('tipo_hora') == 'fixo':
+                    g['total_fixo'] += float(row.get('total_geral') or 0)
+                elif row.get('tipo_hora') == 'extra':
+                    g['total_extra'] += float(row.get('total_geral') or 0)
+            lista = [{'mes_referencia': k[0], 'filial_nome': k[1], **v} for k, v in groups.items()]
+            lista.sort(key=lambda x: x['filial_nome'])
+            lista.sort(key=lambda x: x['mes_referencia'], reverse=True)
+            return jsonify({'data': lista})
+        except Exception as exc:
+            app.logger.error('listar_meses_filiais_horas_extras_rtm: %s', exc)
             return jsonify({'error': translate_database_error(exc)}), 500
 
     @app.route('/api/horas-extras-rtm/detalhe', methods=['GET'])
@@ -9399,10 +9776,73 @@ def create_app():
                 if not allowed_ids:
                     return jsonify({'data': []})
                 query = query.in_('filial_id', allowed_ids)
-            result = query.execute()
+            result = supabase_retry(query.execute)
             return jsonify({'data': result.data or []})
         except Exception as exc:
             app.logger.error('detalhe_horas_extras_rtm: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.route('/api/horas-extras-rtm/tipo-hora-mapa', methods=['GET'])
+    @require_auth
+    def tipo_hora_mapa_rtm(profile):
+        """Returns {colaborador_id: {tipo_hora, cliente_nome, contrato_nome, contrato_id}} for a given month."""
+        mes = request.args.get('mes')  # YYYY-MM or YYYY-MM-DD
+        if not mes:
+            return jsonify({'error': 'Parâmetro mes obrigatório.'}), 400
+        mes_prefix = mes[:7]  # YYYY-MM
+        mes_dt = mes_prefix + '-01'
+        try:
+            cc_resp = supabase.table('contratos_colaboradores').select(
+                'colaborador_id, tipo_item, inicio_vigencia, contrato_operacional_id'
+            ).execute()
+
+            tipo_hora_map = {}    # colab_id (str) -> 'fixo' | 'extra'
+            colab_contrato = {}   # colab_id (str) -> contrato_operacional_id
+
+            for cc in (cc_resp.data or []):
+                cid = cc.get('colaborador_id')
+                if cid is None:
+                    continue
+                iv = cc.get('inicio_vigencia')
+                # Compare by month only — a contract starting mid-month still counts for that month.
+                if iv is not None and iv[:7] > mes_prefix:
+                    continue
+                ti = cc.get('tipo_item', '')
+                cid_str = str(cid)
+                if ti.lower() == 'colaborador':
+                    tipo_hora_map[cid_str] = 'fixo'
+                    if cc.get('contrato_operacional_id'):
+                        colab_contrato[cid_str] = cc['contrato_operacional_id']
+                elif cid_str not in tipo_hora_map:
+                    tipo_hora_map[cid_str] = 'extra'
+
+            # Fetch client names for all contracts referenced
+            contrato_info = {}
+            fixo_contrato_ids = list({v for v in colab_contrato.values() if v})
+            if fixo_contrato_ids:
+                cont_resp = supabase.table('contratos_operacionais').select(
+                    'id, cliente_nome, nome_contrato'
+                ).in_('id', fixo_contrato_ids).execute()
+                for c in (cont_resp.data or []):
+                    contrato_info[c['id']] = {
+                        'cliente_nome': c.get('cliente_nome') or c.get('nome_contrato', ''),
+                        'contrato_nome': c.get('nome_contrato', ''),
+                    }
+
+            result = {}
+            for cid_str, tipo in tipo_hora_map.items():
+                contrato_id = colab_contrato.get(cid_str)
+                info = contrato_info.get(contrato_id, {}) if contrato_id else {}
+                result[cid_str] = {
+                    'tipo_hora': tipo,
+                    'cliente_nome': info.get('cliente_nome', ''),
+                    'contrato_nome': info.get('contrato_nome', ''),
+                    'contrato_id': contrato_id,
+                }
+
+            return jsonify({'data': result})
+        except Exception as exc:
+            app.logger.error('tipo_hora_mapa_rtm: %s', exc)
             return jsonify({'error': translate_database_error(exc)}), 500
 
     @app.route('/api/horas-extras-rtm/registro/<registro_id>', methods=['PUT'])
@@ -9437,11 +9877,176 @@ def create_app():
             app.logger.error('editar_registro_horas_extras_rtm: %s', exc)
             return jsonify({'error': translate_database_error(exc)}), 500
 
+    @app.route('/api/horas-extras-rtm/recalcular-tipo-hora', methods=['POST'])
+    @require_auth
+    def recalcular_tipo_hora_rtm(profile):
+        """Re-derives tipo_hora for all existing records of a given month (and optionally filial)."""
+        import unicodedata, re as _re
+        data = request.get_json() or {}
+        mes = data.get('mes')
+        filial_nome = data.get('filial_nome')
+        if not mes:
+            return jsonify({'error': 'Parâmetro mes obrigatório.'}), 400
+        try:
+            mes_prefix = mes[:7]
+            mes_dt = mes_prefix + '-01'
+
+            # Fetch existing records for this month/filial
+            q = supabase.table('horas_extras_rtm_registros').select('id, colaborador_id, funcionario_nome').eq('mes_referencia', mes)
+            if filial_nome:
+                q = q.eq('filial_nome', filial_nome)
+            if profile_has_filial_scope(profile):
+                allowed_ids = profile.get('allowed_filial_ids') or []
+                if allowed_ids:
+                    q = q.in_('filial_id', allowed_ids)
+            regs = q.execute().data or []
+
+            # Build tipo_hora_map from all contracts (no ativo filter, date-scoped)
+            cc_resp = supabase.table('contratos_colaboradores').select(
+                'colaborador_id, tipo_item, inicio_vigencia'
+            ).execute()
+            tipo_hora_map = {}
+            for cc in (cc_resp.data or []):
+                cid_cc = cc.get('colaborador_id')
+                if cid_cc is None:
+                    continue
+                iv = cc.get('inicio_vigencia')
+                # Compare by month only — a contract starting mid-month still counts for that month.
+                if iv is not None and iv[:7] > mes_prefix:
+                    continue
+                ti = cc.get('tipo_item', '')
+                cid_str = str(cid_cc)
+                if ti.lower() == 'colaborador':
+                    tipo_hora_map[cid_str] = 'fixo'
+                elif cid_str not in tipo_hora_map:
+                    tipo_hora_map[cid_str] = 'extra'
+
+            # Fetch all collaborators for name-based fallback matching
+            todos_db = []
+            try:
+                todos_db = supabase.table('colaboradores').select('id, nome_completo').execute().data or []
+            except Exception:
+                pass
+
+            _STOP_W = {'DE', 'DA', 'DO', 'DAS', 'DOS', 'E', 'EM', 'OS', 'AS', 'A'}
+
+            def _nm(n):
+                if not n:
+                    return ''
+                nfd = unicodedata.normalize('NFD', n.upper().strip())
+                a = ''.join(c for c in nfd if unicodedata.category(c) != 'Mn')
+                return _re.sub(r'\s+', ' ', _re.sub(r'[^A-Z0-9 ]', ' ', a)).strip()
+
+            def _tok(n):
+                return [w for w in _nm(n).split() if len(w) > 2 and w not in _STOP_W]
+
+            def _ovl(ta, tb):
+                if not ta or not tb:
+                    return 0.0
+                return len(set(ta) & set(tb)) / min(len(set(ta)), len(set(tb)))
+
+            def _match_nome(nome):
+                n = _nm(nome)
+                if not n:
+                    return None
+                for c in todos_db:
+                    if _nm(c.get('nome_completo', '')) == n:
+                        return c
+                for c in todos_db:
+                    cn = _nm(c.get('nome_completo', ''))
+                    if cn and (n in cn or cn in n):
+                        return c
+                nt = _tok(n)
+                for c in todos_db:
+                    ct = _tok(c.get('nome_completo', ''))
+                    if not nt or not ct:
+                        continue
+                    sh = nt if len(nt) <= len(ct) else ct
+                    lg = ct if sh is nt else nt
+                    if all(w in lg for w in sh):
+                        return c
+                for c in todos_db:
+                    if _ovl(nt, _tok(c.get('nome_completo', ''))) >= 0.6:
+                        return c
+                parts = n.split()
+                if len(parts) >= 2:
+                    f, l = parts[0], parts[-1]
+                    for c in todos_db:
+                        cp = _nm(c.get('nome_completo', '')).split()
+                        if len(cp) >= 2 and cp[0] == f and cp[-1] == l:
+                            return c
+                return None
+
+            # Build name-keyed fallback map (handles ID mismatches between tables)
+            tipo_hora_nome_map2 = {}
+            for c in todos_db:
+                cid_str2 = str(c.get('id', ''))
+                if cid_str2 in tipo_hora_map:
+                    tipo_hora_nome_map2[_nm(c.get('nome_completo', ''))] = tipo_hora_map[cid_str2]
+
+            # Resolve tipo_hora for each record, then batch-update to minimise DB round-trips
+            fixo_ids = []    # record IDs to set tipo_hora='fixo'
+            extra_ids = []   # record IDs to set tipo_hora='extra'
+            colab_patches = {}  # record id → colaborador_id (only when patching a missing one)
+            detalhes_extra = []  # diagnostic: why each 'extra' employee was classified so
+
+            for reg in regs:
+                cid = reg.get('colaborador_id')
+                nome_func = reg.get('funcionario_nome', '')
+                motivo = None
+                # 1. Try stored colaborador_id
+                tipo_hora = tipo_hora_map.get(str(cid), None) if cid else None
+                if tipo_hora is None and cid:
+                    motivo = 'colaborador_id_nao_encontrado_em_contratos'
+                # 2. Direct name lookup
+                if tipo_hora is None:
+                    tipo_hora = tipo_hora_nome_map2.get(_nm(nome_func), None)
+                # 3. Fuzzy name match → nome_map
+                if tipo_hora is None:
+                    matched = _match_nome(nome_func)
+                    if matched:
+                        alt_cid = matched.get('id')
+                        tipo_hora = tipo_hora_map.get(str(alt_cid), None)
+                        if tipo_hora is None:
+                            tipo_hora = tipo_hora_nome_map2.get(_nm(matched.get('nome_completo', '')), None)
+                        if tipo_hora is not None and not cid:
+                            colab_patches[reg['id']] = alt_cid
+                    else:
+                        motivo = motivo or ('sem_colaborador_id_e_nome_nao_encontrado' if not cid else 'colaborador_id_nao_encontrado_e_nome_sem_match')
+                tipo_hora = tipo_hora or 'extra'
+                if tipo_hora == 'fixo':
+                    fixo_ids.append(reg['id'])
+                else:
+                    extra_ids.append(reg['id'])
+                    detalhes_extra.append({
+                        'nome': nome_func,
+                        'colaborador_id': cid,
+                        'motivo': motivo or 'nao_vinculado_como_colaborador_em_contrato',
+                    })
+
+            # Batch updates — 2 queries instead of N
+            if fixo_ids:
+                supabase.table('horas_extras_rtm_registros').update({'tipo_hora': 'fixo'}).in_('id', fixo_ids).execute()
+            if extra_ids:
+                supabase.table('horas_extras_rtm_registros').update({'tipo_hora': 'extra'}).in_('id', extra_ids).execute()
+            # Patch missing colaborador_ids individually (usually zero or very few)
+            for rec_id, c_id in colab_patches.items():
+                supabase.table('horas_extras_rtm_registros').update({'colaborador_id': c_id}).eq('id', rec_id).execute()
+
+            updated = len(fixo_ids) + len(extra_ids)
+            return jsonify({'ok': True, 'updated': updated, 'fixo': len(fixo_ids), 'extra': len(extra_ids), 'detalhes_extra': detalhes_extra})
+        except Exception as exc:
+            app.logger.error('recalcular_tipo_hora_rtm: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
     @app.route('/api/horas-extras-rtm/mes/<mes>', methods=['DELETE'])
     @require_auth
     def deletar_mes_horas_extras_rtm(profile, mes):
         try:
+            filial_nome = request.args.get('filial_nome')
             del_query = supabase.table('horas_extras_rtm_registros').delete().eq('mes_referencia', mes)
+            if filial_nome:
+                del_query = del_query.eq('filial_nome', filial_nome)
             if profile_has_filial_scope(profile):
                 allowed_ids = profile.get('allowed_filial_ids') or []
                 if not allowed_ids:
@@ -9516,6 +10121,447 @@ def create_app():
             })
         except Exception as exc:
             app.logger.error('metricas_horas_extras_rtm: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    # ============ CONTAS A RECEBER ============
+
+    @app.route('/api/contas-receber', methods=['GET'])
+    @require_auth
+    def listar_contas_receber(profile):
+        try:
+            query = supabase.table('contas_a_receber').select('*').order('competencia', desc=True).order('filial_nome')
+            if profile_has_filial_scope(profile):
+                allowed_ids = profile.get('allowed_filial_ids') or []
+                if not allowed_ids:
+                    return jsonify({'data': []})
+                query = query.in_('filial_id', allowed_ids)
+            competencia = request.args.get('competencia')
+            obrigacao = request.args.get('obrigacao')
+            status_fat = request.args.get('status_fat')
+            status = request.args.get('status')
+            if competencia:
+                query = query.eq('competencia', competencia)
+            if obrigacao:
+                query = query.eq('obrigacao', obrigacao)
+            if status_fat:
+                query = query.eq('status_fat', status_fat)
+            if status:
+                query = query.eq('status', status)
+            result = supabase_retry(query.execute)
+            return jsonify({'data': result.data or []})
+        except Exception as exc:
+            app.logger.error('listar_contas_receber: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.route('/api/contas-receber/alertas', methods=['GET'])
+    @require_auth
+    def alertas_contas_receber(profile):
+        try:
+            query = supabase.table('contas_a_receber').select(
+                'status_fat, status, cobrado_wm, valor_gold, data_limite, data_vencimento, o_que_falta'
+            )
+            if profile_has_filial_scope(profile):
+                allowed_ids = profile.get('allowed_filial_ids') or []
+                if not allowed_ids:
+                    return jsonify({'total_a_receber': 0, 'nao_faturado': 0, 'falta_cobrar': 0, 'vencidos': 0, 'pendentes_autorizacao': 0})
+                query = query.in_('filial_id', allowed_ids)
+            result = supabase_retry(query.execute)
+            rows = result.data or []
+            from datetime import date as _date
+            hoje = _date.today().isoformat()
+            total_a_receber = sum(float(r.get('cobrado_wm') or 0) for r in rows if r.get('status_fat') != 'FATURADO')
+            nao_faturado = sum(1 for r in rows if r.get('status_fat') == 'NÃO FATURADO')
+            falta_cobrar = sum(1 for r in rows if r.get('status') == 'FALTA COBRAR')
+            vencidos = sum(1 for r in rows if (r.get('data_limite') or r.get('data_vencimento') or '') < hoje and r.get('status_fat') != 'FATURADO')
+            pendentes = sum(1 for r in rows if r.get('o_que_falta'))
+            return jsonify({
+                'total_a_receber': total_a_receber,
+                'nao_faturado': nao_faturado,
+                'falta_cobrar': falta_cobrar,
+                'vencidos': vencidos,
+                'pendentes_autorizacao': pendentes,
+            })
+        except Exception as exc:
+            app.logger.error('alertas_contas_receber: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.route('/api/contas-receber', methods=['POST'])
+    @require_auth
+    def criar_conta_receber(profile):
+        data = request.get_json() or {}
+        required = ['filial_id', 'competencia', 'obrigacao']
+        for f in required:
+            if not data.get(f):
+                return jsonify({'error': f'{f} obrigatório.'}), 400
+        if profile_has_filial_scope(profile):
+            allowed_ids = profile.get('allowed_filial_ids') or []
+            if int(data['filial_id']) not in set(allowed_ids):
+                return jsonify({'error': 'Sem permissão para esta filial.'}), 403
+        allowed = [
+            'filial_id', 'filial_nome', 'competencia', 'obrigacao', 'descricao',
+            'cliente_nome', 'contrato_nome', 'contrato_operacional_id',
+            'limite_dia', 'data_limite', 'ult_dia_competencia', 'prazo_envio',
+            'valor_gold', 'data_pagamento_gold', 'cobrado_wm', 'data_envio', 'data_ajuste', 'vlr_ajustado_wm',
+            'frete', 'vlr_cte', 'vlr_fixo_icms',
+            'emissao', 'nd', 'cte', 'tipo_documento', 'ferramenta', 'prestacao', 'contato',
+            'double_check', 'autorizacao', 'o_que_falta', 'motivo_pendencia', 'setor_responsavel', 'previsao',
+            'status_fat', 'status', 'data_vencimento', 'sla', 'tipo_hora',
+        ]
+        row = {k: data[k] for k in allowed if k in data}
+        try:
+            result = supabase.table('contas_a_receber').insert(row).execute()
+            return jsonify({'ok': True, 'data': (result.data or [{}])[0]})
+        except Exception as exc:
+            app.logger.error('criar_conta_receber: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.route('/api/contas-receber/<cr_id>', methods=['PUT'])
+    @require_auth
+    def editar_conta_receber(profile, cr_id):
+        data = request.get_json() or {}
+        if profile_has_filial_scope(profile):
+            reg = supabase.table('contas_a_receber').select('filial_id').eq('id', cr_id).limit(1).execute()
+            fid = ((reg.data or [{}])[0]).get('filial_id')
+            if fid and int(fid) not in set(profile.get('allowed_filial_ids') or []):
+                return jsonify({'error': 'Sem permissão para esta filial.'}), 403
+        allowed = [
+            'filial_nome', 'competencia', 'obrigacao', 'descricao',
+            'cliente_nome', 'contrato_nome', 'contrato_operacional_id',
+            'limite_dia', 'data_limite', 'ult_dia_competencia', 'prazo_envio',
+            'valor_gold', 'data_pagamento_gold', 'cobrado_wm', 'data_envio', 'data_ajuste', 'vlr_ajustado_wm',
+            'frete', 'vlr_cte', 'vlr_fixo_icms',
+            'emissao', 'nd', 'cte', 'tipo_documento', 'ferramenta', 'prestacao', 'contato',
+            'double_check', 'autorizacao', 'o_que_falta', 'motivo_pendencia', 'setor_responsavel', 'previsao',
+            'status_fat', 'status', 'data_vencimento', 'sla', 'tipo_hora',
+        ]
+        update = {k: data[k] for k in allowed if k in data}
+        update['updated_at'] = datetime.utcnow().isoformat()
+        try:
+            supabase.table('contas_a_receber').update(update).eq('id', cr_id).execute()
+            return jsonify({'ok': True})
+        except Exception as exc:
+            app.logger.error('editar_conta_receber: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.route('/api/contas-receber/<cr_id>', methods=['DELETE'])
+    @require_auth
+    def deletar_conta_receber(profile, cr_id):
+        if profile_has_filial_scope(profile):
+            reg = supabase.table('contas_a_receber').select('filial_id').eq('id', cr_id).limit(1).execute()
+            fid = ((reg.data or [{}])[0]).get('filial_id')
+            if fid and int(fid) not in set(profile.get('allowed_filial_ids') or []):
+                return jsonify({'error': 'Sem permissão.'}), 403
+        try:
+            supabase.table('contas_a_receber').delete().eq('id', cr_id).execute()
+            return jsonify({'ok': True})
+        except Exception as exc:
+            app.logger.error('deletar_conta_receber: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    # ============ CONTAS A PAGAR ============
+
+    @app.route('/api/contas-pagar', methods=['GET'])
+    @require_auth
+    def listar_contas_pagar(profile):
+        try:
+            query = supabase.table('contas_a_pagar').select('*').order('competencia', desc=True).order('filial_nome')
+            if profile_has_filial_scope(profile):
+                allowed_ids = profile.get('allowed_filial_ids') or []
+                if not allowed_ids:
+                    return jsonify({'data': []})
+                query = query.in_('filial_id', allowed_ids)
+            competencia = request.args.get('competencia')
+            status = request.args.get('status')
+            tipo_despesa = request.args.get('tipo_despesa')
+            if competencia:
+                query = query.eq('competencia', competencia)
+            if status:
+                query = query.eq('status', status)
+            if tipo_despesa:
+                query = query.eq('tipo_despesa', tipo_despesa)
+            result = supabase_retry(query.execute)
+            return jsonify({'data': result.data or []})
+        except Exception as exc:
+            app.logger.error('listar_contas_pagar: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.route('/api/contas-pagar/alertas', methods=['GET'])
+    @require_auth
+    def alertas_contas_pagar(profile):
+        try:
+            query = supabase.table('contas_a_pagar').select('status, valor, valor_pago, data_vencimento')
+            if profile_has_filial_scope(profile):
+                allowed_ids = profile.get('allowed_filial_ids') or []
+                if not allowed_ids:
+                    return jsonify({'total_a_pagar': 0, 'pendente': 0, 'vencidos': 0, 'pago_mes': 0})
+                query = query.in_('filial_id', allowed_ids)
+            result = supabase_retry(query.execute)
+            rows = result.data or []
+            from datetime import date as _date
+            hoje = _date.today().isoformat()
+            mes_atual = hoje[:7]
+            total_a_pagar = sum(float(r.get('valor') or 0) - float(r.get('valor_pago') or 0) for r in rows if r.get('status') not in ('PAGO', 'CANCELADO'))
+            pendente = sum(1 for r in rows if r.get('status') == 'PENDENTE')
+            vencidos = sum(1 for r in rows if (r.get('data_vencimento') or '') < hoje and r.get('status') not in ('PAGO', 'CANCELADO'))
+            pago_mes = sum(float(r.get('valor_pago') or 0) for r in rows if r.get('status') == 'PAGO' and (r.get('data_vencimento') or '')[:7] == mes_atual)
+            return jsonify({
+                'total_a_pagar': total_a_pagar,
+                'pendente': pendente,
+                'vencidos': vencidos,
+                'pago_mes': pago_mes,
+            })
+        except Exception as exc:
+            app.logger.error('alertas_contas_pagar: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.route('/api/contas-pagar', methods=['POST'])
+    @require_auth
+    def criar_conta_pagar(profile):
+        data = request.get_json() or {}
+        required = ['filial_id', 'competencia', 'tipo_despesa', 'valor']
+        for f in required:
+            if data.get(f) is None:
+                return jsonify({'error': f'{f} obrigatório.'}), 400
+        if profile_has_filial_scope(profile):
+            allowed_ids = profile.get('allowed_filial_ids') or []
+            if int(data['filial_id']) not in set(allowed_ids):
+                return jsonify({'error': 'Sem permissão para esta filial.'}), 403
+        allowed = [
+            'filial_id', 'filial_nome', 'competencia', 'tipo_despesa', 'descricao',
+            'fornecedor_nome', 'colaborador_id', 'valor', 'data_vencimento', 'data_pagamento',
+            'valor_pago', 'status', 'tipo_documento', 'numero_documento', 'observacoes',
+        ]
+        row = {k: data[k] for k in allowed if k in data}
+        try:
+            result = supabase.table('contas_a_pagar').insert(row).execute()
+            return jsonify({'ok': True, 'data': (result.data or [{}])[0]})
+        except Exception as exc:
+            app.logger.error('criar_conta_pagar: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.route('/api/contas-pagar/<cp_id>', methods=['PUT'])
+    @require_auth
+    def editar_conta_pagar(profile, cp_id):
+        data = request.get_json() or {}
+        if profile_has_filial_scope(profile):
+            reg = supabase.table('contas_a_pagar').select('filial_id').eq('id', cp_id).limit(1).execute()
+            fid = ((reg.data or [{}])[0]).get('filial_id')
+            if fid and int(fid) not in set(profile.get('allowed_filial_ids') or []):
+                return jsonify({'error': 'Sem permissão.'}), 403
+        allowed = [
+            'filial_nome', 'competencia', 'tipo_despesa', 'descricao', 'fornecedor_nome',
+            'colaborador_id', 'valor', 'data_vencimento', 'data_pagamento', 'valor_pago',
+            'status', 'tipo_documento', 'numero_documento', 'observacoes',
+        ]
+        update = {k: data[k] for k in allowed if k in data}
+        update['updated_at'] = datetime.utcnow().isoformat()
+        try:
+            supabase.table('contas_a_pagar').update(update).eq('id', cp_id).execute()
+            return jsonify({'ok': True})
+        except Exception as exc:
+            app.logger.error('editar_conta_pagar: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.route('/api/contas-pagar/<cp_id>', methods=['DELETE'])
+    @require_auth
+    def deletar_conta_pagar(profile, cp_id):
+        if profile_has_filial_scope(profile):
+            reg = supabase.table('contas_a_pagar').select('filial_id').eq('id', cp_id).limit(1).execute()
+            fid = ((reg.data or [{}])[0]).get('filial_id')
+            if fid and int(fid) not in set(profile.get('allowed_filial_ids') or []):
+                return jsonify({'error': 'Sem permissão.'}), 403
+        try:
+            supabase.table('contas_a_pagar').delete().eq('id', cp_id).execute()
+            return jsonify({'ok': True})
+        except Exception as exc:
+            app.logger.error('deletar_conta_pagar: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    # ============ BANCO ============
+
+    @app.route('/api/banco/contas', methods=['GET'])
+    @require_auth
+    def listar_banco_contas(profile):
+        try:
+            query = supabase.table('banco_contas').select('*').order('banco_nome')
+            if profile_has_filial_scope(profile):
+                allowed_ids = profile.get('allowed_filial_ids') or []
+                if not allowed_ids:
+                    return jsonify({'data': []})
+                query = query.in_('filial_id', allowed_ids)
+            result = query.execute()
+            contas = result.data or []
+            # Calcula saldo atual para cada conta
+            for conta in contas:
+                lresp = supabase.table('banco_lancamentos').select('tipo, valor').eq('conta_id', conta['id']).execute()
+                saldo = float(conta.get('saldo_inicial') or 0)
+                for l in (lresp.data or []):
+                    v = float(l.get('valor') or 0)
+                    saldo += v if l.get('tipo') == 'ENTRADA' else -v
+                conta['saldo_atual'] = round(saldo, 2)
+            return jsonify({'data': contas})
+        except Exception as exc:
+            app.logger.error('listar_banco_contas: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.route('/api/banco/contas', methods=['POST'])
+    @require_auth
+    def criar_banco_conta(profile):
+        data = request.get_json() or {}
+        if not data.get('banco_nome'):
+            return jsonify({'error': 'banco_nome obrigatório.'}), 400
+        if profile_has_filial_scope(profile):
+            allowed_ids = profile.get('allowed_filial_ids') or []
+            if data.get('filial_id') and int(data['filial_id']) not in set(allowed_ids):
+                return jsonify({'error': 'Sem permissão para esta filial.'}), 403
+        allowed = ['filial_id', 'filial_nome', 'banco_nome', 'agencia', 'conta', 'tipo', 'saldo_inicial', 'ativo']
+        row = {k: data[k] for k in allowed if k in data}
+        try:
+            result = supabase.table('banco_contas').insert(row).execute()
+            return jsonify({'ok': True, 'data': (result.data or [{}])[0]})
+        except Exception as exc:
+            app.logger.error('criar_banco_conta: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.route('/api/banco/contas/<conta_id>', methods=['PUT'])
+    @require_auth
+    def editar_banco_conta(profile, conta_id):
+        data = request.get_json() or {}
+        allowed = ['banco_nome', 'agencia', 'conta', 'tipo', 'saldo_inicial', 'ativo', 'filial_nome']
+        update = {k: data[k] for k in allowed if k in data}
+        try:
+            supabase.table('banco_contas').update(update).eq('id', conta_id).execute()
+            return jsonify({'ok': True})
+        except Exception as exc:
+            app.logger.error('editar_banco_conta: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.route('/api/banco/contas/<conta_id>', methods=['DELETE'])
+    @require_auth
+    def deletar_banco_conta(profile, conta_id):
+        try:
+            supabase.table('banco_contas').delete().eq('id', conta_id).execute()
+            return jsonify({'ok': True})
+        except Exception as exc:
+            app.logger.error('deletar_banco_conta: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.route('/api/banco/lancamentos', methods=['GET'])
+    @require_auth
+    def listar_banco_lancamentos(profile):
+        try:
+            query = supabase.table('banco_lancamentos').select('*').order('data_lancamento', desc=True)
+            if profile_has_filial_scope(profile):
+                allowed_ids = profile.get('allowed_filial_ids') or []
+                if not allowed_ids:
+                    return jsonify({'data': []})
+                query = query.in_('filial_id', allowed_ids)
+            conta_id = request.args.get('conta_id')
+            conciliado = request.args.get('conciliado')
+            mes = request.args.get('mes')
+            if conta_id:
+                query = query.eq('conta_id', conta_id)
+            if conciliado is not None:
+                query = query.eq('conciliado', conciliado == 'true')
+            if mes:
+                query = query.gte('data_lancamento', mes + '-01').lte('data_lancamento', mes + '-31')
+            result = query.execute()
+            return jsonify({'data': result.data or []})
+        except Exception as exc:
+            app.logger.error('listar_banco_lancamentos: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.route('/api/banco/lancamentos', methods=['POST'])
+    @require_auth
+    def criar_banco_lancamento(profile):
+        data = request.get_json() or {}
+        required = ['conta_id', 'data_lancamento', 'tipo', 'descricao', 'valor']
+        for f in required:
+            if not data.get(f):
+                return jsonify({'error': f'{f} obrigatório.'}), 400
+        allowed = [
+            'conta_id', 'filial_id', 'filial_nome', 'data_lancamento', 'tipo', 'categoria',
+            'descricao', 'valor', 'conta_receber_id', 'conta_pagar_id', 'observacoes',
+        ]
+        row = {k: data[k] for k in allowed if k in data}
+        row['conciliado'] = False
+        try:
+            result = supabase.table('banco_lancamentos').insert(row).execute()
+            inserted = (result.data or [{}])[0]
+            # Se veio com conta_receber_id ou conta_pagar_id, concilia automaticamente
+            if inserted.get('id') and data.get('conta_receber_id'):
+                supabase.table('contas_a_receber').update({'banco_lancamento_id': inserted['id'], 'status_fat': 'FATURADO', 'status': 'RECEBIDO'}).eq('id', data['conta_receber_id']).execute()
+            if inserted.get('id') and data.get('conta_pagar_id'):
+                supabase.table('contas_a_pagar').update({'banco_lancamento_id': inserted['id'], 'status': 'PAGO', 'data_pagamento': data.get('data_lancamento'), 'valor_pago': float(data.get('valor') or 0)}).eq('id', data['conta_pagar_id']).execute()
+            return jsonify({'ok': True, 'data': inserted})
+        except Exception as exc:
+            app.logger.error('criar_banco_lancamento: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.route('/api/banco/lancamentos/<lancamento_id>', methods=['PUT'])
+    @require_auth
+    def editar_banco_lancamento(profile, lancamento_id):
+        data = request.get_json() or {}
+        allowed = ['data_lancamento', 'tipo', 'categoria', 'descricao', 'valor', 'conciliado', 'conta_receber_id', 'conta_pagar_id', 'observacoes']
+        update = {k: data[k] for k in allowed if k in data}
+        try:
+            supabase.table('banco_lancamentos').update(update).eq('id', lancamento_id).execute()
+            return jsonify({'ok': True})
+        except Exception as exc:
+            app.logger.error('editar_banco_lancamento: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.route('/api/banco/lancamentos/<lancamento_id>/conciliar', methods=['POST'])
+    @require_auth
+    def conciliar_lancamento(profile, lancamento_id):
+        data = request.get_json() or {}
+        try:
+            lan_resp = supabase.table('banco_lancamentos').select('*').eq('id', lancamento_id).limit(1).execute()
+            lan = (lan_resp.data or [{}])[0]
+            if not lan:
+                return jsonify({'error': 'Lançamento não encontrado.'}), 404
+            conciliado = bool(data.get('conciliado', True))
+            supabase.table('banco_lancamentos').update({'conciliado': conciliado}).eq('id', lancamento_id).execute()
+            if conciliado:
+                if lan.get('conta_receber_id'):
+                    supabase.table('contas_a_receber').update({'status_fat': 'FATURADO', 'status': 'RECEBIDO'}).eq('id', lan['conta_receber_id']).execute()
+                if lan.get('conta_pagar_id'):
+                    supabase.table('contas_a_pagar').update({'status': 'PAGO', 'valor_pago': float(lan.get('valor') or 0)}).eq('id', lan['conta_pagar_id']).execute()
+            return jsonify({'ok': True})
+        except Exception as exc:
+            app.logger.error('conciliar_lancamento: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.route('/api/banco/saldos', methods=['GET'])
+    @require_auth
+    def saldos_banco(profile):
+        try:
+            query_contas = supabase.table('banco_contas').select('id, banco_nome, filial_id, filial_nome, saldo_inicial, tipo, ativo')
+            if profile_has_filial_scope(profile):
+                allowed_ids = profile.get('allowed_filial_ids') or []
+                if not allowed_ids:
+                    return jsonify({'saldo_total': 0, 'nao_conciliados': 0, 'contas': []})
+                query_contas = query_contas.in_('filial_id', allowed_ids)
+            contas_resp = query_contas.eq('ativo', True).execute()
+            contas = contas_resp.data or []
+            lan_resp = supabase.table('banco_lancamentos').select('conta_id, tipo, valor, conciliado').execute()
+            lancamentos = lan_resp.data or []
+            nao_conciliados = sum(1 for l in lancamentos if not l.get('conciliado'))
+            saldo_total = 0
+            from collections import defaultdict
+            lan_by_conta = defaultdict(list)
+            for l in lancamentos:
+                lan_by_conta[l['conta_id']].append(l)
+            for conta in contas:
+                saldo = float(conta.get('saldo_inicial') or 0)
+                for l in lan_by_conta.get(conta['id'], []):
+                    v = float(l.get('valor') or 0)
+                    saldo += v if l.get('tipo') == 'ENTRADA' else -v
+                conta['saldo_atual'] = round(saldo, 2)
+                saldo_total += saldo
+            return jsonify({'saldo_total': round(saldo_total, 2), 'nao_conciliados': nao_conciliados, 'contas': contas})
+        except Exception as exc:
+            app.logger.error('saldos_banco: %s', exc)
             return jsonify({'error': translate_database_error(exc)}), 500
 
     # ============ SERVIR FRONTEND REACT ============

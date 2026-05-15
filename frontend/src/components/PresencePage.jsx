@@ -89,6 +89,12 @@ export default function PresencePage() {
   const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
+    if (config.filiais?.length === 1 && !selectedFilial) {
+      setSelectedFilial(String(config.filiais[0].id))
+    }
+  }, [config.filiais])
+
+  useEffect(() => {
     let active = true
 
     async function loadConfig() {
@@ -372,17 +378,19 @@ export default function PresencePage() {
             <span>Mês</span>
             <input type="month" value={selectedMonth} onChange={(e) => setSelectedMonth(e.target.value)} />
           </label>
-          <label className="field filter-field" style={{ marginBottom: 0 }}>
-            <span>Filial (exportar)</span>
-            <select value={selectedFilial} onChange={(e) => setSelectedFilial(e.target.value)}>
-              <option value="">Todas</option>
-              {config.filiais.map((filial) => (
-                <option key={filial.id} value={filial.id}>
-                  {filial.cidade}/{filial.uf}
-                </option>
-              ))}
-            </select>
-          </label>
+          {config.filiais.length !== 1 && (
+            <label className="field filter-field" style={{ marginBottom: 0 }}>
+              <span>Filial (exportar)</span>
+              <select value={selectedFilial} onChange={(e) => setSelectedFilial(e.target.value)}>
+                <option value="">Todas</option>
+                {config.filiais.map((filial) => (
+                  <option key={filial.id} value={filial.id}>
+                    {filial.cidade}/{filial.uf}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
           <button className="button-primary" type="button" disabled={exporting} onClick={handleExportExcel}>
             {exporting ? 'Exportando...' : '📊 Exportar Excel (Calendário)'}
           </button>
@@ -400,17 +408,19 @@ export default function PresencePage() {
               <input onChange={(event) => setSelectedDate(event.target.value)} type="date" value={selectedDate} />
             </label>
 
-            <label className="field filter-field">
-              <span>Filial</span>
-              <select onChange={(event) => setSelectedFilial(event.target.value)} value={selectedFilial}>
-                <option value="">Todas</option>
-                {config.filiais.map((filial) => (
-                  <option key={filial.id} value={filial.id}>
-                    {filial.cidade}/{filial.uf}
-                  </option>
-                ))}
-              </select>
-            </label>
+            {config.filiais.length !== 1 && (
+              <label className="field filter-field">
+                <span>Filial</span>
+                <select onChange={(event) => setSelectedFilial(event.target.value)} value={selectedFilial}>
+                  <option value="">Todas</option>
+                  {config.filiais.map((filial) => (
+                    <option key={filial.id} value={filial.id}>
+                      {filial.cidade}/{filial.uf}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
 
             <label className="field filter-field span-2 presence-search-field">
               <span>Buscar colaborador</span>

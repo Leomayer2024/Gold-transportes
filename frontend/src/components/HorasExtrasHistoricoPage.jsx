@@ -69,6 +69,12 @@ export default function HorasExtrasHistoricoPage() {
 
   const filialOptions = [...new Set(detalhe.map((r) => r.filial_nome).filter(Boolean))].sort()
 
+  useEffect(() => {
+    if (filialOptions.length === 1 && !filterFilial) {
+      setFilterFilial(filialOptions[0])
+    }
+  }, [filialOptions.length])
+
   const detalheFiltered = detalhe.filter((r) => {
     if (filterNome && !r.funcionario_nome?.toLowerCase().includes(filterNome.toLowerCase())) return false
     if (filterFilial && r.filial_nome !== filterFilial) return false
@@ -185,10 +191,12 @@ export default function HorasExtrasHistoricoPage() {
                   onChange={(e) => setFilterNome(e.target.value)}
                   style={{ width: 220 }}
                 />
-                <select className="input" value={filterFilial} onChange={(e) => setFilterFilial(e.target.value)} style={{ minWidth: 160 }}>
-                  <option value="">Todas as filiais</option>
-                  {filialOptions.map((f) => <option key={f} value={f}>{f}</option>)}
-                </select>
+                {filialOptions.length !== 1 && (
+                  <select className="input" value={filterFilial} onChange={(e) => setFilterFilial(e.target.value)} style={{ minWidth: 160 }}>
+                    <option value="">Todas as filiais</option>
+                    {filialOptions.map((f) => <option key={f} value={f}>{f}</option>)}
+                  </select>
+                )}
                 {(filterNome || filterFilial) && (
                   <button className="button-secondary" style={{ fontSize: 11 }} onClick={() => { setFilterNome(''); setFilterFilial('') }} type="button">
                     Limpar

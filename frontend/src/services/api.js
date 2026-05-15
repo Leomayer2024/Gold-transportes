@@ -239,8 +239,46 @@ export const api = {
   rtmSalvar: (mes_referencia, registros) =>
     request('/horas-extras-rtm/salvar', { method: 'POST', body: JSON.stringify({ mes_referencia, registros }) }),
   rtmMeses: () => request('/horas-extras-rtm/meses'),
+  rtmMesesFiliais: () => request('/horas-extras-rtm/meses-filiais'),
   rtmDetalhe: (mes) => request(`/horas-extras-rtm/detalhe?mes=${mes}`),
-  rtmDeletar: (mes) => request(`/horas-extras-rtm/mes/${mes}`, { method: 'DELETE' }),
+  rtmDeletar: (mes, filial_nome) => {
+    const qs = filial_nome ? `?filial_nome=${encodeURIComponent(filial_nome)}` : ''
+    return request(`/horas-extras-rtm/mes/${mes}${qs}`, { method: 'DELETE' })
+  },
   rtmEditarRegistro: (id, payload) => request(`/horas-extras-rtm/registro/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  rtmRecalcularTipoHora: (mes, filial_nome) => request('/horas-extras-rtm/recalcular-tipo-hora', { method: 'POST', body: JSON.stringify({ mes, filial_nome }) }),
   rtmMetricas: () => request('/horas-extras-rtm/metricas'),
+  rtmTipoHoraMapa: (mes) => request(`/horas-extras-rtm/tipo-hora-mapa?mes=${mes}`),
+  // Contas a Receber
+  contasReceber: (params) => {
+    const q = params ? '?' + new URLSearchParams(params).toString() : ''
+    return request(`/contas-receber${q}`)
+  },
+  contasReceberAlertas: () => request('/contas-receber/alertas'),
+  criarContaReceber: (payload) => request('/contas-receber', { method: 'POST', body: JSON.stringify(payload) }),
+  editarContaReceber: (id, payload) => request(`/contas-receber/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  deletarContaReceber: (id) => request(`/contas-receber/${id}`, { method: 'DELETE' }),
+  // Contas a Pagar
+  contasPagar: (params) => {
+    const q = params ? '?' + new URLSearchParams(params).toString() : ''
+    return request(`/contas-pagar${q}`)
+  },
+  contasPagarAlertas: () => request('/contas-pagar/alertas'),
+  criarContaPagar: (payload) => request('/contas-pagar', { method: 'POST', body: JSON.stringify(payload) }),
+  editarContaPagar: (id, payload) => request(`/contas-pagar/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  deletarContaPagar: (id) => request(`/contas-pagar/${id}`, { method: 'DELETE' }),
+  // Banco
+  bancoContas: () => request('/banco/contas'),
+  criarBancoConta: (payload) => request('/banco/contas', { method: 'POST', body: JSON.stringify(payload) }),
+  editarBancoConta: (id, payload) => request(`/banco/contas/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  deletarBancoConta: (id) => request(`/banco/contas/${id}`, { method: 'DELETE' }),
+  bancoLancamentos: (params) => {
+    const q = params ? '?' + new URLSearchParams(params).toString() : ''
+    return request(`/banco/lancamentos${q}`)
+  },
+  criarBancoLancamento: (payload) => request('/banco/lancamentos', { method: 'POST', body: JSON.stringify(payload) }),
+  editarBancoLancamento: (id, payload) => request(`/banco/lancamentos/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
+  deletarBancoLancamento: (id) => request(`/banco/lancamentos/${id}`, { method: 'DELETE' }),
+  conciliarLancamento: (id, payload) => request(`/banco/lancamentos/${id}/conciliar`, { method: 'POST', body: JSON.stringify(payload) }),
+  bancoSaldos: () => request('/banco/saldos'),
 }

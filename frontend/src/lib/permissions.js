@@ -29,6 +29,9 @@ export const navigationGroups = [
     title: 'Financeiro',
     items: [
       { to: '/notas-cte', label: 'Notas Fiscais / CT-e', scope: 'menu.notas_cte' },
+      { to: '/contas-receber', label: 'Contas a Receber', scope: 'menu.contas_receber' },
+      { to: '/contas-pagar', label: 'Contas a Pagar', scope: 'menu.contas_pagar' },
+      { to: '/banco', label: 'Banco / Conciliação', scope: 'menu.banco' },
     ],
   },
   {
@@ -96,6 +99,16 @@ export function getVisibleNavigation(profile) {
       items: group.items.filter((item) => hasScopePermission(profile, item.scope)),
     }))
     .filter((group) => group.items.length > 0)
+}
+
+export function getAllNavigation(profile) {
+  return navigationGroups.map((group) => ({
+    ...group,
+    items: group.items.map((item) => ({
+      ...item,
+      locked: !hasScopePermission(profile, item.scope),
+    })),
+  }))
 }
 
 export function getDefaultAuthorizedPath(profile) {

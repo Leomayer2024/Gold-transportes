@@ -35,6 +35,12 @@ export default function CustosRhPage({ embedded = false }) {
   const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => {
+    if (dashboard.filiais?.length === 1 && !selectedFilial) {
+      setSelectedFilial(String(dashboard.filiais[0].id))
+    }
+  }, [dashboard.filiais])
+
+  useEffect(() => {
     let active = true
 
     async function load() {
@@ -91,7 +97,7 @@ export default function CustosRhPage({ embedded = false }) {
             <label className="field filter-field">
               <span>Filial</span>
               <select onChange={(event) => setSelectedFilial(event.target.value)} value={selectedFilial}>
-                <option value="">Todas</option>
+                {(dashboard.filiais || []).length !== 1 && <option value="">Todas</option>}
                 {(dashboard.filiais || []).map((filial) => (
                   <option key={filial.id} value={filial.id}>
                     {filial.cidade}/{filial.uf}

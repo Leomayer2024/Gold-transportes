@@ -30,16 +30,104 @@ function calcValorHora(col) {
 function normName(s) {
   return (s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
 }
+
+const _STOP = new Set(['DE', 'DA', 'DO', 'DAS', 'DOS', 'E', 'EM', 'OS', 'AS', 'A'])
+
+function _tokens(name) {
+  return normName(name).split(/\s+/).filter((w) => w.length > 2 && !_STOP.has(w))
+}
+
+function _overlap(a, b) {
+  const wa = _tokens(a), wb = _tokens(b)
+  if (!wa.length || !wb.length) return 0
+  const setB = new Set(wb)
+  return wa.filter((w) => setB.has(w)).length / Math.max(wa.length, wb.length)
+}
+
 function matchColaborador(nomePasta, lista) {
   const n = normName(nomePasta)
   if (!n) return null
+
+  // 1. Exact
   let found = lista.find((c) => normName(c.nome_completo) === n)
   if (found) return found
+
+  // 2. One name contains the other
   found = lista.find((c) => { const cn = normName(c.nome_completo); return cn && (n.includes(cn) || cn.includes(n)) })
   if (found) return found
+
+  // 3. All significant words of paste appear in collab name
   const words = n.split(/\s+/).filter((w) => w.length > 3)
-  return words.length > 0 ? lista.find((c) => { const cn = normName(c.nome_completo); return words.every((w) => cn.includes(w)) }) || null : null
+  if (words.length > 0) {
+    found = lista.find((c) => { const cn = normName(c.nome_completo); return words.every((w) => cn.includes(w)) })
+    if (found) return found
+  }
+
+  // 4. Word overlap ≥ 60% ignoring prepositions — handles middle names and abbreviations
+  let bestScore = 0, bestMatch = null
+  for (const c of lista) {
+    const score = _overlap(nomePasta, c.nome_completo)
+    if (score > bestScore) { bestScore = score; bestMatch = c }
+  }
+  if (bestScore >= 0.6 && bestMatch) return bestMatch
+
+  // 5. First + last significant word match — catches "JOSE SILVA" → "JOSE ROBERTO SILVA"
+  const parts = _tokens(nomePasta)
+  if (parts.length >= 2) {
+    const first = parts[0], last = parts[parts.length - 1]
+    found = lista.find((c) => {
+      const cp = _tokens(c.nome_completo)
+      return cp.length >= 2 && cp[0] === first && cp[cp.length - 1] === last
+    })
+    if (found) return found
+  }
+
+  return null
 }
+
+// Returns 'exact' | 'high' | 'fuzzy' based on how confident the match is
+function matchConfidence(nomePasta, col) {
+  if (!col) return null
+  const n = normName(nomePasta), cn = normName(col.nome_completo)
+  if (n === cn) return 'exact'
+  if (n.includes(cn) || cn.includes(n)) return 'high'
+  const words = n.split(/\s+/).filter((w) => w.length > 3)
+  if (words.length > 0 && words.every((w) => cn.includes(w))) return 'high'
+  return 'fuzzy'
+}
+
+const MESES_PT = { JANEIRO: 1, FEVEREIRO: 2, MARCO: 3, ABRIL: 4, MAIO: 5, JUNHO: 6, JULHO: 7, AGOSTO: 8, SETEMBRO: 9, OUTUBRO: 10, NOVEMBRO: 11, DEZEMBRO: 12 }
+function mesNomeParaNum(nome) { return MESES_PT[normName(nome)] || null }
+function isMultiMesFormat(text) {
+  const lines = text.trim().split('\n')
+  for (const line of lines) {
+    const cols = line.split('\t').map((c) => c.trim())
+    if (!cols[0] || /^funcionario/i.test(cols[0]) || /^nome/i.test(cols[0])) continue
+    return cols.length >= 5 && Boolean(mesNomeParaNum(cols[1]))
+  }
+  return false
+}
+function parsePasteMultiMes(text, ano) {
+  if (!text.trim()) return []
+  const seen = new Set()
+  return text.trim().split('\n').map((row) => {
+    const cols = row.split('\t').map((c) => c.trim())
+    if (!cols[0] || /^funcionario/i.test(cols[0]) || /^nome/i.test(cols[0])) return null
+    const competencia = cols[1] || ''
+    const num = mesNomeParaNum(competencia)
+    if (!num) return null
+    const mes_referencia = `${ano}-${String(num).padStart(2, '0')}`
+    const estado = cols[2] || ''
+    const filial = cols[3] || ''
+    const he = cols[4] || ''
+    const hn = cols[5] || ''
+    const key = `${normName(cols[0])}|${mes_referencia}`
+    if (seen.has(key)) return null
+    seen.add(key)
+    return { funcionario: cols[0], competencia, mes_referencia, estado, filial_pasta: filial, horas_normais_str: hn || '00:00', horas_extra_100_str: he || '00:00', horas_normais: parseHoras(hn), horas_extra_100: parseHoras(he) }
+  }).filter(Boolean)
+}
+
 function parsePaste(text) {
   if (!text.trim()) return []
   const seen = new Set()
@@ -130,36 +218,64 @@ function LineChart({ data, valueKey, labelKey, color = 'var(--primary)', formatV
 
 // ─── Aba Histórico ─────────────────────────────────────────────────────────────
 function AbaHistorico() {
-  const [meses, setMeses] = useState([])
+  const [mesFiliais, setMesFiliais] = useState([])
   const [loading, setLoading] = useState(true)
-  const [mesSel, setMesSel] = useState(null)
+  // selKey = "YYYY-MM-DD|Filial Nome"
+  const [selKey, setSelKey] = useState(null)
   const [detalhe, setDetalhe] = useState([])
+  const [detMes, setDetMes] = useState(null)
   const [loadingDet, setLoadingDet] = useState(false)
   const [filterNome, setFilterNome] = useState('')
-  const [filterFilial, setFilterFilial] = useState('')
-  const [confirmDelete, setConfirmDelete] = useState(null)
+  const [confirmDelete, setConfirmDelete] = useState(null) // {mes, filial}
   const [deleting, setDeleting] = useState(false)
+  const [recalcMsg, setRecalcMsg] = useState(null)
+  const [recalculating, setRecalculating] = useState(false)
   const [editando, setEditando] = useState(null)
   const [editForm, setEditForm] = useState({})
   const [saving, setSaving] = useState(false)
+
+  const [selMes, selFilial] = selKey ? selKey.split('|') : [null, null]
 
   useEffect(() => { carregar() }, [])
 
   function carregar() {
     setLoading(true)
-    api.rtmMeses().then((r) => setMeses(r.data || [])).catch(() => {}).finally(() => setLoading(false))
+    api.rtmMesesFiliais().then((r) => setMesFiliais(r.data || [])).catch(() => {}).finally(() => setLoading(false))
   }
 
-  function abrirMes(mes) {
-    setMesSel(mes); setFilterNome(''); setFilterFilial(''); setLoadingDet(true)
-    api.rtmDetalhe(mes).then((r) => setDetalhe(r.data || [])).catch(() => {}).finally(() => setLoadingDet(false))
+  function abrirFilialMes(mes, filial) {
+    const key = `${mes}|${filial}`
+    setSelKey(key)
+    setFilterNome('')
+    setEditando(null)
+    if (mes !== detMes) {
+      setLoadingDet(true)
+      setDetalhe([])
+      api.rtmDetalhe(mes).then((r) => { setDetalhe(r.data || []); setDetMes(mes) }).catch(() => {}).finally(() => setLoadingDet(false))
+    }
   }
 
-  async function deletarMes(mes) {
+  async function recalcularTipoHora() {
+    if (!selMes) return
+    setRecalculating(true); setRecalcMsg(null)
+    try {
+      const res = await api.rtmRecalcularTipoHora(selMes, selFilial)
+      setRecalcMsg({ type: 'success', text: `${res.updated} recalculado(s): ${res.fixo ?? 0} NO CONTRATO, ${res.extra ?? 0} FORA CONTRATO.`, detalhes_extra: res.detalhes_extra || [] })
+      // Reload detail data to reflect updated tipo_hora
+      setLoadingDet(true)
+      api.rtmDetalhe(selMes).then((r) => { setDetalhe(r.data || []); setDetMes(selMes) }).catch(() => {}).finally(() => setLoadingDet(false))
+      carregar()
+    } catch (e) {
+      setRecalcMsg({ type: 'error', text: e.message || 'Erro ao recalcular.' })
+    } finally { setRecalculating(false) }
+  }
+
+  async function deletarFilialMes({ mes, filial }) {
     setDeleting(true)
     try {
-      await api.rtmDeletar(mes)
-      if (mesSel === mes) { setMesSel(null); setDetalhe([]) }
+      await api.rtmDeletar(mes, filial)
+      if (selMes === mes && selFilial === filial) { setSelKey(null); setDetalhe([]); setDetMes(null) }
+      else if (detMes === mes) { setDetalhe((prev) => prev.filter((r) => (r.filial_nome || 'Sem filial') !== filial)) }
       setConfirmDelete(null); carregar()
     } catch (e) { alert(e.message || 'Erro ao excluir.') }
     finally { setDeleting(false) }
@@ -185,21 +301,24 @@ function AbaHistorico() {
         valor_hora_100: parseFloat(editForm.valor_hora_100) || 0,
       })
       setEditando(null)
-      api.rtmDetalhe(mesSel).then((r) => setDetalhe(r.data || []))
+      api.rtmDetalhe(selMes).then((r) => { setDetalhe(r.data || []); setDetMes(selMes) })
       carregar()
     } catch (e) { alert(e.message || 'Erro ao salvar.') }
     finally { setSaving(false) }
   }
 
-  const filialOpts = [...new Set(detalhe.map((r) => r.filial_nome).filter(Boolean))].sort()
-  const detFiltrado = detalhe.filter((r) => {
+  // Records for selected filial only, then filtered by name
+  const detFilial = useMemo(() => detalhe.filter((r) => (r.filial_nome || 'Sem filial') === selFilial), [detalhe, selFilial])
+  const detFiltrado = useMemo(() => detFilial.filter((r) => {
     if (filterNome && !r.funcionario_nome?.toLowerCase().includes(filterNome.toLowerCase())) return false
-    if (filterFilial && r.filial_nome !== filterFilial) return false
     return true
-  })
+  }), [detFilial, filterNome])
+
   const totH50 = detFiltrado.reduce((s, r) => s + (r.horas_normais || 0), 0)
   const totH100 = detFiltrado.reduce((s, r) => s + (r.horas_extra_100 || 0), 0)
   const totGeral = detFiltrado.reduce((s, r) => s + (r.total_geral || 0), 0)
+  const totFixo = detFiltrado.reduce((s, r) => s + (r.tipo_hora === 'fixo' ? (r.total_geral || 0) : 0), 0)
+  const totExtra = detFiltrado.reduce((s, r) => s + (r.tipo_hora === 'extra' ? (r.total_geral || 0) : 0), 0)
 
   // preview dos totais ao editar
   const prevT50 = (parseFloat(editForm.horas_normais) || 0) * (parseFloat(editForm.valor_hora_50) || 0)
@@ -209,69 +328,106 @@ function AbaHistorico() {
     <div>
       {loading ? (
         <div className="surface-card" style={{ textAlign: 'center', color: 'var(--muted)', padding: 32 }}>Carregando…</div>
-      ) : meses.length === 0 ? (
+      ) : mesFiliais.length === 0 ? (
         <div className="surface-card empty-state">
           <strong>Nenhum fechamento salvo</strong>
           <p>Use a aba Calculadora para calcular e salvar um fechamento mensal.</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: mesSel ? '260px 1fr' : '1fr', gap: 14 }}>
-          {/* Cards de meses */}
+        <div style={{ display: 'grid', gridTemplateColumns: selKey ? '280px 1fr' : '1fr', gap: 14 }}>
+          {/* Cards filial + mês */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {meses.map((m) => {
-              const ativo = mesSel === m.mes_referencia
+            {mesFiliais.map((m) => {
+              const key = `${m.mes_referencia}|${m.filial_nome}`
+              const ativo = selKey === key
               return (
-                <div key={m.mes_referencia} className="surface-card"
+                <div key={key} className="surface-card"
                   style={{ cursor: 'pointer', padding: '10px 14px', border: ativo ? '2px solid var(--primary)' : '1px solid var(--border-light)' }}
-                  onClick={() => abrirMes(m.mes_referencia)}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 800, fontSize: 15, color: ativo ? 'var(--primary)' : undefined }}>{formatMes(m.mes_referencia)}</span>
+                  onClick={() => abrirFilialMes(m.mes_referencia, m.filial_nome)}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6 }}>
+                    <div>
+                      <div style={{ fontWeight: 800, fontSize: 13, color: ativo ? 'var(--primary)' : undefined, lineHeight: 1.2 }}>{m.filial_nome}</div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: ativo ? 'var(--primary)' : 'var(--muted)', marginTop: 1 }}>{formatMes(m.mes_referencia)}</div>
+                    </div>
                     <button className="button-secondary" type="button"
-                      style={{ fontSize: 10, padding: '2px 8px', color: 'var(--danger)', borderColor: 'var(--danger)' }}
-                      onClick={(e) => { e.stopPropagation(); setConfirmDelete(m.mes_referencia) }}>
+                      style={{ fontSize: 10, padding: '2px 8px', color: 'var(--danger)', borderColor: 'var(--danger)', flexShrink: 0 }}
+                      onClick={(e) => { e.stopPropagation(); setConfirmDelete({ mes: m.mes_referencia, filial: m.filial_nome }) }}>
                       Excluir
                     </button>
                   </div>
-                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{m.funcionarios} funcionários</div>
-                  <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+                  <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 4 }}>{m.funcionarios} funcionário{m.funcionarios !== 1 ? 's' : ''}</div>
+                  <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
                     <div>
                       <div style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase' }}>H. Normais</div>
-                      <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 12 }}>{formatHHMM(m.total_horas_normais)}</div>
+                      <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 11 }}>{formatHHMM(m.total_horas_normais)}</div>
                     </div>
                     <div>
                       <div style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase' }}>H. Extra 100%</div>
-                      <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 12, color: m.total_horas_100 > 0 ? 'var(--warning)' : undefined }}>{formatHHMM(m.total_horas_100)}</div>
+                      <div style={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 11, color: m.total_horas_100 > 0 ? 'var(--warning)' : undefined }}>{formatHHMM(m.total_horas_100)}</div>
                     </div>
                     <div>
                       <div style={{ fontSize: 9, color: 'var(--muted)', fontWeight: 700, textTransform: 'uppercase' }}>Total</div>
-                      <div style={{ fontWeight: 800, fontSize: 12, color: 'var(--success)' }}>{formatBRL(m.total_geral)}</div>
+                      <div style={{ fontWeight: 800, fontSize: 11, color: 'var(--success)' }}>{formatBRL(m.total_geral)}</div>
                     </div>
                   </div>
+                  {(m.total_fixo > 0 || m.total_extra > 0) && (
+                    <div style={{ display: 'flex', gap: 6, marginTop: 5, flexWrap: 'wrap' }}>
+                      {m.total_fixo > 0 && <span style={{ fontSize: 9, fontWeight: 600, color: '#1d4ed8', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 99, padding: '1px 6px' }}>C/Rec: {formatBRL(m.total_fixo)}</span>}
+                      {m.total_extra > 0 && <span style={{ fontSize: 9, fontWeight: 600, color: '#92400e', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 99, padding: '1px 6px' }}>C/Pag: {formatBRL(m.total_extra)}</span>}
+                    </div>
+                  )}
                 </div>
               )
             })}
           </div>
 
           {/* Detalhe */}
-          {mesSel && (
+          {selKey && (
             <div>
               <div className="surface-card" style={{ marginBottom: 10, padding: '10px 14px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
-                  <strong style={{ fontSize: 14 }}>Detalhes — {formatMes(mesSel)}</strong>
-                  <div style={{ display: 'flex', gap: 14, fontSize: 12 }}>
+                  <div>
+                    <strong style={{ fontSize: 14 }}>{selFilial}</strong>
+                    <span style={{ fontSize: 12, color: 'var(--muted)', marginLeft: 8 }}>{formatMes(selMes)}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 14, fontSize: 12, flexWrap: 'wrap' }}>
                     <span>H. Normais: <strong style={{ fontFamily: 'monospace' }}>{formatHHMM(totH50)}</strong></span>
                     <span>H. Extra 100%: <strong style={{ fontFamily: 'monospace', color: totH100 > 0 ? 'var(--warning)' : undefined }}>{formatHHMM(totH100)}</strong></span>
                     <span>Total: <strong style={{ color: 'var(--success)' }}>{formatBRL(totGeral)}</strong></span>
+                    {totFixo > 0 && <span style={{ color: '#1d4ed8' }}>C/Rec: <strong>{formatBRL(totFixo)}</strong></span>}
+                    {totExtra > 0 && <span style={{ color: '#92400e' }}>C/Pag: <strong>{formatBRL(totExtra)}</strong></span>}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                  <input className="input" placeholder="Buscar funcionário…" value={filterNome} onChange={(e) => setFilterNome(e.target.value)} style={{ width: 200 }} />
-                  <select className="input" value={filterFilial} onChange={(e) => setFilterFilial(e.target.value)} style={{ minWidth: 150 }}>
-                    <option value="">Todas as filiais</option>
-                    {filialOpts.map((f) => <option key={f} value={f}>{f}</option>)}
-                  </select>
-                  {(filterNome || filterFilial) && <button className="button-secondary" style={{ fontSize: 11 }} onClick={() => { setFilterNome(''); setFilterFilial('') }} type="button">Limpar</button>}
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <input className="input" placeholder="Buscar funcionário…" value={filterNome} onChange={(e) => setFilterNome(e.target.value)} style={{ width: 220 }} />
+                  {filterNome && <button className="button-secondary" style={{ fontSize: 11 }} onClick={() => setFilterNome('')} type="button">Limpar</button>}
+                  <button className="button-secondary" onClick={recalcularTipoHora} disabled={recalculating} type="button"
+                    style={{ fontSize: 11, marginLeft: 'auto' }} title="Recalcula NO CONTRATO / FORA CONTRATO com base nos contratos atuais">
+                    {recalculating ? 'Recalculando…' : 'Recalcular tipo'}
+                  </button>
+                  {recalcMsg && (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: recalcMsg.type === 'success' ? 'var(--success)' : 'var(--danger)' }}>
+                      {recalcMsg.text}
+                    </span>
+                  )}
                 </div>
+                {recalcMsg?.detalhes_extra?.length > 0 && (
+                  <div style={{ marginTop: 6, padding: '8px 10px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, fontSize: 11 }}>
+                    <strong style={{ color: '#92400e' }}>FORA CONTRATO — motivo por funcionario:</strong>
+                    <ul style={{ margin: '4px 0 0 14px', padding: 0 }}>
+                      {recalcMsg.detalhes_extra.map((d, i) => (
+                        <li key={i} style={{ color: '#78350f', marginBottom: 2 }}>
+                          <strong>{d.nome}</strong>
+                          {d.colaborador_id ? ` (id: ${d.colaborador_id})` : ' (sem colaborador_id)'}
+                          {' — '}{d.motivo === 'colaborador_id_nao_encontrado_em_contratos' ? 'ID não vinculado em contratos_colaboradores'
+                            : d.motivo === 'sem_colaborador_id_e_nome_nao_encontrado' ? 'Sem ID e nome não localizado em colaboradores'
+                            : d.motivo === 'colaborador_id_nao_encontrado_e_nome_sem_match' ? 'ID não encontrado e nome sem correspondência'
+                            : 'Não vinculado como colaborador em nenhum contrato'}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
 
               {loadingDet ? (
@@ -279,10 +435,10 @@ function AbaHistorico() {
               ) : (
                 <div className="surface-card" style={{ padding: 0 }}>
                   <div style={{ overflowX: 'auto' }}>
-                    <table className="data-table" style={{ minWidth: 860 }}>
+                    <table className="data-table" style={{ minWidth: 780 }}>
                       <thead>
                         <tr>
-                          <th>Funcionário</th><th>Filial</th><th>Est.</th>
+                          <th>Funcionário</th><th>Est.</th><th>Tipo</th>
                           <th style={{ textAlign: 'right' }}>H. Normais</th>
                           <th style={{ textAlign: 'right' }}>H. Extra 100%</th>
                           <th style={{ textAlign: 'right' }}>V.H. 50%</th>
@@ -332,8 +488,8 @@ function AbaHistorico() {
                           return (
                             <tr key={r.id}>
                               <td><strong style={{ fontSize: 12 }}>{r.funcionario_nome}</strong></td>
-                              <td style={{ fontSize: 11 }}>{r.filial_nome || '—'}</td>
                               <td style={{ fontSize: 11 }}>{r.estado || '—'}</td>
+                              <td>{r.tipo_hora ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: r.tipo_hora === 'fixo' ? '#eff6ff' : '#fef3c7', color: r.tipo_hora === 'fixo' ? '#1d4ed8' : '#92400e', border: `1px solid ${r.tipo_hora === 'fixo' ? '#bfdbfe' : '#fde68a'}` }}>{r.tipo_hora === 'fixo' ? 'NO CONTRATO' : 'FORA CONTRATO'}</span> : <span style={{ color: '#ccc', fontSize: 10 }}>—</span>}</td>
                               <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 12 }}>{formatHHMM(r.horas_normais)}</td>
                               <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 12, color: r.horas_extra_100 > 0 ? 'var(--warning)' : '#ccc', fontWeight: r.horas_extra_100 > 0 ? 700 : undefined }}>{formatHHMM(r.horas_extra_100)}</td>
                               <td style={{ textAlign: 'right', fontSize: 12 }}>{formatBRL(r.valor_hora_50)}</td>
@@ -351,7 +507,8 @@ function AbaHistorico() {
                           <td colSpan={3} style={{ fontSize: 12 }}>TOTAL ({detFiltrado.length} func.)</td>
                           <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 12 }}>{formatHHMM(totH50)}</td>
                           <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 12, color: totH100 > 0 ? 'var(--warning)' : undefined }}>{formatHHMM(totH100)}</td>
-                          <td colSpan={4} />
+                          <td colSpan={3} />
+                          <td colSpan={1} />
                           <td style={{ textAlign: 'right', color: 'var(--success)', fontSize: 13 }}>{formatBRL(totGeral)}</td>
                           <td />
                         </tr>
@@ -368,12 +525,12 @@ function AbaHistorico() {
       {/* Modal exclusão */}
       {confirmDelete && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-          <div className="surface-card" style={{ maxWidth: 360, width: '100%', margin: 16 }}>
-            <h3 style={{ marginTop: 0 }}>Excluir fechamento</h3>
-            <p>Excluir o fechamento de <strong>{formatMes(confirmDelete)}</strong>? Esta ação não pode ser desfeita.</p>
+          <div className="surface-card" style={{ maxWidth: 380, width: '100%', margin: 16 }}>
+            <h3 style={{ marginTop: 0 }}>Excluir registros</h3>
+            <p>Excluir todos os registros de <strong>{confirmDelete.filial}</strong> em <strong>{formatMes(confirmDelete.mes)}</strong>? Esta ação não pode ser desfeita.</p>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
               <button className="button-secondary" onClick={() => setConfirmDelete(null)} disabled={deleting} type="button">Cancelar</button>
-              <button className="button-primary" style={{ background: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => deletarMes(confirmDelete)} disabled={deleting} type="button">{deleting ? 'Excluindo…' : 'Excluir'}</button>
+              <button className="button-primary" style={{ background: 'var(--danger)', borderColor: 'var(--danger)' }} onClick={() => deletarFilialMes(confirmDelete)} disabled={deleting} type="button">{deleting ? 'Excluindo…' : 'Excluir'}</button>
             </div>
           </div>
         </div>
@@ -624,46 +781,97 @@ function AbaCalculadora() {
   const [filterFilial, setFilterFilial] = useState('')
   const [filterEstado, setFilterEstado] = useState('')
   const [filterStatus, setFilterStatus] = useState('todos')
+  const [tipoHoraMapa, setTipoHoraMapa] = useState({})
+  const [isMultiMes, setIsMultiMes] = useState(false)
+  const [anoRef, setAnoRef] = useState(String(new Date().getFullYear()))
+  const [mesTabAtiva, setMesTabAtiva] = useState(null)
 
   useEffect(() => {
     setLoadingColab(true)
     api.list('colaboradores', { limit: 2000 }).then((res) => setTodosColaboradores(res.items || res || [])).catch(() => {}).finally(() => setLoadingColab(false))
   }, [])
 
-  function doCalculate() {
-    const data = parsePaste(pasteText)
+  async function doCalculate() {
+    const multi = isMultiMesFormat(pasteText)
     const fb50 = parseBRL(fallback50), fb100 = parseBRL(fallback100)
+    const data = multi
+      ? parsePasteMultiMes(pasteText, parseInt(anoRef, 10) || new Date().getFullYear())
+      : parsePaste(pasteText)
+    setIsMultiMes(multi)
     setRows(data.map((r) => {
       const col = matchColaborador(r.funcionario, todosColaboradores)
+      const matchConf = matchConfidence(r.funcionario, col)
       const inativo = col && col.ativo === false
       const vh = col ? calcValorHora(col) : 0
-      return { ...r, col, matched: Boolean(col), inativo, salario: col ? parseFloat(col.salario_base_mensal) || 0 : 0, vh50: numericStr(vh > 0 ? vh * 1.5 : fb50), vh100: numericStr(vh > 0 ? vh * 2 : fb100), selected: true }
+      return { ...r, col, matched: Boolean(col), matchConf, inativo, salario: col ? parseFloat(col.salario_base_mensal) || 0 : 0, vh50: numericStr(vh > 0 ? vh * 1.5 : fb50), vh100: numericStr(vh > 0 ? vh * 2 : fb100), selected: true }
     }))
     setParsed(true)
+    let mesParaMapa = mesReferencia
+    if (multi && data.length > 0) {
+      const meses = [...new Set(data.map((r) => r.mes_referencia).filter(Boolean))].sort()
+      const primeiro = meses[0]
+      setMesTabAtiva(primeiro)
+      setMesReferencia(primeiro)
+      mesParaMapa = primeiro
+    } else {
+      setMesTabAtiva(null)
+    }
+    try {
+      const mapa = await api.rtmTipoHoraMapa(mesParaMapa)
+      setTipoHoraMapa(mapa.data || {})
+    } catch {
+      setTipoHoraMapa({})
+    }
+  }
+
+  async function handleTabChange(mes) {
+    setMesTabAtiva(mes)
+    setMesReferencia(mes)
+    setFilterNome(''); setFilterFilial(''); setFilterEstado(''); setFilterStatus('todos')
+    try {
+      const mapa = await api.rtmTipoHoraMapa(mes)
+      setTipoHoraMapa(mapa.data || {})
+    } catch {
+      setTipoHoraMapa({})
+    }
   }
 
   function updateRow(i, field, val) { setRows((prev) => prev.map((r, idx) => idx === i ? { ...r, [field]: val } : r)) }
-  function toggleAll(val) { setRows((prev) => prev.map((r) => ({ ...r, selected: val }))) }
+  function toggleAll(val) {
+    setRows((prev) => prev.map((r) => (isMultiMes && mesTabAtiva ? r.mes_referencia === mesTabAtiva : true) ? { ...r, selected: val } : r))
+  }
   function applyFallbackToAll() { setRows((prev) => prev.map((r) => ({ ...r, vh50: fallback50, vh100: fallback100 }))) }
 
   const enrichedRows = useMemo(() => rows.map((r) => {
     const vh50 = parseBRL(r.vh50), vh100 = parseBRL(r.vh100)
-    return { ...r, vh50_num: vh50, vh100_num: vh100, total50: r.horas_normais * vh50, total100: r.horas_extra_100 * vh100 }
-  }), [rows])
+    const cid = r.col?.id ? String(r.col.id) : null
+    const tipoInfo = cid ? tipoHoraMapa[cid] : null
+    const tipo_hora = tipoInfo?.tipo_hora || null
+    const cliente_nome = tipoInfo?.cliente_nome || ''
+    return { ...r, vh50_num: vh50, vh100_num: vh100, total50: r.horas_normais * vh50, total100: r.horas_extra_100 * vh100, tipo_hora, cliente_nome }
+  }), [rows, tipoHoraMapa])
 
-  const filialOptions = useMemo(() => [...new Set(enrichedRows.map((r) => r.filial_pasta).filter(Boolean))].sort(), [enrichedRows])
-  const estadoOptions = useMemo(() => [...new Set(enrichedRows.map((r) => r.estado).filter(Boolean))].sort(), [enrichedRows])
+  const mesesDisp = useMemo(() => {
+    if (!isMultiMes) return []
+    return [...new Set(rows.map((r) => r.mes_referencia).filter(Boolean))].sort()
+  }, [rows, isMultiMes])
+
+  const tabRows = useMemo(() => (isMultiMes && mesTabAtiva ? enrichedRows.filter((r) => r.mes_referencia === mesTabAtiva) : enrichedRows), [enrichedRows, isMultiMes, mesTabAtiva])
+  const filialOptions = useMemo(() => [...new Set(tabRows.map((r) => r.filial_pasta).filter(Boolean))].sort(), [tabRows])
+  const estadoOptions = useMemo(() => [...new Set(tabRows.map((r) => r.estado).filter(Boolean))].sort(), [tabRows])
 
   const filteredIndexes = useMemo(() => enrichedRows.map((r, i) => ({ r, i })).filter(({ r }) => {
+    if (isMultiMes && mesTabAtiva && r.mes_referencia !== mesTabAtiva) return false
     if (filterNome && !normName(r.funcionario).includes(normName(filterNome))) return false
     if (filterFilial && r.filial_pasta !== filterFilial) return false
     if (filterEstado && r.estado !== filterEstado) return false
     if (filterStatus === 'selecionados' && !r.selected) return false
     if (filterStatus === 'desmarcados' && r.selected) return false
     if (filterStatus === 'inativos' && !r.inativo) return false
+    if (filterStatus === 'fuzzy' && r.matchConf !== 'fuzzy') return false
     if (filterStatus === 'sem_contrato' && r.matched) return false
     return true
-  }), [enrichedRows, filterNome, filterFilial, filterEstado, filterStatus])
+  }), [enrichedRows, filterNome, filterFilial, filterEstado, filterStatus, isMultiMes, mesTabAtiva])
 
   // Somente os visíveis no filtro E selecionados
   const filteredSelectedRows = useMemo(() => filteredIndexes.map(({ i }) => enrichedRows[i]).filter((r) => r.selected), [filteredIndexes, enrichedRows])
@@ -674,33 +882,81 @@ function AbaCalculadora() {
   const totalMon100 = filteredSelectedRows.reduce((s, r) => s + r.total100, 0)
   const grandTotal = totalMon50 + totalMon100
   const temValores = filteredSelectedRows.some((r) => r.vh50_num > 0 || r.vh100_num > 0)
-  const matchedCount = enrichedRows.filter((r) => r.matched).length
-  const inativoCount = enrichedRows.filter((r) => r.inativo).length
-  const allSelected = rows.length > 0 && rows.every((r) => r.selected)
-  const noneSelected = rows.every((r) => !r.selected)
-  const selectedCount = rows.filter((r) => r.selected).length
+
+  // Breakdown by tipo_hora and filial for summary charts
+  const totalFixoSel = filteredSelectedRows.reduce((s, r) => r.tipo_hora === 'fixo' ? s + r.total50 + r.total100 : s, 0)
+  const totalExtraSel = filteredSelectedRows.reduce((s, r) => r.tipo_hora === 'extra' ? s + r.total50 + r.total100 : s, 0)
+  const totalSemTipoSel = filteredSelectedRows.reduce((s, r) => !r.tipo_hora ? s + r.total50 + r.total100 : s, 0)
+  const countFixoSel = filteredSelectedRows.filter((r) => r.tipo_hora === 'fixo').length
+  const countExtraSel = filteredSelectedRows.filter((r) => r.tipo_hora === 'extra').length
+  const countSemTipoSel = filteredSelectedRows.filter((r) => !r.tipo_hora).length
+  const filialChartData = Object.values(
+    filteredSelectedRows.reduce((acc, r) => {
+      const f = r.filial_pasta || 'Sem filial'
+      if (!acc[f]) acc[f] = { filial: f, total: 0, count: 0 }
+      acc[f].total += r.total50 + r.total100
+      acc[f].count += 1
+      return acc
+    }, {})
+  ).sort((a, b) => b.total - a.total)
+
+  const matchedCount = tabRows.filter((r) => r.matched).length
+  const inativoCount = tabRows.filter((r) => r.inativo).length
+  const tabRowsBase = isMultiMes && mesTabAtiva ? rows.filter((r) => r.mes_referencia === mesTabAtiva) : rows
+  const allSelected = tabRowsBase.length > 0 && tabRowsBase.every((r) => r.selected)
+  const noneSelected = tabRowsBase.every((r) => !r.selected)
+  const selectedCount = tabRowsBase.filter((r) => r.selected).length
   const hasFilter = filterNome || filterFilial || filterEstado || filterStatus !== 'todos'
+
+  function buildRegistro(r) {
+    return {
+      funcionario_nome: (r.matched && r.col?.nome_completo) ? r.col.nome_completo : r.funcionario,
+      colaborador_id: r.col?.id || null,
+      filial_nome: r.filial_pasta || '',
+      estado: r.estado || '',
+      horas_normais: r.horas_normais,
+      horas_extra_100: r.horas_extra_100,
+      valor_hora_50: r.vh50_num,
+      valor_hora_100: r.vh100_num,
+      total_50: r.total50,
+      total_100: r.total100,
+      total_geral: r.total50 + r.total100,
+      tipo_hora: r.tipo_hora || undefined,
+    }
+  }
 
   async function salvarFechamento() {
     if (!filteredSelectedRows.length) { setSaveMsg({ type: 'error', text: 'Nenhum funcionário visível + selecionado para salvar.' }); return }
     if (!mesReferencia) { setSaveMsg({ type: 'error', text: 'Informe o mês de referência.' }); return }
     setSaving(true); setSaveMsg(null)
     try {
-      const registros = filteredSelectedRows.map((r) => ({
-        funcionario_nome: r.funcionario,
-        colaborador_id: r.col?.id || null,
-        filial_nome: r.filial_pasta || '',
-        estado: r.estado || '',
-        horas_normais: r.horas_normais,
-        horas_extra_100: r.horas_extra_100,
-        valor_hora_50: r.vh50_num,
-        valor_hora_100: r.vh100_num,
-        total_50: r.total50,
-        total_100: r.total100,
-        total_geral: r.total50 + r.total100,
-      }))
+      const registros = filteredSelectedRows.map(buildRegistro)
       await api.rtmSalvar(mesReferencia + '-01', registros)
       setSaveMsg({ type: 'success', text: `${registros.length} funcionários salvos para ${mesReferencia}.` })
+    } catch (e) {
+      setSaveMsg({ type: 'error', text: e.message || 'Erro ao salvar.' })
+    } finally { setSaving(false) }
+  }
+
+  async function salvarTodosMeses() {
+    const selecionados = enrichedRows.filter((r) => r.selected)
+    if (!selecionados.length) { setSaveMsg({ type: 'error', text: 'Nenhum funcionário selecionado.' }); return }
+    setSaving(true); setSaveMsg(null)
+    const grupos = {}
+    for (const r of selecionados) {
+      const mes = r.mes_referencia
+      if (!mes) continue
+      if (!grupos[mes]) grupos[mes] = []
+      grupos[mes].push(buildRegistro(r))
+    }
+    const mesesOrdenados = Object.keys(grupos).sort()
+    let totalSalvos = 0
+    try {
+      for (const mes of mesesOrdenados) {
+        await api.rtmSalvar(mes + '-01', grupos[mes])
+        totalSalvos += grupos[mes].length
+      }
+      setSaveMsg({ type: 'success', text: `${totalSalvos} funcionários salvos em ${mesesOrdenados.length} mes${mesesOrdenados.length !== 1 ? 'es' : ''}: ${mesesOrdenados.map(formatMes).join(', ')}.` })
     } catch (e) {
       setSaveMsg({ type: 'error', text: e.message || 'Erro ao salvar.' })
     } finally { setSaving(false) }
@@ -728,13 +984,46 @@ function AbaCalculadora() {
         </div>
         <div>
           <strong style={{ fontSize: 13 }}>Dados da planilha</strong>
-          <p style={{ fontSize: 11, color: 'var(--muted)', margin: '2px 0 8px' }}>Colunas: <strong>FUNCIONARIO · Filial · ESTADO · HORAS NORMAIS · H.EXTRA 100%</strong></p>
-          <textarea className="input" rows={8} value={pasteText} onChange={(e) => setPasteText(e.target.value)} placeholder={"FUNCIONARIO\tFilial\tESTADO\tHORAS NORMAIS\tH.EXTRA 100%\nANA SILVA\tWHITE MARTINS\tSS/RS\t08:00:00\t00:00:00"} style={{ fontFamily: 'Courier New, monospace', fontSize: 12, resize: 'vertical', width: '100%' }} />
+          <p style={{ fontSize: 11, color: 'var(--muted)', margin: '2px 0 2px' }}>
+            Formato padrão (1 mês): <strong>FUNCIONARIO · Filial · ESTADO · HORAS NORMAIS · H.EXTRA 100%</strong>
+          </p>
+          <p style={{ fontSize: 11, color: 'var(--muted)', margin: '0 0 8px' }}>
+            Formato multi-mês: <strong>FUNCIONARIO · COMPETÊNCIA · ESTADO · FILIAL · H.EXTRA 100% · HORA NORMAL</strong>
+          </p>
+          <textarea className="input" rows={8} value={pasteText} onChange={(e) => setPasteText(e.target.value)} placeholder={"FUNCIONARIO\tCOMPETENCIA\tESTADO\tFILIAL\tH.EXTRA 100%\tHORA NORMAL\nANA SILVA\tABRIL\tJO/SC\tJOINVILLE\t08:00\t40:00"} style={{ fontFamily: 'Courier New, monospace', fontSize: 12, resize: 'vertical', width: '100%' }} />
         </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <div style={{ display: 'flex', gap: 8, marginTop: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <button className="button-primary" onClick={doCalculate} type="button">Calcular</button>
-          {parsed && <button className="button-secondary" onClick={() => { setPasteText(''); setRows([]); setParsed(false) }} type="button">Limpar</button>}
+          {parsed && <button className="button-secondary" onClick={() => { setPasteText(''); setRows([]); setParsed(false); setIsMultiMes(false); setMesTabAtiva(null) }} type="button">Limpar</button>}
+          {!parsed && (
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <label style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>Ano:</label>
+              <input type="number" className="input" value={anoRef} onChange={(e) => setAnoRef(e.target.value)} style={{ width: 80, textAlign: 'center' }} min="2020" max="2035" />
+            </div>
+          )}
         </div>
+        {isMultiMes && parsed && mesesDisp.length > 0 && (
+          <div style={{ marginTop: 12, padding: '10px 14px', background: '#f0f7ff', border: '1px solid #bfdbfe', borderRadius: 'var(--radius)' }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '0.05em', flexShrink: 0 }}>
+                {mesesDisp.length} meses detectados
+              </span>
+              <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', flex: 1 }}>
+                {mesesDisp.map((mes) => (
+                  <button key={mes} type="button" onClick={() => handleTabChange(mes)}
+                    style={{ padding: '4px 14px', fontSize: 12, fontWeight: mesTabAtiva === mes ? 700 : 400, background: mesTabAtiva === mes ? '#1d4ed8' : '#fff', color: mesTabAtiva === mes ? '#fff' : '#374151', border: '1px solid ' + (mesTabAtiva === mes ? '#1d4ed8' : '#d1d5db'), borderRadius: 99, cursor: 'pointer' }}>
+                    {formatMes(mes)}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                <label style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600 }}>Ano:</label>
+                <input type="number" className="input" value={anoRef} onChange={(e) => setAnoRef(e.target.value)} style={{ width: 76, textAlign: 'center' }} min="2020" max="2035" />
+                <button type="button" className="button-secondary" onClick={doCalculate} style={{ fontSize: 11 }}>Re-parsear</button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {parsed && rows.length === 0 && <div className="surface-card empty-state"><strong>Nenhum dado encontrado</strong><p>Verifique se os dados estão separados por tabulação.</p></div>}
@@ -746,13 +1035,14 @@ function AbaCalculadora() {
             <div><label className="field-label">Funcionário</label><input className="input" value={filterNome} onChange={(e) => setFilterNome(e.target.value)} placeholder="Buscar…" style={{ width: 190 }} /></div>
             <div><label className="field-label">Filial</label><select className="input" value={filterFilial} onChange={(e) => setFilterFilial(e.target.value)} style={{ minWidth: 140 }}><option value="">Todas</option>{filialOptions.map((f) => <option key={f} value={f}>{f}</option>)}</select></div>
             <div><label className="field-label">Estado</label><select className="input" value={filterEstado} onChange={(e) => setFilterEstado(e.target.value)} style={{ minWidth: 110 }}><option value="">Todos</option>{estadoOptions.map((e) => <option key={e} value={e}>{e}</option>)}</select></div>
-            <div><label className="field-label">Status</label><select className="input" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ minWidth: 140 }}><option value="todos">Todos</option><option value="selecionados">Selecionados</option><option value="desmarcados">Desmarcados</option><option value="inativos">Inativos</option><option value="sem_contrato">Sem contrato</option></select></div>
+            <div><label className="field-label">Status</label><select className="input" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ minWidth: 140 }}><option value="todos">Todos</option><option value="selecionados">Selecionados</option><option value="desmarcados">Desmarcados</option><option value="inativos">Inativos</option><option value="fuzzy">Match aprox.</option><option value="sem_contrato">Sem cadastro</option></select></div>
             {hasFilter && <div style={{ display: 'flex', alignItems: 'flex-end' }}><button className="button-secondary" type="button" onClick={() => { setFilterNome(''); setFilterFilial(''); setFilterEstado(''); setFilterStatus('todos') }} style={{ fontSize: 11 }}>Limpar filtros</button></div>}
           </div>
 
           {/* Badges */}
           <div style={{ display: 'flex', gap: 8, marginBottom: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             <span style={{ fontSize: 12, padding: '3px 10px', background: 'var(--success-bg)', border: '1px solid var(--success-border)', borderRadius: 99, color: 'var(--success)', fontWeight: 700 }}>✓ {matchedCount} com contrato</span>
+            {tabRows.filter((r) => r.matchConf === 'fuzzy').length > 0 && <span style={{ fontSize: 12, padding: '3px 10px', background: '#f5f3ff', border: '1px solid #c4a0e8', borderRadius: 99, color: '#7c3aed', fontWeight: 700 }} title="Match por similaridade — nome do arquivo difere do cadastro">~ {tabRows.filter((r) => r.matchConf === 'fuzzy').length} match aprox.</span>}
             {inativoCount > 0 && <span style={{ fontSize: 12, padding: '3px 10px', background: '#f0e8ff', border: '1px solid #c4a0e8', borderRadius: 99, color: '#6b21a8', fontWeight: 700 }}>⚠ {inativoCount} inativo{inativoCount !== 1 ? 's' : ''}</span>}
             {enrichedRows.filter((r) => !r.matched).length > 0 && <span style={{ fontSize: 12, padding: '3px 10px', background: '#fffbec', border: '1px solid #f1d877', borderRadius: 99, color: '#7a5c00', fontWeight: 700 }}>⚠ {enrichedRows.filter((r) => !r.matched).length} sem cadastro</span>}
             <div style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
@@ -769,7 +1059,7 @@ function AbaCalculadora() {
                 <thead>
                   <tr>
                     <th style={{ width: 36, textAlign: 'center' }}><input type="checkbox" checked={allSelected} onChange={(e) => toggleAll(e.target.checked)} /></th>
-                    <th>Funcionário</th><th>Filial</th><th>Est.</th>
+                    <th>Funcionário</th><th style={{ width: 64 }}>Tipo</th><th>Filial</th><th>Est.</th>
                     <th style={{ textAlign: 'right' }}>H. Normais</th>
                     <th style={{ textAlign: 'right' }}>H. Extra 100%</th>
                     <th style={{ textAlign: 'right' }}>Salário</th>
@@ -788,12 +1078,25 @@ function AbaCalculadora() {
                       <tr key={i} style={{ opacity: r.selected ? 1 : 0.4, background: r.inativo && r.selected ? '#fdf4ff' : undefined }}>
                         <td style={{ textAlign: 'center' }}><input type="checkbox" checked={r.selected} onChange={(e) => updateRow(i, 'selected', e.target.checked)} /></td>
                         <td>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                            <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, background: r.inativo ? '#a855f7' : r.matched ? 'var(--success)' : '#f0b429' }} />
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                            <span style={{ width: 7, height: 7, borderRadius: '50%', flexShrink: 0, background: r.inativo ? '#a855f7' : r.matched ? (r.tipo_hora === 'fixo' ? 'var(--success)' : r.tipo_hora === 'extra' ? '#f59e0b' : 'var(--success)') : '#f0b429' }} />
                             <strong style={{ fontSize: 12 }}>{r.funcionario}</strong>
                             {r.inativo && <span style={{ fontSize: 9, fontWeight: 700, color: '#6b21a8', background: '#f0e8ff', border: '1px solid #c4a0e8', borderRadius: 99, padding: '1px 5px' }}>INATIVO</span>}
+                            {r.matchConf === 'fuzzy' && <span style={{ fontSize: 9, fontWeight: 700, color: '#7c3aed', background: '#f5f3ff', border: '1px solid #c4a0e8', borderRadius: 99, padding: '1px 5px' }} title="Match aproximado por similaridade de palavras">~APROX</span>}
                           </div>
-                          {r.matched && r.col?.nome_completo && normName(r.col.nome_completo) !== normName(r.funcionario) && <div style={{ fontSize: 10, color: 'var(--muted)', paddingLeft: 12 }}>{r.col.nome_completo}</div>}
+                          {r.matchConf === 'fuzzy' && r.col?.nome_completo && (
+                            <div style={{ fontSize: 10, color: '#7c3aed', paddingLeft: 12, fontWeight: 600 }}>→ {r.col.nome_completo}</div>
+                          )}
+                          {r.matchConf === 'high' && r.col?.nome_completo && normName(r.col.nome_completo) !== normName(r.funcionario) && (
+                            <div style={{ fontSize: 10, color: 'var(--muted)', paddingLeft: 12 }}>{r.col.nome_completo}</div>
+                          )}
+                          {r.matched && r.col?.id && <div style={{ fontSize: 10, color: '#94a3b8', paddingLeft: 12 }}>#{r.col.id}{r.cliente_nome ? <span style={{ marginLeft: 4, color: '#0369a1', fontWeight: 600 }}>{r.cliente_nome}</span> : null}</div>}
+                        </td>
+                        <td style={{ textAlign: 'center' }}>
+                          {r.tipo_hora === 'fixo' && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: '#eff6ff', color: '#1d4ed8', border: '1px solid #bfdbfe' }}>NO CONTRATO</span>}
+                          {r.tipo_hora === 'extra' && <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: '#fef3c7', color: '#92400e', border: '1px solid #fde68a' }}>FORA CONTRATO</span>}
+                          {!r.tipo_hora && r.matched && <span style={{ fontSize: 10, color: '#94a3b8' }}>…</span>}
+                          {!r.matched && <span style={{ fontSize: 10, color: '#cbd5e1' }}>—</span>}
                         </td>
                         <td style={{ fontSize: 11 }}>{r.filial_pasta}</td>
                         <td style={{ fontSize: 11 }}>{r.estado}</td>
@@ -811,7 +1114,7 @@ function AbaCalculadora() {
                 </tbody>
                 <tfoot>
                   <tr style={{ background: '#f0f4f8', fontWeight: 700 }}>
-                    <td /><td colSpan={3} style={{ fontSize: 12 }}>TOTAL{hasFilter ? ' (filtrado)' : ''} — {filteredSelectedRows.length} func.</td>
+                    <td /><td colSpan={4} style={{ fontSize: 12 }}>TOTAL{hasFilter ? ' (filtrado)' : ''} — {filteredSelectedRows.length} func.</td>
                     <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 12 }}>{formatHHMM(totalH50)}</td>
                     <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 12, color: totalH100 > 0 ? 'var(--warning)' : undefined }}>{totalH100 > 0 ? formatHHMM(totalH100) : '—'}</td>
                     <td /><td /><td />
@@ -826,14 +1129,22 @@ function AbaCalculadora() {
 
           {/* Salvar fechamento */}
           <div className="surface-card" style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
-            <div>
-              <label className="field-label">Mês de referência</label>
-              <input type="month" className="input" value={mesReferencia} onChange={(e) => setMesReferencia(e.target.value)} style={{ width: 160 }} />
-            </div>
+            {!isMultiMes && (
+              <div>
+                <label className="field-label">Mês de referência</label>
+                <input type="month" className="input" value={mesReferencia} onChange={(e) => setMesReferencia(e.target.value)} style={{ width: 160 }} />
+              </div>
+            )}
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
-              <button className="button-primary" onClick={salvarFechamento} disabled={saving} type="button">
-                {saving ? 'Salvando…' : `Salvar${hasFilter ? ` (${filteredSelectedRows.length} visíveis)` : ''}`}
-              </button>
+              {isMultiMes ? (
+                <button className="button-primary" onClick={salvarTodosMeses} disabled={saving} type="button">
+                  {saving ? 'Salvando…' : `Salvar todos os meses (${enrichedRows.filter(r => r.selected).length} func.)`}
+                </button>
+              ) : (
+                <button className="button-primary" onClick={salvarFechamento} disabled={saving} type="button">
+                  {saving ? 'Salvando…' : `Salvar${hasFilter ? ` (${filteredSelectedRows.length} visíveis)` : ''}`}
+                </button>
+              )}
             </div>
             {saveMsg && (
               <span style={{ fontSize: 12, fontWeight: 600, color: saveMsg.type === 'success' ? 'var(--success)' : 'var(--danger)', padding: '4px 10px', borderRadius: 'var(--radius)', background: saveMsg.type === 'success' ? 'var(--success-bg)' : '#fff0f0' }}>
@@ -865,6 +1176,44 @@ function AbaCalculadora() {
                 <div style={{ fontSize: 10, color: 'var(--success)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', marginBottom: 4 }}>{hasFilter ? 'TOTAL (filtrado)' : 'TOTAL GERAL'}</div>
                 <div style={{ fontSize: 28, fontWeight: 900, color: 'var(--success)' }}>{formatBRL(grandTotal)}</div>
               </div>
+            </div>
+          )}
+
+          {/* Summary charts: by tipo_hora and filial */}
+          {temValores && (
+            <div style={{ display: 'grid', gridTemplateColumns: filialChartData.length > 1 ? '1fr 1fr' : '1fr', gap: 12, marginTop: 4 }}>
+              <div className="surface-card">
+                <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Por tipo de contrato</div>
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                  {countFixoSel > 0 && (
+                    <div style={{ flex: 1, minWidth: 130, padding: '10px 14px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 'var(--radius)' }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#1d4ed8', textTransform: 'uppercase', marginBottom: 3 }}>NO CONTRATO</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: '#1d4ed8' }}>{formatBRL(totalFixoSel)}</div>
+                      <div style={{ fontSize: 11, color: '#3b82f6', marginTop: 2 }}>{countFixoSel} func. · C/Receber</div>
+                    </div>
+                  )}
+                  {countExtraSel > 0 && (
+                    <div style={{ flex: 1, minWidth: 130, padding: '10px 14px', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 'var(--radius)' }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: '#92400e', textTransform: 'uppercase', marginBottom: 3 }}>FORA CONTRATO</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: '#d97706' }}>{formatBRL(totalExtraSel)}</div>
+                      <div style={{ fontSize: 11, color: '#a16207', marginTop: 2 }}>{countExtraSel} func. · C/Pagar</div>
+                    </div>
+                  )}
+                  {countSemTipoSel > 0 && (
+                    <div style={{ flex: 1, minWidth: 130, padding: '10px 14px', background: '#f0f4f8', border: '1px solid #c8d2dc', borderRadius: 'var(--radius)' }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 3 }}>SEM CLASSIFICAÇÃO</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: 'var(--muted)' }}>{formatBRL(totalSemTipoSel)}</div>
+                      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>{countSemTipoSel} func. · sem contrato</div>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {filialChartData.length > 1 && (
+                <div className="surface-card">
+                  <div style={{ fontSize: 13, fontWeight: 700, marginBottom: 12 }}>Por filial — total R$</div>
+                  <RankingBar items={filialChartData} valueKey="total" labelKey="filial" colorBar="var(--primary)" formatValue={formatBRL} />
+                </div>
+              )}
             </div>
           )}
         </>

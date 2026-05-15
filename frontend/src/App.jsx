@@ -38,6 +38,9 @@ import AcompanhamentoPage from './components/AcompanhamentoPage'
 import HorasExtrasRTMPage from './components/HorasExtrasRTMPage'
 import HorasExtrasHistoricoPage from './components/HorasExtrasHistoricoPage'
 import HorasExtrasMetricasPage from './components/HorasExtrasMetricasPage'
+import ContasReceberPage from './components/ContasReceberPage'
+import ContasPagarPage from './components/ContasPagarPage'
+import BancoPage from './components/BancoPage'
 
 function PlaceholderPage({ title, text }) {
   return (
@@ -166,6 +169,15 @@ export default function App() {
           </Route>
           <Route element={<AccessRoute requiredScope="menu.horas_extras_rtm" />}>
             <Route path="/horas-extras-metricas" element={<HorasExtrasMetricasPage />} />
+          </Route>
+          <Route element={<AccessRoute requiredScope="menu.contas_receber" />}>
+            <Route path="/contas-receber" element={<ContasReceberPage />} />
+          </Route>
+          <Route element={<AccessRoute requiredScope="menu.contas_pagar" />}>
+            <Route path="/contas-pagar" element={<ContasPagarPage />} />
+          </Route>
+          <Route element={<AccessRoute requiredScope="menu.banco" />}>
+            <Route path="/banco" element={<BancoPage />} />
           </Route>
         </Route>
       </Route>

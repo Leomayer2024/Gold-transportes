@@ -267,7 +267,7 @@ function formatValue(item, column, relations) {
   }
 
   if (column.key === 'filial_id') {
-    const filial = relations.filiais?.find((relation) => relation.id === item.filial_id)
+    const filial = relations.filiais?.find((relation) => String(relation.id) === String(item.filial_id))
     return filial ? `${filial.cidade}/${filial.uf}` : item.filial_id || '-'
   }
 
@@ -567,7 +567,8 @@ export default function ResourcePage({
       setErrorMessage('')
 
       try {
-        const relationFields = [...config.fields, ...(config.filters || [])].filter((field) => field.relation)
+        const relationFields = [...config.fields, ...(config.filters || []), ...(config.columns || [])]
+          .filter((field) => field.relation)
         const relationNames = [...new Set(relationFields.map((field) => field.relation))]
         const activeFilters = Object.entries(filterState).reduce((accumulator, [key, value]) => {
           if (value !== '' && value !== null && value !== undefined) {
@@ -579,7 +580,7 @@ export default function ResourcePage({
 
         const [mainResponse, ...relationResponses] = await Promise.all([
           api.list(config.resource, { ...activeFilters, page }),
-          ...relationNames.map((relationName) => api.list(relationName, { ativo: true })),
+          ...relationNames.map((relationName) => api.list(relationName)),
         ])
 
         if (!active) {
@@ -738,7 +739,8 @@ export default function ResourcePage({
   }
 
   function handleChange(field, value) {
-    const normalizedValue = field.type === 'checkbox' ? Boolean(value) : value
+    const transformedValue = field.transform === 'uppercase' && typeof value === 'string' ? value.toUpperCase() : value
+    const normalizedValue = field.type === 'checkbox' ? Boolean(transformedValue) : transformedValue
     const nextManualOverrides = field.autoFill
       ? {
           ...manualAutoFillOverrides,
@@ -1342,7 +1344,11 @@ export default function ResourcePage({
 
                       if (field.type === 'select') {
                         const baseOptions = field.relation
-                          ? filterRelationRowsByDependency(relations[field.relation] || [], field, formState).map((item) => ({
+                          ? filterRelationRowsByDependency(
+                              (relations[field.relation] || []).filter((item) => item.ativo !== false),
+                              field,
+                              formState
+                            ).map((item) => ({
                               value: item.id,
                               label: relationOptionLabel(field, item),
                             }))
@@ -1388,7 +1394,7 @@ export default function ResourcePage({
 
                       if (field.type === 'select-text') {
                         // Como select convencional mas salva o TEXT (optionLabel), não o ID
-                        const optRows = (relations[field.relation] || [])
+                        const optRows = (relations[field.relation] || []).filter((item) => item.ativo !== false)
                         const labelKey = field.optionLabel || 'nome'
                         const datalistId = `datalist-${field.name}`
                         return (
@@ -1420,6 +1426,7 @@ export default function ResourcePage({
                             onChange={(event) => handleChange(field, event.target.value)}
                             placeholder={field.placeholder}
                             required={isFieldRequired(field, formState)}
+                            style={field.transform === 'uppercase' ? { textTransform: 'uppercase' } : undefined}
                             type={field.type}
                             value={value}
                           />

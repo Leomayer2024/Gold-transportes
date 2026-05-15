@@ -48,9 +48,9 @@ export const resourceConfigs = {
       { key: 'ativo', label: 'Ativo', type: 'boolean' },
     ],
     fields: [
-      { name: 'cidade', label: 'Cidade', type: 'text', required: true, placeholder: 'Ex.: Uberlândia' },
-      { name: 'uf', label: 'UF', type: 'text', required: true, placeholder: 'MG' },
-      { name: 'parceira', label: 'Parceira', type: 'text', required: true, placeholder: 'Ex.: Integra Brasil' },
+      { name: 'cidade', label: 'Cidade', type: 'text', required: true, placeholder: 'Ex.: UBERLÂNDIA', transform: 'uppercase' },
+      { name: 'uf', label: 'UF', type: 'text', required: true, placeholder: 'MG', transform: 'uppercase' },
+      { name: 'parceira', label: 'Parceira', type: 'text', required: true, placeholder: 'Ex.: INTEGRA BRASIL', transform: 'uppercase' },
       { name: 'cnpj', label: 'CNPJ', type: 'text', placeholder: '00.000.000/0001-00' },
       { name: 'telefone_filial', label: 'Telefone', type: 'text', placeholder: '(34) 99999-9999' },
       { name: 'email_filial', label: 'E-mail da filial', type: 'email', placeholder: 'filial@empresa.com.br' },
