@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState, useCallback } from 'react'
+import { Fragment, useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { api } from '../services/api'
 
 const TIPOS = ['HORAS EXTRAS', 'FORNECEDOR', 'COLABORADOR', 'HOSPEDAGEM', 'KM', 'PEDAGIO', 'DESPESAS EXTRAS', 'OUTRO']
@@ -89,6 +89,12 @@ export default function ContasPagarPage() {
   const [filterTipo, setFilterTipo] = useState('')
   const [filterStatus, setFilterStatus] = useState('')
 
+  useEffect(() => {
+    if (filiais?.length === 1 && !filterFilial) {
+      setFilterFilial(String(filiais[0].id))
+    }
+  }, [filiais])
+
   const [editRow, setEditRow] = useState(null)
   const [editForm, setEditForm] = useState({})
   const [saving, setSaving] = useState(false)
@@ -98,11 +104,12 @@ export default function ContasPagarPage() {
   const [creatingNew, setCreatingNew] = useState(false)
 
   const [detailRow, setDetailRow] = useState(null)
+  const _loaded = useRef(false)
 
   const hoje = new Date().toISOString().split('T')[0]
 
   const carregar = useCallback(() => {
-    setLoading(true)
+    if (!_loaded.current) setLoading(true)
     Promise.all([
       api.contasPagar(),
       api.contasPagarAlertas(),
@@ -114,7 +121,7 @@ export default function ContasPagarPage() {
         setFiliais(fil.items || fil || [])
       })
       .catch(() => {})
-      .finally(() => setLoading(false))
+      .finally(() => { _loaded.current = true; setLoading(false) })
   }, [])
 
   useEffect(() => { carregar() }, [carregar])
@@ -126,11 +133,13 @@ export default function ContasPagarPage() {
 
   const filtradas = useMemo(() => rows.filter((r) => {
     if (filterFilial) {
-      const matchById = r.filial_id != null && String(r.filial_id) === String(filterFilial)
       const selectedCidade = filiais.find((f) => String(f.id) === String(filterFilial))?.cidade
-      const matchByNome = selectedCidade && r.filial_nome &&
-        r.filial_nome.trim().toUpperCase() === selectedCidade.trim().toUpperCase()
-      if (!matchById && !matchByNome) return false
+      if (r.filial_nome && selectedCidade) {
+        // filial_nome is authoritative — filial_id may be stale/wrong from RTM fallback
+        if (r.filial_nome.trim().toUpperCase() !== selectedCidade.trim().toUpperCase()) return false
+      } else if (r.filial_id != null) {
+        if (String(r.filial_id) !== String(filterFilial)) return false
+      }
     }
     if (filterMes && r.competencia?.slice(0, 7) !== filterMes) return false
     if (filterTipo && r.tipo_despesa !== filterTipo) return false
@@ -226,7 +235,7 @@ export default function ContasPagarPage() {
         <div>
           <label className="field-label">Filial</label>
           <select className="input" value={filterFilial} onChange={(e) => setFilterFilial(e.target.value)} style={{ minWidth: 140 }}>
-            <option value="">Todas</option>
+            {filiais.length !== 1 && <option value="">Todas</option>}
             {filiais.map((f) => <option key={f.id} value={f.id}>{f.cidade}</option>)}
           </select>
         </div>
@@ -300,14 +309,15 @@ export default function ContasPagarPage() {
                     const isEdit = editRow === r.id
                     const saldo = (r.valor || 0) - (r.valor_pago || 0)
                     const vencido = r.data_vencimento && r.data_vencimento < hoje && r.status !== 'PAGO' && r.status !== 'CANCELADO'
-                    const editBg = { ...XL, padding: '3px 4px', background: '#fffbeb' }
+                    const editBg = { ...XL, padding: '3px 4px', background: '#fffde7', borderTop: '2px solid #f59e0b', borderBottom: '2px solid #f59e0b' }
+                    const editBgFirst = { ...editBg, borderLeft: '4px solid #f59e0b', color: '#78350f', fontWeight: 700, fontFamily: 'monospace', fontSize: 10 }
                     const td = vencido ? { ...XL_TD(i), background: '#fff5f5' } : XL_TD(i)
                     if (isEdit) {
                       const ef = editForm
                       return (
                         <tr key={r.id}>
-                          <td style={editBg}>{i + 1}</td>
-                          <td style={editBg}>{r.filial_nome || '—'}</td>
+                          <td style={editBgFirst} title="Editando">✎</td>
+                          <td style={{ ...editBg, fontWeight: 700, color: '#1e3a5f' }}>{r.filial_nome || '—'}</td>
                           <td style={editBg}><InlineInput value={ef.tipo_despesa} onChange={(v) => setField('tipo_despesa', v)} opts={TIPOS} /></td>
                           <td style={editBg}><InlineInput value={ef.tipo_hora} onChange={(v) => setField('tipo_hora', v)} opts={['fixo', 'extra']} /></td>
                           <td style={editBg}><InlineInput value={ef.competencia} onChange={(v) => setField('competencia', v)} type="date" /></td>

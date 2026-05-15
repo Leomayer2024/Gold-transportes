@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../services/api'
 
@@ -24,6 +24,7 @@ export default function HorasExtrasHistoricoPage() {
   const navigate = useNavigate()
   const [meses, setMeses] = useState([])
   const [loading, setLoading] = useState(true)
+  const _loaded = useRef(false)
   const [mesSelecionado, setMesSelecionado] = useState(null)
   const [detalhe, setDetalhe] = useState([])
   const [loadingDetalhe, setLoadingDetalhe] = useState(false)
@@ -35,11 +36,11 @@ export default function HorasExtrasHistoricoPage() {
   useEffect(() => { carregar() }, [])
 
   function carregar() {
-    setLoading(true)
+    if (!_loaded.current) setLoading(true)
     api.rtmMeses()
       .then((r) => setMeses(r.data || []))
       .catch(() => {})
-      .finally(() => setLoading(false))
+      .finally(() => { _loaded.current = true; setLoading(false) })
   }
 
   function abrirMes(mes) {

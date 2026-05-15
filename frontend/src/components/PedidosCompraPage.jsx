@@ -791,6 +791,7 @@ export default function PedidosCompraPage() {
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
   const [refreshKey, setRefreshKey] = useState(0)
+  const _loaded = useRef(false)
   const [expandedId, setExpandedId] = useState(null)
   const [pdfData, setPdfData] = useState(null)      // abre PrintablePedido
 
@@ -804,9 +805,15 @@ export default function PedidosCompraPage() {
   }, [])
 
   useEffect(() => {
+    if (filiais?.length === 1 && !fFilial) {
+      setFFilial(String(filiais[0].id))
+    }
+  }, [filiais])
+
+  useEffect(() => {
     if (mode !== 'list') return
     let active = true
-    setLoading(true)
+    if (!_loaded.current) setLoading(true)
     setErro('')
     const params = {}
     if (fFilial) params.filial_id = fFilial
@@ -814,7 +821,7 @@ export default function PedidosCompraPage() {
     api.list('pedidos_compra', params)
       .then((rows) => { if (active) setPedidos(rows || []) })
       .catch((err) => { if (active) setErro(err.message) })
-      .finally(() => { if (active) setLoading(false) })
+      .finally(() => { if (active) { _loaded.current = true; setLoading(false) } })
     return () => { active = false }
   }, [fFilial, fStatus, refreshKey, mode])
 
@@ -885,7 +892,7 @@ export default function PedidosCompraPage() {
           <label className="field filter-field">
             <span>Filial</span>
             <select value={fFilial} onChange={(e) => setFFilial(e.target.value)}>
-              <option value="">Todas</option>
+              {filiais.length !== 1 && <option value="">Todas</option>}
               {filiais.map((f) => <option key={f.id} value={f.id}>{f.cidade}/{f.uf}</option>)}
             </select>
           </label>

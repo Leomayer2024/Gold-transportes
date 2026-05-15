@@ -213,8 +213,15 @@ export default function EstoquePage() {
   const [items, setItems] = useState([])
   const [filiais, setFiliais] = useState([])
   const [loading, setLoading] = useState(true)
+  const _loaded = useRef(false)
   const [error, setError] = useState('')
   const [filterText, setFilterText] = useState('')
+
+  useEffect(() => {
+    if (filiais?.length === 1 && !filterFilial) {
+      setFilterFilial(String(filiais[0].id))
+    }
+  }, [filiais])
   const [filterCat, setFilterCat] = useState('')
   const [filterFilial, setFilterFilial] = useState('')
   const [filterAlerta, setFilterAlerta] = useState(false)
@@ -223,7 +230,7 @@ export default function EstoquePage() {
   const searchRef = useRef(null)
 
   async function load() {
-    setLoading(true)
+    if (!_loaded.current) setLoading(true)
     setError('')
     try {
       const [itensRes, filiaisRes] = await Promise.all([
@@ -235,6 +242,7 @@ export default function EstoquePage() {
     } catch (err) {
       setError(err.message || 'Erro ao carregar estoque.')
     } finally {
+      _loaded.current = true
       setLoading(false)
     }
   }
@@ -341,7 +349,7 @@ export default function EstoquePage() {
           {CATEGORIA_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
         <select className="form-input" style={{ flex: '1 1 160px' }} value={filterFilial} onChange={(e) => setFilterFilial(e.target.value)}>
-          <option value="">Todas as bases</option>
+          {filiais.length !== 1 && <option value="">Todas as bases</option>}
           {filiais.map((f) => <option key={f.id} value={f.id}>{f.cidade}/{f.uf}</option>)}
         </select>
         {filterAlerta && (

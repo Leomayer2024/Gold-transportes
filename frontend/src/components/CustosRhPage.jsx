@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { api } from '../services/api'
 import {
   formatCurrency,
@@ -32,6 +32,7 @@ export default function CustosRhPage({ embedded = false }) {
     database_ready: { contracts: true },
   })
   const [loading, setLoading] = useState(true)
+  const _loaded = useRef(false)
   const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => {
@@ -44,7 +45,7 @@ export default function CustosRhPage({ embedded = false }) {
     let active = true
 
     async function load() {
-      setLoading(true)
+      if (!_loaded.current) setLoading(true)
       setErrorMessage('')
 
       try {
@@ -61,6 +62,7 @@ export default function CustosRhPage({ embedded = false }) {
         }
       } finally {
         if (active) {
+          _loaded.current = true
           setLoading(false)
         }
       }

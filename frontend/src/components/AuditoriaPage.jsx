@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { api } from '../services/api'
 
 function statusTone(value) {
@@ -17,7 +17,14 @@ export default function AuditoriaPage() {
   const [items, setItems] = useState([])
   const [filters, setFilters] = useState({ action: '', resource: '', status: '', filial_id: '', date_from: '', date_to: '' })
   const [loading, setLoading] = useState(true)
+  const _loaded = useRef(false)
   const [errorMessage, setErrorMessage] = useState('')
+
+  useEffect(() => {
+    if (config.filiais?.length === 1 && !filters.filial_id) {
+      setFilters((prev) => ({ ...prev, filial_id: String(config.filiais[0].id) }))
+    }
+  }, [config.filiais])
 
   useEffect(() => {
     let active = true
@@ -47,7 +54,7 @@ export default function AuditoriaPage() {
     let active = true
 
     async function loadItems() {
-      setLoading(true)
+      if (!_loaded.current) setLoading(true)
       setErrorMessage('')
 
       try {
@@ -62,6 +69,7 @@ export default function AuditoriaPage() {
         }
       } finally {
         if (active) {
+          _loaded.current = true
           setLoading(false)
         }
       }
@@ -128,7 +136,7 @@ export default function AuditoriaPage() {
             <label className="field filter-field">
               <span>Filial</span>
               <select onChange={(event) => setFilter('filial_id', event.target.value)} value={filters.filial_id}>
-                <option value="">Todas</option>
+                {(config.filiais || []).length !== 1 && <option value="">Todas</option>}
                 {(config.filiais || []).map((filial) => (
                   <option key={filial.id} value={filial.id}>{filial.cidade}/{filial.uf}</option>
                 ))}

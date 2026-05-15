@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../services/api'
@@ -51,18 +51,25 @@ export default function FrotaDashboardPage() {
   const [filiais, setFiliais] = useState([])
   const [selectedFilial, setSelectedFilial] = useState('')
   const [mes, setMes] = useState(MES_ATUAL)
+
+  useEffect(() => {
+    if (filiais?.length === 1 && !selectedFilial) {
+      setSelectedFilial(String(filiais[0].id))
+    }
+  }, [filiais])
   const [data, setData] = useState(null)
   const [manutAbertas, setManutAbertas] = useState([])
   const [pneusAlerta, setPneusAlerta] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const _loaded = useRef(false)
 
   useEffect(() => {
     api.list('filiais').then(r => setFiliais(Array.isArray(r) ? r : r.data || [])).catch(() => {})
   }, [])
 
   const load = useCallback(async () => {
-    setLoading(true)
+    if (!_loaded.current) setLoading(true)
     setError('')
     try {
       const params = {}
@@ -93,6 +100,7 @@ export default function FrotaDashboardPage() {
     } catch (err) {
       setError(err.message || 'Erro ao carregar dados da frota.')
     } finally {
+      _loaded.current = true
       setLoading(false)
     }
   }, [selectedFilial, mes])
@@ -118,7 +126,7 @@ export default function FrotaDashboardPage() {
             value={selectedFilial}
             onChange={e => setSelectedFilial(e.target.value)}
           >
-            <option value="">Todas as filiais</option>
+            {filiais.length !== 1 && <option value="">Todas as filiais</option>}
             {filiais.map(f => (
               <option key={f.id} value={f.id}>{f.cidade}</option>
             ))}

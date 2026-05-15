@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { api } from '../services/api'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -281,9 +281,16 @@ export default function FeriadosPage() {
   const [mes, setMes] = useState(today.getMonth() + 1)
   const [filiais, setFiliais] = useState([])
   const [filtroFilial, setFiltroFilial] = useState('')
+
+  useEffect(() => {
+    if (filiais?.length === 1 && !filtroFilial) {
+      setFiltroFilial(String(filiais[0].id))
+    }
+  }, [filiais])
   const [filtroUf, setFiltroUf] = useState('')
   const [feriados, setFeriados] = useState([])
   const [loading, setLoading] = useState(false)
+  const _loaded = useRef(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [selectedDay, setSelectedDay] = useState(null)
   const [modalFeriado, setModalFeriado] = useState(null) // null=fechado, {}=novo, {...}=editar
@@ -295,14 +302,14 @@ export default function FeriadosPage() {
 
   useEffect(() => {
     let active = true
-    setLoading(true)
+    if (!_loaded.current) setLoading(true)
     const params = { ano, mes }
     if (filtroUf) params.uf = filtroUf
     if (filtroFilial) params.filial_id = filtroFilial
     api.getFeriadosCalendario(params)
       .then((rows) => { if (active) setFeriados(rows || []) })
       .catch(() => { if (active) setFeriados([]) })
-      .finally(() => { if (active) setLoading(false) })
+      .finally(() => { if (active) { _loaded.current = true; setLoading(false) } })
     return () => { active = false }
   }, [ano, mes, filtroUf, filtroFilial, refreshKey])
 
@@ -385,7 +392,7 @@ export default function FeriadosPage() {
           <label className="field filter-field" style={{ minWidth: 180 }}>
             <span>Filial</span>
             <select value={filtroFilial} onChange={(e) => setFiltroFilial(e.target.value)}>
-              <option value="">Todas</option>
+              {filiais.length !== 1 && <option value="">Todas</option>}
               {filiais.map((f) => <option key={f.id} value={f.id}>{f.cidade}/{f.uf}</option>)}
             </select>
           </label>

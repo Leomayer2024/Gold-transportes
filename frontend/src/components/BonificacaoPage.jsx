@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../services/api'
 
@@ -46,15 +46,22 @@ export default function BonificacaoPage() {
   })
   const [selectionMap, setSelectionMap] = useState({})
   const [loading, setLoading] = useState(true)
+  const _loaded = useRef(false)
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => {
+    if (board.filiais?.length === 1 && !selectedFilial) {
+      setSelectedFilial(String(board.filiais[0].id))
+    }
+  }, [board.filiais])
+
+  useEffect(() => {
     let active = true
 
     async function loadBoard() {
-      setLoading(true)
+      if (!_loaded.current) setLoading(true)
       setErrorMessage('')
 
       try {
@@ -75,6 +82,7 @@ export default function BonificacaoPage() {
         }
       } finally {
         if (active) {
+          _loaded.current = true
           setLoading(false)
         }
       }
@@ -208,7 +216,7 @@ export default function BonificacaoPage() {
             <label className="field filter-field">
               <span>Filial</span>
               <select onChange={(event) => setSelectedFilial(event.target.value)} value={selectedFilial}>
-                <option value="">Todas</option>
+                {(board.filiais || []).length !== 1 && <option value="">Todas</option>}
                 {(board.filiais || []).map((filial) => (
                   <option key={filial.id} value={filial.id}>
                     {filial.cidade}/{filial.uf}

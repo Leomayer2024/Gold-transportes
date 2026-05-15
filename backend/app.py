@@ -1013,6 +1013,8 @@ def create_app():
     supabase: Client = create_client(supabase_url, supabase_server_key)
     auth_cache_ttl = int(os.getenv('AUTH_CACHE_TTL_SECONDS', '30'))
     auth_cache = {}
+    _profile_cache = {}          # user_id → {'profile': ..., 'expires_at': float}
+    _profile_cache_ttl = 120     # seconds — rebuild profile after 2 min
 
     # ─── Reconexão automática Supabase (HTTP/2 fecha conexões ociosas) ────────
     _sb_lock = threading.Lock()
@@ -3960,14 +3962,8 @@ def create_app():
     def fetch_filial_labels(filial_ids):
         if not filial_ids:
             return []
-
-        response = (
-            supabase.table('filiais')
-            .select('id, cidade, uf')
-            .in_('id', filial_ids)
-            .order('cidade')
-            .execute()
-        )
+        query = supabase.table('filiais').select('id, cidade, uf').in_('id', filial_ids).order('cidade')
+        response = supabase_retry(query.execute)
         return [f"{item['cidade']}/{item['uf']}" for item in (response.data or [])]
 
     def fetch_loading_support_rows(profile):
@@ -4669,23 +4665,33 @@ def create_app():
         if is_super_admin_identity(user):
             return build_super_admin_profile(user), None
 
+        user_id = str(user['id'])
+
+        # Serve from cache when fresh — avoids a Supabase roundtrip on every request
+        cached = _profile_cache.get(user_id)
+        if cached and cached['expires_at'] > time.time():
+            return cached['profile'], None
+
         try:
-            profile_response = (
-                supabase.table('colaboradores')
+            profile_response = supabase_retry(
+                lambda: supabase.table('colaboradores')
                 .select('*')
-                .eq('user_id', str(user['id']))
+                .eq('user_id', user_id)
                 .limit(1)
                 .execute()
             )
         except Exception as exc:
-            app.logger.error('Falha ao carregar colaborador para user_id=%s: %s', str(user.get('id', ''))[:36], exc)
+            app.logger.error('Falha ao carregar colaborador para user_id=%s: %s', user_id[:36], exc)
+            # Return stale cache on transient error rather than failing the request
+            if cached:
+                return cached['profile'], None
             return None, (jsonify({'error': 'Falha ao carregar perfil. Tente novamente.'}), 500)
 
         if not profile_response.data:
             return None, (
                 jsonify({
                     'error': 'Usuário autenticado, mas sem cadastro em colaboradores.',
-                    'user_id': str(user['id']),
+                    'user_id': user_id,
                 }),
                 403,
             )
@@ -4694,7 +4700,9 @@ def create_app():
         if is_super_admin_identity(user, collaborator):
             return build_super_admin_profile(user), None
 
-        return build_profile(collaborator, user), None
+        profile = build_profile(collaborator, user)
+        _profile_cache[user_id] = {'profile': profile, 'expires_at': time.time() + _profile_cache_ttl}
+        return profile, None
 
     def require_auth(handler):
         @wraps(handler)
@@ -9653,7 +9661,7 @@ def create_app():
                 for _key, info in fixo_groups.items():
                     if info['total'] <= 0:
                         continue
-                    fid_cr = info['filial_id'] or find_filial_id(info.get('filial_nome', ''))
+                    fid_cr = find_filial_id(info.get('filial_nome', '')) or info['filial_id']
                     cliente = info.get('cliente_nome') or ''
                     cr_rows.append({
                         'filial_id': fid_cr,
@@ -9677,7 +9685,7 @@ def create_app():
                 for _fid, info in extra_groups.items():
                     if info['total'] <= 0:
                         continue
-                    fid_cp = info['filial_id'] or find_filial_id(info.get('filial_nome', ''))
+                    fid_cp = find_filial_id(info.get('filial_nome', '')) or info['filial_id']
                     cp_rows.append({
                         'filial_id': fid_cp,
                         'filial_nome': info['filial_nome'],

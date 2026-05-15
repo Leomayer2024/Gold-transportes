@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { api } from '../services/api'
 
 function summaryCardsForBase(base) {
@@ -31,6 +31,7 @@ export default function WorkforceBoardPage() {
   const [search, setSearch] = useState('')
   const [board, setBoard] = useState({ filiais: [], summary_by_filial: [], employees: [], reference_date: '' })
   const [loading, setLoading] = useState(true)
+  const _loaded = useRef(false)
   const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => {
@@ -43,7 +44,7 @@ export default function WorkforceBoardPage() {
     let active = true
 
     async function loadBoard() {
-      setLoading(true)
+      if (!_loaded.current) setLoading(true)
       setErrorMessage('')
 
       try {
@@ -62,6 +63,7 @@ export default function WorkforceBoardPage() {
         }
       } finally {
         if (active) {
+          _loaded.current = true
           setLoading(false)
         }
       }

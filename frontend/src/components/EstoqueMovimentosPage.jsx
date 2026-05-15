@@ -288,6 +288,13 @@ export default function EstoqueMovimentosPage() {
   const [filiais, setFiliais] = useState([])
   const [colaboradores, setColaboradores] = useState([])
   const [loading, setLoading] = useState(true)
+  const _loaded = useRef(false)
+
+  useEffect(() => {
+    if (filiais?.length === 1 && !filterFilial) {
+      setFilterFilial(String(filiais[0].id))
+    }
+  }, [filiais])
   const [error, setError] = useState('')
   const [filterFilial, setFilterFilial] = useState('')
   const [filterItem, setFilterItem] = useState(preItem.itemId ? String(preItem.itemId) : '')
@@ -295,7 +302,7 @@ export default function EstoqueMovimentosPage() {
   const [showModal, setShowModal] = useState(false)
 
   async function loadBase() {
-    setLoading(true)
+    if (!_loaded.current) setLoading(true)
     setError('')
     try {
       const [itensRes, filiaisRes, colabsRes] = await Promise.all([
@@ -309,6 +316,7 @@ export default function EstoqueMovimentosPage() {
     } catch (err) {
       setError(err.message || 'Erro ao carregar dados.')
     } finally {
+      _loaded.current = true
       setLoading(false)
     }
   }
@@ -372,7 +380,7 @@ export default function EstoqueMovimentosPage() {
           value={filterFilial}
           onChange={(e) => { setFilterFilial(e.target.value); setFilterItem('') }}
         >
-          <option value="">Todas as bases</option>
+          {filiais.length !== 1 && <option value="">Todas as bases</option>}
           {filiais.map((f) => <option key={f.id} value={f.id}>{f.cidade}/{f.uf}</option>)}
         </select>
         <select

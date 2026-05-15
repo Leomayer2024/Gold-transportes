@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { api } from '../services/api'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
@@ -322,6 +322,7 @@ export default function NotasCTEPage() {
   const [notas, setNotas] = useState([])
   const [resumo, setResumo] = useState(null)
   const [loading, setLoading] = useState(false)
+  const _loaded = useRef(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [modalNota, setModalNota] = useState(null) // null | {} | {...nota}
   const [fFilial, setFFilial] = useState('')
@@ -335,8 +336,14 @@ export default function NotasCTEPage() {
   }, [])
 
   useEffect(() => {
+    if (filiais?.length === 1 && !fFilial) {
+      setFFilial(String(filiais[0].id))
+    }
+  }, [filiais])
+
+  useEffect(() => {
     let active = true
-    setLoading(true)
+    if (!_loaded.current) setLoading(true)
     const params = { ativo: true }
     if (fFilial) params.filial_id = fFilial
     if (fStatus) params.status = fStatus
@@ -352,7 +359,7 @@ export default function NotasCTEPage() {
         setResumo(res)
       })
       .catch(() => { if (active) setNotas([]) })
-      .finally(() => { if (active) setLoading(false) })
+      .finally(() => { if (active) { _loaded.current = true; setLoading(false) } })
 
     return () => { active = false }
   }, [fFilial, fStatus, fTipo, refreshKey])
@@ -429,7 +436,7 @@ export default function NotasCTEPage() {
           <label className="field filter-field">
             <span>Filial</span>
             <select value={fFilial} onChange={(e) => setFFilial(e.target.value)}>
-              <option value="">Todas</option>
+              {filiais.length !== 1 && <option value="">Todas</option>}
               {filiais.map((f) => <option key={f.id} value={f.id}>{f.cidade}/{f.uf}</option>)}
             </select>
           </label>
