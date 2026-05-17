@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../services/api'
 
 // ─── Utilitários ──────────────────────────────────────────────────────────────
@@ -233,14 +233,25 @@ function AbaHistorico() {
   const [editando, setEditando] = useState(null)
   const [editForm, setEditForm] = useState({})
   const [saving, setSaving] = useState(false)
+  const [modoImpressao, setModoImpressao] = useState(false)
+  const [hiddenIds, setHiddenIds] = useState(new Set())
+  const _loaded = useRef(false)
 
   const [selMes, selFilial] = selKey ? selKey.split('|') : [null, null]
 
   useEffect(() => { carregar() }, [])
 
   function carregar() {
-    setLoading(true)
-    api.rtmMesesFiliais().then((r) => setMesFiliais(r.data || [])).catch(() => {}).finally(() => setLoading(false))
+    if (!_loaded.current) setLoading(true)
+    api.rtmMesesFiliais().then((r) => setMesFiliais(r.data || [])).catch(() => {}).finally(() => { _loaded.current = true; setLoading(false) })
+  }
+
+  function toggleHidden(id) {
+    setHiddenIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
   }
 
   function abrirFilialMes(mes, filial) {
@@ -248,6 +259,7 @@ function AbaHistorico() {
     setSelKey(key)
     setFilterNome('')
     setEditando(null)
+    setHiddenIds(new Set())
     if (mes !== detMes) {
       setLoadingDet(true)
       setDetalhe([])
@@ -314,11 +326,15 @@ function AbaHistorico() {
     return true
   }), [detFilial, filterNome])
 
-  const totH50 = detFiltrado.reduce((s, r) => s + (r.horas_normais || 0), 0)
-  const totH100 = detFiltrado.reduce((s, r) => s + (r.horas_extra_100 || 0), 0)
-  const totGeral = detFiltrado.reduce((s, r) => s + (r.total_geral || 0), 0)
-  const totFixo = detFiltrado.reduce((s, r) => s + (r.tipo_hora === 'fixo' ? (r.total_geral || 0) : 0), 0)
-  const totExtra = detFiltrado.reduce((s, r) => s + (r.tipo_hora === 'extra' ? (r.total_geral || 0) : 0), 0)
+  const detVisible = useMemo(() => detFiltrado.filter((r) => !hiddenIds.has(r.id)), [detFiltrado, hiddenIds])
+
+  const totH50 = detVisible.reduce((s, r) => s + (r.horas_normais || 0), 0)
+  const totH100 = detVisible.reduce((s, r) => s + (r.horas_extra_100 || 0), 0)
+  const totGeral = detVisible.reduce((s, r) => s + (r.total_geral || 0), 0)
+  const totFixo = detVisible.reduce((s, r) => s + (r.tipo_hora === 'fixo' ? (r.total_geral || 0) : 0), 0)
+  const totExtra = detVisible.reduce((s, r) => s + (r.tipo_hora === 'extra' ? (r.total_geral || 0) : 0), 0)
+  const totVal50 = detVisible.reduce((s, r) => s + (r.total_50 || 0), 0)
+  const totVal100 = detVisible.reduce((s, r) => s + (r.total_100 || 0), 0)
 
   // preview dos totais ao editar
   const prevT50 = (parseFloat(editForm.horas_normais) || 0) * (parseFloat(editForm.valor_hora_50) || 0)
@@ -334,9 +350,9 @@ function AbaHistorico() {
           <p>Use a aba Calculadora para calcular e salvar um fechamento mensal.</p>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: selKey ? '280px 1fr' : '1fr', gap: 14 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: selKey && !modoImpressao ? '280px 1fr' : '1fr', gap: 14 }}>
           {/* Cards filial + mês */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: modoImpressao ? 'none' : 'flex', flexDirection: 'column', gap: 8 }}>
             {mesFiliais.map((m) => {
               const key = `${m.mes_referencia}|${m.filial_nome}`
               const ativo = selKey === key
@@ -384,34 +400,67 @@ function AbaHistorico() {
           {/* Detalhe */}
           {selKey && (
             <div>
-              <div className="surface-card" style={{ marginBottom: 10, padding: '10px 14px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+              {/* Cabeçalho + cards de resumo */}
+              <div className="surface-card" style={{ marginBottom: 10, padding: '12px 16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
                   <div>
-                    <strong style={{ fontSize: 14 }}>{selFilial}</strong>
+                    <strong style={{ fontSize: 15 }}>{selFilial}</strong>
                     <span style={{ fontSize: 12, color: 'var(--muted)', marginLeft: 8 }}>{formatMes(selMes)}</span>
+                    {hiddenIds.size > 0 && <span style={{ marginLeft: 10, fontSize: 11, color: 'var(--warning)', fontWeight: 600 }}>{hiddenIds.size} oculto{hiddenIds.size !== 1 ? 's' : ''}</span>}
                   </div>
-                  <div style={{ display: 'flex', gap: 14, fontSize: 12, flexWrap: 'wrap' }}>
-                    <span>H. Normais: <strong style={{ fontFamily: 'monospace' }}>{formatHHMM(totH50)}</strong></span>
-                    <span>H. Extra 100%: <strong style={{ fontFamily: 'monospace', color: totH100 > 0 ? 'var(--warning)' : undefined }}>{formatHHMM(totH100)}</strong></span>
-                    <span>Total: <strong style={{ color: 'var(--success)' }}>{formatBRL(totGeral)}</strong></span>
-                    {totFixo > 0 && <span style={{ color: '#1d4ed8' }}>C/Rec: <strong>{formatBRL(totFixo)}</strong></span>}
-                    {totExtra > 0 && <span style={{ color: '#92400e' }}>C/Pag: <strong>{formatBRL(totExtra)}</strong></span>}
-                  </div>
-                </div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <input className="input" placeholder="Buscar funcionário…" value={filterNome} onChange={(e) => setFilterNome(e.target.value)} style={{ width: 220 }} />
-                  {filterNome && <button className="button-secondary" style={{ fontSize: 11 }} onClick={() => setFilterNome('')} type="button">Limpar</button>}
-                  <button className="button-secondary" onClick={recalcularTipoHora} disabled={recalculating} type="button"
-                    style={{ fontSize: 11, marginLeft: 'auto' }} title="Recalcula NO CONTRATO / FORA CONTRATO com base nos contratos atuais">
-                    {recalculating ? 'Recalculando…' : 'Recalcular tipo'}
-                  </button>
-                  {recalcMsg && (
-                    <span style={{ fontSize: 11, fontWeight: 600, color: recalcMsg.type === 'success' ? 'var(--success)' : 'var(--danger)' }}>
-                      {recalcMsg.text}
-                    </span>
+                  {!modoImpressao && (
+                    <button className="button-secondary" onClick={() => setModoImpressao(true)} type="button"
+                      style={{ fontSize: 11, color: '#1d4ed8', borderColor: '#1d4ed8' }}>
+                      Modo impressão
+                    </button>
+                  )}
+                  {modoImpressao && (
+                    <button className="button-secondary" onClick={() => setModoImpressao(false)} type="button"
+                      style={{ fontSize: 11 }}>
+                      ✕ Sair
+                    </button>
                   )}
                 </div>
-                {recalcMsg?.detalhes_extra?.length > 0 && (
+
+                {/* Cards de métricas */}
+                <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: modoImpressao ? 0 : 10 }}>
+                  {(modoImpressao ? [
+                    { label: 'H. Normais', value: formatHHMM(totH50), mono: true },
+                    { label: 'H. Extra 100%', value: formatHHMM(totH100), mono: true, color: totH100 > 0 ? 'var(--warning)' : undefined },
+                    { label: 'Total 50%', value: formatBRL(totVal50), color: '#1d4ed8' },
+                    { label: 'Total 100%', value: formatBRL(totVal100), color: '#92400e' },
+                    { label: 'Total Geral', value: formatBRL(totGeral), color: 'var(--success)', bold: true },
+                  ] : [
+                    { label: 'H. Normais', value: formatHHMM(totH50), mono: true },
+                    { label: 'H. Extra 100%', value: formatHHMM(totH100), mono: true, color: totH100 > 0 ? 'var(--warning)' : undefined },
+                    { label: 'C/Rec (NO CONTRATO)', value: formatBRL(totFixo), color: '#1d4ed8', show: totFixo > 0 },
+                    { label: 'C/Pag (FORA CONTRATO)', value: formatBRL(totExtra), color: '#92400e', show: totExtra > 0 },
+                    { label: 'Total Geral', value: formatBRL(totGeral), color: 'var(--success)', bold: true },
+                  ]).filter((c) => c.show !== false).map((c, i) => (
+                    <div key={i} style={{ background: '#f8fafc', border: '1px solid var(--border-light)', borderRadius: 8, padding: '8px 14px', minWidth: 130 }}>
+                      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 3, letterSpacing: '0.04em' }}>{c.label}</div>
+                      <div style={{ fontFamily: c.mono ? 'monospace' : undefined, fontWeight: c.bold ? 800 : 700, fontSize: 15, color: c.color }}>{c.value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {!modoImpressao && (
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input className="input" placeholder="Buscar funcionário…" value={filterNome} onChange={(e) => setFilterNome(e.target.value)} style={{ width: 220 }} />
+                    {filterNome && <button className="button-secondary" style={{ fontSize: 11 }} onClick={() => setFilterNome('')} type="button">Limpar</button>}
+                    {hiddenIds.size > 0 && <button className="button-secondary" style={{ fontSize: 11 }} onClick={() => setHiddenIds(new Set())} type="button">Mostrar todos</button>}
+                    <button className="button-secondary" onClick={recalcularTipoHora} disabled={recalculating} type="button"
+                      style={{ fontSize: 11 }} title="Recalcula NO CONTRATO / FORA CONTRATO com base nos contratos atuais">
+                      {recalculating ? 'Recalculando…' : 'Recalcular tipo'}
+                    </button>
+                    {recalcMsg && (
+                      <span style={{ fontSize: 11, fontWeight: 600, color: recalcMsg.type === 'success' ? 'var(--success)' : 'var(--danger)' }}>
+                        {recalcMsg.text}
+                      </span>
+                    )}
+                  </div>
+                )}
+                {recalcMsg?.detalhes_extra?.length > 0 && !modoImpressao && (
                   <div style={{ marginTop: 6, padding: '8px 10px', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, fontSize: 11 }}>
                     <strong style={{ color: '#92400e' }}>FORA CONTRATO — motivo por funcionario:</strong>
                     <ul style={{ margin: '4px 0 0 14px', padding: 0 }}>
@@ -430,15 +479,17 @@ function AbaHistorico() {
                 )}
               </div>
 
-              {loadingDet ? (
+              {!modoImpressao && loadingDet && (
                 <div className="surface-card" style={{ textAlign: 'center', color: 'var(--muted)', padding: 24 }}>Carregando…</div>
-              ) : (
+              )}
+              {!loadingDet && (
                 <div className="surface-card" style={{ padding: 0 }}>
                   <div style={{ overflowX: 'auto' }}>
-                    <table className="data-table" style={{ minWidth: 780 }}>
+                    <table className="data-table" style={{ minWidth: modoImpressao ? 700 : 800 }}>
                       <thead>
                         <tr>
-                          <th>Funcionário</th><th>Est.</th><th>Tipo</th>
+                          <th>Funcionário</th><th>Est.</th>
+                          {!modoImpressao && <th>Tipo</th>}
                           <th style={{ textAlign: 'right' }}>H. Normais</th>
                           <th style={{ textAlign: 'right' }}>H. Extra 100%</th>
                           <th style={{ textAlign: 'right' }}>V.H. 50%</th>
@@ -446,19 +497,34 @@ function AbaHistorico() {
                           <th style={{ textAlign: 'right' }}>Total 50%</th>
                           <th style={{ textAlign: 'right' }}>Total 100%</th>
                           <th style={{ textAlign: 'right' }}>Total</th>
-                          <th style={{ width: 70 }}></th>
+                          {!modoImpressao && <th style={{ width: 100 }}></th>}
                         </tr>
                       </thead>
                       <tbody>
-                        {detFiltrado.length === 0 && (
-                          <tr><td colSpan={11} style={{ textAlign: 'center', color: 'var(--muted)', padding: '20px 0' }}>Nenhum resultado</td></tr>
+                        {detVisible.length === 0 && (
+                          <tr><td colSpan={modoImpressao ? 9 : 11} style={{ textAlign: 'center', color: 'var(--muted)', padding: '20px 0' }}>Nenhum resultado</td></tr>
                         )}
                         {detFiltrado.map((r) => {
                           const emEdicao = editando === r.id
+                          const oculto = hiddenIds.has(r.id)
+                          if (!modoImpressao && oculto) {
+                            return (
+                              <tr key={r.id} style={{ opacity: 0.35 }}>
+                                <td colSpan={9} style={{ fontSize: 11, color: 'var(--muted)', fontStyle: 'italic', paddingLeft: 10 }}>
+                                  {r.funcionario_nome} — oculto
+                                </td>
+                                <td colSpan={2}>
+                                  <button className="button-secondary" style={{ fontSize: 10, padding: '2px 7px' }} onClick={() => toggleHidden(r.id)} type="button">Mostrar</button>
+                                </td>
+                              </tr>
+                            )
+                          }
+                          if (oculto) return null
                           if (emEdicao) {
                             return (
                               <tr key={r.id} style={{ background: '#fffbec' }}>
-                                <td colSpan={3}><strong style={{ fontSize: 12 }}>{r.funcionario_nome}</strong></td>
+                                <td colSpan={2}><strong style={{ fontSize: 12 }}>{r.funcionario_nome}</strong></td>
+                                {!modoImpressao && <td />}
                                 <td>
                                   <input className="input" value={editForm.horas_normais} onChange={(e) => setEditForm((f) => ({ ...f, horas_normais: e.target.value }))}
                                     style={{ width: 80, textAlign: 'right', fontSize: 12 }} title="Ex: 8.5 (horas decimais)" />
@@ -478,10 +544,12 @@ function AbaHistorico() {
                                 <td style={{ textAlign: 'right', fontSize: 11, color: 'var(--muted)' }}>{formatBRL(prevT50)}</td>
                                 <td style={{ textAlign: 'right', fontSize: 11, color: 'var(--muted)' }}>{formatBRL(prevT100)}</td>
                                 <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--success)', fontSize: 12 }}>{formatBRL(prevT50 + prevT100)}</td>
-                                <td style={{ display: 'flex', gap: 4, padding: '6px 8px' }}>
-                                  <button className="button-primary" style={{ fontSize: 10, padding: '3px 8px' }} onClick={salvarEdicao} disabled={saving} type="button">{saving ? '…' : 'OK'}</button>
-                                  <button className="button-secondary" style={{ fontSize: 10, padding: '3px 8px' }} onClick={() => setEditando(null)} type="button">✕</button>
-                                </td>
+                                {!modoImpressao && (
+                                  <td style={{ display: 'flex', gap: 4, padding: '6px 8px' }}>
+                                    <button className="button-primary" style={{ fontSize: 10, padding: '3px 8px' }} onClick={salvarEdicao} disabled={saving} type="button">{saving ? '…' : 'OK'}</button>
+                                    <button className="button-secondary" style={{ fontSize: 10, padding: '3px 8px' }} onClick={() => setEditando(null)} type="button">✕</button>
+                                  </td>
+                                )}
                               </tr>
                             )
                           }
@@ -489,7 +557,7 @@ function AbaHistorico() {
                             <tr key={r.id}>
                               <td><strong style={{ fontSize: 12 }}>{r.funcionario_nome}</strong></td>
                               <td style={{ fontSize: 11 }}>{r.estado || '—'}</td>
-                              <td>{r.tipo_hora ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: r.tipo_hora === 'fixo' ? '#eff6ff' : '#fef3c7', color: r.tipo_hora === 'fixo' ? '#1d4ed8' : '#92400e', border: `1px solid ${r.tipo_hora === 'fixo' ? '#bfdbfe' : '#fde68a'}` }}>{r.tipo_hora === 'fixo' ? 'NO CONTRATO' : 'FORA CONTRATO'}</span> : <span style={{ color: '#ccc', fontSize: 10 }}>—</span>}</td>
+                              {!modoImpressao && <td>{r.tipo_hora ? <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 99, background: r.tipo_hora === 'fixo' ? '#eff6ff' : '#fef3c7', color: r.tipo_hora === 'fixo' ? '#1d4ed8' : '#92400e', border: `1px solid ${r.tipo_hora === 'fixo' ? '#bfdbfe' : '#fde68a'}` }}>{r.tipo_hora === 'fixo' ? 'NO CONTRATO' : 'FORA CONTRATO'}</span> : <span style={{ color: '#ccc', fontSize: 10 }}>—</span>}</td>}
                               <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 12 }}>{formatHHMM(r.horas_normais)}</td>
                               <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 12, color: r.horas_extra_100 > 0 ? 'var(--warning)' : '#ccc', fontWeight: r.horas_extra_100 > 0 ? 700 : undefined }}>{formatHHMM(r.horas_extra_100)}</td>
                               <td style={{ textAlign: 'right', fontSize: 12 }}>{formatBRL(r.valor_hora_50)}</td>
@@ -497,20 +565,26 @@ function AbaHistorico() {
                               <td style={{ textAlign: 'right', fontSize: 12 }}>{formatBRL(r.total_50)}</td>
                               <td style={{ textAlign: 'right', fontSize: 12 }}>{formatBRL(r.total_100)}</td>
                               <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--success)' }}>{formatBRL(r.total_geral)}</td>
-                              <td><button className="button-secondary" style={{ fontSize: 10, padding: '3px 8px' }} onClick={() => abrirEdicao(r)} type="button">Editar</button></td>
+                              {!modoImpressao && (
+                                <td>
+                                  <div style={{ display: 'flex', gap: 4 }}>
+                                    <button className="button-secondary" style={{ fontSize: 10, padding: '3px 8px' }} onClick={() => abrirEdicao(r)} type="button">Editar</button>
+                                    <button className="button-secondary" style={{ fontSize: 10, padding: '3px 8px', color: 'var(--muted)' }} onClick={() => toggleHidden(r.id)} type="button" title="Ocultar desta listagem">Ocultar</button>
+                                  </div>
+                                </td>
+                              )}
                             </tr>
                           )
                         })}
                       </tbody>
                       <tfoot>
                         <tr style={{ background: '#f0f4f8', fontWeight: 700 }}>
-                          <td colSpan={3} style={{ fontSize: 12 }}>TOTAL ({detFiltrado.length} func.)</td>
+                          <td colSpan={modoImpressao ? 2 : 3} style={{ fontSize: 12 }}>TOTAL ({detVisible.length} func.)</td>
                           <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 12 }}>{formatHHMM(totH50)}</td>
                           <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 12, color: totH100 > 0 ? 'var(--warning)' : undefined }}>{formatHHMM(totH100)}</td>
-                          <td colSpan={3} />
-                          <td colSpan={1} />
+                          <td colSpan={4} />
                           <td style={{ textAlign: 'right', color: 'var(--success)', fontSize: 13 }}>{formatBRL(totGeral)}</td>
-                          <td />
+                          {!modoImpressao && <td />}
                         </tr>
                       </tfoot>
                     </table>

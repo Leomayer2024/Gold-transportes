@@ -180,7 +180,7 @@ export const resourceConfigs = {
       { name: 'filial_id', label: 'Filial', type: 'select', required: true, relation: 'filiais', optionLabel: 'cidade' },
       { name: 'codigo_contrato', label: 'Código do contrato', type: 'text', required: true, placeholder: 'Ex.: CT-UDI-2026-001' },
       { name: 'nome_contrato', label: 'Nome do contrato', type: 'text', required: true, placeholder: 'Ex.: Contrato operação base Uberlândia' },
-      { name: 'cliente_nome', label: 'Cliente', type: 'text', placeholder: 'Nome do cliente contratante' },
+      { name: 'cliente_nome', label: 'Cliente', type: 'select-text', relation: 'clientes', optionLabel: 'nome', placeholder: 'Nome do cliente contratante' },
       { name: 'valor_mensal_contrato', label: 'Valor mensal do contrato', type: 'number', required: false, defaultValue: 0, placeholder: '0,00' },
       { name: 'qtd_colaboradores_contratados', label: 'Qtd. colaboradores contratados', type: 'number', defaultValue: 0, placeholder: '0' },
       { name: 'cargos_contrato', label: 'Cargos previstos no contrato', type: 'textarea', placeholder: 'Ex.: 2 motoristas, 4 ajudantes, 1 líder' },

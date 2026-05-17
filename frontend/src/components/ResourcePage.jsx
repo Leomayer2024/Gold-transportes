@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { canCreateResource } from '../lib/permissions'
 import { uploadRhDocumentFile } from '../lib/supabase'
@@ -329,11 +329,14 @@ export default function ResourcePage({
   const [activePanel, setActivePanel] = useState('form')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const _loaded = useRef(false)
   const [uploadingFields, setUploadingFields] = useState({})
   const [importing, setImporting] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
   const [debugOverlayMessage, setDebugOverlayMessage] = useState('')
+  const [showPasteModal, setShowPasteModal] = useState(false)
+  const [pasteText, setPasteText] = useState('')
   const [bonusPreviewValue, setBonusPreviewValue] = useState(0)
   const [bonusPreviewMonth] = useState(() => currentMonthInputValue())
   const [bonusPreviewLoading, setBonusPreviewLoading] = useState(false)
@@ -563,7 +566,7 @@ export default function ResourcePage({
     let active = true
 
     async function load() {
-      setLoading(true)
+      if (!_loaded.current) setLoading(true)
       setErrorMessage('')
 
       try {
@@ -605,6 +608,7 @@ export default function ResourcePage({
         }
       } finally {
         if (active) {
+          _loaded.current = true
           setLoading(false)
         }
       }
@@ -865,7 +869,7 @@ export default function ResourcePage({
 
     const headerLine = lines[0]
     const delimiter = headerLine.includes('\t') ? '\t' : headerLine.includes(';') ? ';' : ','
-    const headers = headerLine.split(delimiter).map((column) => column.trim())
+    const headers = headerLine.split(delimiter).map((column) => column.trim().toLowerCase())
 
     return lines.slice(1).map((line) => {
       const values = line.split(delimiter).map((item) => item.trim())
@@ -943,6 +947,47 @@ export default function ResourcePage({
     } catch (error) {
       setErrorMessage(error.message || 'Falha ao importar colaboradores.')
       setDebugOverlayMessage(error.stack || error.message || 'Falha ao importar colaboradores.')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  const [pasteErrors, setPasteErrors] = useState([])
+  const [pasteFiliais, setPasteFiliais] = useState([])
+
+  async function handleImportPaste() {
+    if (!pasteText.trim()) return
+    setImporting(true)
+    setFeedback('')
+    setErrorMessage('')
+    setDebugOverlayMessage('')
+    setPasteErrors([])
+    setPasteFiliais([])
+    try {
+      const parsedRows = parseImportText(pasteText)
+      if (parsedRows.length === 0) throw new Error('Nenhuma linha válida encontrada. Verifique se o cabeçalho está presente.')
+      const normalizedRows = parsedRows.map((row) =>
+        Object.entries(row).reduce((acc, [k, v]) => { acc[k] = normalizeImportCellValue(v); return acc }, {})
+      )
+      const result = await api.importCollaborators({ rows: normalizedRows })
+      const importedCount = Number(result.imported || 0)
+      const updatedCount = Number(result.updated || 0)
+      if (result.filiais_disponiveis?.length) setPasteFiliais(result.filiais_disponiveis)
+      const skipped = Number(result.skipped_duplicates || 0)
+      const skipMsg = skipped > 0 ? `, ${skipped} duplicata${skipped !== 1 ? 's' : ''} ignorada${skipped !== 1 ? 's' : ''}` : ''
+      if (result.errors?.length) {
+        setPasteErrors(result.errors)
+        setFeedback(`Importação: ${importedCount} inseridos, ${updatedCount} atualizados${skipMsg}, ${result.errors.length} com erro.`)
+        if (importedCount > 0 || updatedCount > 0) await refreshList()
+      } else {
+        await refreshList()
+        setFeedback(`Importação concluída: ${importedCount} inseridos, ${updatedCount} atualizados${skipMsg}.`)
+        setShowPasteModal(false)
+        setPasteText('')
+      }
+    } catch (error) {
+      setErrorMessage(error.message || 'Falha ao importar.')
+      setDebugOverlayMessage(error.stack || error.message || '')
     } finally {
       setImporting(false)
     }
@@ -1126,8 +1171,93 @@ export default function ResourcePage({
     }
   }
 
+  const pastePreviewRows = showPasteModal ? parseImportText(pasteText) : []
+
   const content = (
     <>
+      {showPasteModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000 }}>
+          <div style={{ background: '#fff', borderRadius: 10, padding: 28, maxWidth: 780, width: '100%', margin: 16, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 16px 48px rgba(0,0,0,.22)', borderTop: '4px solid #1e40af' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div>
+                <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: '#64748b', marginBottom: 3 }}>Importação por colagem</div>
+                <h3 style={{ margin: 0 }}>Colar dados de planilha / Excel</h3>
+              </div>
+              <button type="button" onClick={() => { setShowPasteModal(false); setPasteText(''); setPasteErrors([]); setPasteFiliais([]) }} style={{ fontSize: 13, background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}>✕</button>
+            </div>
+            <p style={{ fontSize: 12, color: '#64748b', marginBottom: 10 }}>
+              Copie as linhas diretamente do Excel ou Google Sheets (incluindo o cabeçalho) e cole abaixo. Colunas separadas por <strong>Tab</strong>, <strong>ponto-e-vírgula</strong> ou <strong>vírgula</strong> são aceitas.
+            </p>
+            <div style={{ marginBottom: 8, padding: '6px 10px', background: '#f0f9ff', border: '1px solid #bae6fd', borderRadius: 5, fontSize: 11, color: '#0369a1' }}>
+              Colunas esperadas: <strong>filial · nome_completo · email · cpf · telefone · cargo · turno · escala_servico · horario_padrao_inicio · horario_padrao_fim · tipo_acesso · data_admissao · ativo</strong>
+            </div>
+            {(relations.filiais || []).length > 0 && (
+              <div style={{ marginBottom: 8, padding: '6px 10px', background: '#fefce8', border: '1px solid #fde68a', borderRadius: 5, fontSize: 11, color: '#78350f' }}>
+                <strong>Coluna "filial" aceita:</strong> nome da cidade, cidade/UF ou cidade - UF.
+                <br />
+                <span style={{ fontFamily: 'monospace', fontSize: 10.5 }}>
+                  {(relations.filiais || []).map((f) => `${f.cidade}/${f.uf}`).join(' · ')}
+                </span>
+              </div>
+            )}
+            <textarea
+              autoFocus
+              onChange={(e) => setPasteText(e.target.value)}
+              placeholder={'filial\tnome_completo\temail\tcpf\t...\nBELEM/PA\tJOAO DA SILVA\tjoao@gold.com\t000.000.000-00\t...'}
+              rows={10}
+              style={{ width: '100%', fontFamily: 'monospace', fontSize: 11, border: '1px solid #c7d2e0', borderRadius: 6, padding: '8px 10px', boxSizing: 'border-box', resize: 'vertical', background: '#f8fafc' }}
+              value={pasteText}
+            />
+            {pastePreviewRows.length > 0 && (
+              <div style={{ marginTop: 8, padding: '6px 10px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 5, fontSize: 11, color: '#059669', fontWeight: 600 }}>
+                ✔ {pastePreviewRows.length} linha{pastePreviewRows.length !== 1 ? 's' : ''} detectada{pastePreviewRows.length !== 1 ? 's' : ''} para importação
+                {pastePreviewRows[0] && (
+                  <span style={{ fontWeight: 400, color: '#047857', marginLeft: 6 }}>
+                    — primeira: {pastePreviewRows[0].nome_completo || pastePreviewRows[0].nome || '(sem nome)'}
+                    {pastePreviewRows[0].filial ? ` · ${pastePreviewRows[0].filial}` : ''}
+                  </span>
+                )}
+              </div>
+            )}
+            {pasteText.trim() && pastePreviewRows.length === 0 && (
+              <div style={{ marginTop: 8, padding: '6px 10px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 5, fontSize: 11, color: '#dc2626' }}>
+                Nenhuma linha detectada. Verifique se o texto inclui a linha de cabeçalho.
+              </div>
+            )}
+            {pasteErrors.length > 0 && (
+              <div style={{ marginTop: 12, padding: '10px 12px', background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 6, fontSize: 11 }}>
+                <div style={{ fontWeight: 700, color: '#dc2626', marginBottom: 6 }}>Erros na importação ({pasteErrors.length}):</div>
+                <ul style={{ margin: 0, paddingLeft: 16, color: '#7f1d1d', lineHeight: 1.7 }}>
+                  {pasteErrors.slice(0, 10).map((e) => (
+                    <li key={e.line}><strong>Linha {e.line}:</strong> {e.error}</li>
+                  ))}
+                  {pasteErrors.length > 10 && <li style={{ color: '#9ca3af' }}>… e mais {pasteErrors.length - 10} erros</li>}
+                </ul>
+                {pasteFiliais.length > 0 && (
+                  <div style={{ marginTop: 10, paddingTop: 8, borderTop: '1px solid #fca5a5' }}>
+                    <div style={{ fontWeight: 600, color: '#92400e', marginBottom: 4 }}>Filiais disponíveis no sistema:</div>
+                    <div style={{ color: '#78350f', fontFamily: 'monospace', fontSize: 10.5, lineHeight: 1.6 }}>
+                      {pasteFiliais.join(' · ')}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 16 }}>
+              <button type="button" className="button-secondary" onClick={() => { setShowPasteModal(false); setPasteText(''); setPasteErrors([]); setPasteFiliais([]) }}>Cancelar</button>
+              <button
+                type="button"
+                className="button-primary"
+                disabled={importing || pastePreviewRows.length === 0}
+                onClick={handleImportPaste}
+              >
+                {importing ? 'Importando…' : `Importar ${pastePreviewRows.length > 0 ? pastePreviewRows.length + ' registros' : ''}`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {debugOverlayMessage && (
         <div className="debug-overlay-message" role="alert">
           <button
@@ -1175,7 +1305,7 @@ export default function ResourcePage({
                   Baixar modelo de colunas
                 </a>
                 <label className="button-secondary import-upload-label">
-                  {importing ? 'Importando...' : 'Importar arquivo'}
+                  {importing ? 'Importando...' : 'Importar arquivo (.csv)'}
                   <input
                     accept=".csv,text/csv"
                     disabled={importing}
@@ -1186,6 +1316,14 @@ export default function ResourcePage({
                     type="file"
                   />
                 </label>
+                <button
+                  className="button-secondary"
+                  disabled={importing}
+                  onClick={() => setShowPasteModal(true)}
+                  type="button"
+                >
+                  📋 Colar dados (Excel / planilha)
+                </button>
               </div>
             </div>
           )}

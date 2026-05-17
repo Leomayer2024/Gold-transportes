@@ -23,6 +23,8 @@ export const navigationGroups = [
     title: 'Compras',
     items: [
       { to: '/pedidos-compra', label: 'Pedidos de compra', scope: 'menu.pedidos_compra' },
+      { to: '/fornecedores', label: 'Fornecedores', scope: 'menu.fornecedores' },
+      { to: '/clientes', label: 'Clientes', scope: 'menu.clientes' },
     ],
   },
   {

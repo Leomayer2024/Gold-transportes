@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../services/api'
 
@@ -258,6 +258,7 @@ export default function GestaoAcessosPage() {
   const [modalColab, setModalColab] = useState(null)
   const [modalEmailColab, setModalEmailColab] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
+  const _loaded = useRef(false)
 
   // Bloqueia acesso para não-super-admin no frontend também
   const isSuperAdmin = Boolean(profile?.is_super_admin)
@@ -265,12 +266,12 @@ export default function GestaoAcessosPage() {
   useEffect(() => {
     if (!isSuperAdmin) return
     let active = true
-    setLoading(true)
+    if (!_loaded.current) setLoading(true)
     setErro('')
     api.adminListarAcessos()
       .then((rows) => { if (active) setAcessos(rows || []) })
       .catch((err) => { if (active) setErro(err.message || 'Falha ao carregar.') })
-      .finally(() => { if (active) setLoading(false) })
+      .finally(() => { if (active) { _loaded.current = true; setLoading(false) } })
     return () => { active = false }
   }, [isSuperAdmin, refreshKey])
 

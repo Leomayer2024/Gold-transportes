@@ -3,6 +3,12 @@ import { useAuth } from '../context/AuthContext'
 import { canCreateResource } from '../lib/permissions'
 import { api } from '../services/api'
 
+const PLATFORM_FILTER_OPTS = [
+  { value: 'all', label: 'Todos' },
+  { value: 'app', label: 'App' },
+  { value: 'web', label: 'Somente Web' },
+]
+
 const INITIAL_FLAGS = {
   permissao_app: false,
   permissao_desktop: false,
@@ -21,7 +27,7 @@ const FLAGS_LABELS = [
   ['ativo', 'Colaborador ativo'],
 ]
 
-// Escopos que podem não vir do backend (reto-compatibilidade)
+// Escopos que podem não vir do backend (retro-compatibilidade)
 const EXTRA_SCOPE_GROUPS = [
   {
     key: 'operacao_rtm',
@@ -30,11 +36,13 @@ const EXTRA_SCOPE_GROUPS = [
       {
         name: 'menu.presenca',
         label: 'Menu Presença',
+        platforms: ['web', 'app'],
         description: 'Libera a tela de presença no grupo Operação RTM do menu lateral.',
       },
       {
         name: 'manage.presenca',
         label: 'Modificar presença',
+        platforms: ['web', 'app'],
         description: 'Permite alterar e salvar o quadro diário de presença dos colaboradores.',
       },
     ],
@@ -46,6 +54,7 @@ const EXTRA_SCOPE_GROUPS = [
       {
         name: 'menu.quadro_funcionarios',
         label: 'Quadro de funcionários',
+        platforms: ['web', 'app'],
         description: 'Libera a visão consolidada da equipe por base, com totais e status diários.',
       },
     ],
@@ -54,10 +63,25 @@ const EXTRA_SCOPE_GROUPS = [
 
 // ─── Componente reutilizável: grade de escopos ────────────────────────────────
 
-function ScopeGrid({ scopeGroups, activeScopes, onToggle }) {
+function ScopeGrid({ scopeGroups, activeScopes, onToggle, platformFilter = 'all' }) {
+  const visibleGroups = useMemo(() => {
+    if (platformFilter === 'all') return scopeGroups
+    return scopeGroups
+      .map((group) => ({
+        ...group,
+        items: group.items.filter((item) => {
+          const platforms = item.platforms || ['web']
+          if (platformFilter === 'app') return platforms.includes('app')
+          if (platformFilter === 'web') return !platforms.includes('app')
+          return true
+        }),
+      }))
+      .filter((group) => group.items.length > 0)
+  }, [scopeGroups, platformFilter])
+
   return (
     <>
-      {scopeGroups.map((group) => (
+      {visibleGroups.map((group) => (
         <div className="permissions-block" key={group.key}>
           <div className="section-title">
             <span className="eyebrow">{group.title}</span>
@@ -70,20 +94,31 @@ function ScopeGrid({ scopeGroups, activeScopes, onToggle }) {
             </div>
           )}
           <div className="permissions-scope-grid">
-            {group.items.map((item) => (
-              <label className="permissions-scope-item" key={item.name}>
-                <input
-                  checked={activeScopes.includes(item.name)}
-                  onChange={(e) => onToggle(item.name, e.target.checked)}
-                  type="checkbox"
-                />
-                <div>
-                  <strong>{item.label}</strong>
-                  <span>{item.description}</span>
-                  <small className="permissions-scope-code">{item.name}</small>
-                </div>
-              </label>
-            ))}
+            {group.items.map((item) => {
+              const isApp = (item.platforms || ['web']).includes('app')
+              return (
+                <label className="permissions-scope-item" key={item.name}>
+                  <input
+                    checked={activeScopes.includes(item.name)}
+                    onChange={(e) => onToggle(item.name, e.target.checked)}
+                    type="checkbox"
+                  />
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <strong>{item.label}</strong>
+                      {isApp && (
+                        <span style={{
+                          fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4,
+                          background: '#e8f5e9', color: '#2e7d32', letterSpacing: '0.02em',
+                        }}>App</span>
+                      )}
+                    </div>
+                    <span>{item.description}</span>
+                    <small className="permissions-scope-code">{item.name}</small>
+                  </div>
+                </label>
+              )
+            })}
           </div>
         </div>
       ))}
@@ -107,6 +142,7 @@ function AbaColaborador({ config, scopeGroups }) {
   const [feedback, setFeedback] = useState('')
   const [error, setError] = useState('')
   const [cargos, setCargos] = useState([])
+  const [platformFilter, setPlatformFilter] = useState('all')
 
   useEffect(() => {
     api.getCargosModelos().then(setCargos).catch(() => {})
@@ -333,12 +369,28 @@ function AbaColaborador({ config, scopeGroups }) {
             </div>
 
             {/* Escopos de menu e funcionalidade */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Plataforma:</span>
+              {PLATFORM_FILTER_OPTS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={`button-secondary${platformFilter === opt.value ? ' active' : ''}`}
+                  style={{ fontSize: 12, padding: '3px 10px' }}
+                  onClick={() => setPlatformFilter(opt.value)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
             <ScopeGrid
               activeScopes={activeScopes}
               onToggle={(name, checked) =>
                 setActiveScopes((s) => (checked ? [...new Set([...s, name])] : s.filter((x) => x !== name)))
               }
               scopeGroups={scopeGroups}
+              platformFilter={platformFilter}
             />
 
             {feedback && <div className="alert-success">{feedback}</div>}
@@ -369,6 +421,7 @@ function AbaCargos({ scopeGroups }) {
   const [saving, setSaving] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [error, setError] = useState('')
+  const [platformFilter, setPlatformFilter] = useState('all')
 
   // Formulário novo cargo
   const [showAddForm, setShowAddForm] = useState(false)
@@ -586,7 +639,7 @@ function AbaCargos({ scopeGroups }) {
               personalizadas além do modelo — o modelo é apenas um ponto de partida reutilizável.
             </div>
 
-            <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center' }}>
               <button
                 className="button-secondary"
                 onClick={() => setCargoScopes(scopeGroups.flatMap((g) => g.items.map((i) => i.name)))}
@@ -608,12 +661,28 @@ function AbaCargos({ scopeGroups }) {
               </span>
             </div>
 
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Plataforma:</span>
+              {PLATFORM_FILTER_OPTS.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  className={`button-secondary${platformFilter === opt.value ? ' active' : ''}`}
+                  style={{ fontSize: 12, padding: '3px 10px' }}
+                  onClick={() => setPlatformFilter(opt.value)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+
             <ScopeGrid
               activeScopes={cargoScopes}
               onToggle={(name, checked) =>
                 setCargoScopes((s) => (checked ? [...new Set([...s, name])] : s.filter((x) => x !== name)))
               }
               scopeGroups={scopeGroups}
+              platformFilter={platformFilter}
             />
 
             {feedback && <div className="alert-success">{feedback}</div>}

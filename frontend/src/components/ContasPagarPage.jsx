@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { api } from '../services/api'
 
-const TIPOS = ['HORAS EXTRAS', 'FORNECEDOR', 'COLABORADOR', 'HOSPEDAGEM', 'KM', 'PEDAGIO', 'DESPESAS EXTRAS', 'OUTRO']
+const TIPOS = ['HORAS EXTRAS', 'FORNECEDOR', 'COLABORADOR', 'HOSPEDAGEM', 'KM', 'PEDAGIO', 'DESPESAS EXTRAS', 'COMPRAS', 'OUTRO']
 const STATUS_OPTS = ['PENDENTE', 'PAGO', 'VENCIDO', 'CANCELADO']
 const TIPO_DOCS = ['NF', 'BOLETO', 'RECIBO', 'PIX', 'TED', 'OUTRO']
 
@@ -83,6 +83,7 @@ export default function ContasPagarPage() {
   const [alertas, setAlertas] = useState(null)
   const [loading, setLoading] = useState(true)
   const [filiais, setFiliais] = useState([])
+  const [fornecedoresDB, setFornecedoresDB] = useState([])
 
   const [filterFilial, setFilterFilial] = useState('')
   const [filterMes, setFilterMes] = useState('')
@@ -114,11 +115,13 @@ export default function ContasPagarPage() {
       api.contasPagar(),
       api.contasPagarAlertas(),
       api.list('filiais', { limit: 500 }),
+      api.list('fornecedores', { ativo: true, limit: 500 }),
     ])
-      .then(([cp, al, fil]) => {
+      .then(([cp, al, fil, forn]) => {
         setRows(cp.data || [])
         setAlertas(al)
         setFiliais(fil.items || fil || [])
+        setFornecedoresDB(forn.items || forn || [])
       })
       .catch(() => {})
       .finally(() => { _loaded.current = true; setLoading(false) })
@@ -152,6 +155,21 @@ export default function ContasPagarPage() {
     pago: filtradas.reduce((s, r) => s + (r.valor_pago || 0), 0),
     saldo: filtradas.filter((r) => r.status !== 'PAGO' && r.status !== 'CANCELADO').reduce((s, r) => s + (r.valor || 0) - (r.valor_pago || 0), 0),
   }), [filtradas])
+
+  const vencimentoAlertas = useMemo(() => {
+    const em7 = new Date(hoje + 'T00:00:00')
+    em7.setDate(em7.getDate() + 7)
+    const em7str = em7.toISOString().slice(0, 10)
+    const ativos = filtradas.filter((r) => r.status !== 'PAGO' && r.status !== 'CANCELADO' && r.data_vencimento)
+    const hoje_ = ativos.filter((r) => r.data_vencimento === hoje)
+    const em7_ = ativos.filter((r) => r.data_vencimento > hoje && r.data_vencimento <= em7str)
+    return {
+      hoje: hoje_,
+      em7: em7_,
+      valorHoje: hoje_.reduce((s, r) => s + (r.valor || 0), 0),
+      valor7: em7_.reduce((s, r) => s + (r.valor || 0), 0),
+    }
+  }, [filtradas, hoje])
 
   const filialGroups = useMemo(() => {
     const map = new Map()
@@ -221,17 +239,25 @@ export default function ContasPagarPage() {
       </div>
 
       {/* Alertas */}
-      {alertas && (
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
-          <AlertaCard label="Total a Pagar" value={fmtBRL(alertas.total_a_pagar)} sub="saldo pendente" color="#dc2626" bg="#fef2f2" />
-          <AlertaCard label="Pendentes" value={alertas.pendente} sub="aguardando pagamento" color="#d97706" bg="#fffbeb" warn={alertas.pendente > 0} />
-          <AlertaCard label="Vencidos" value={alertas.vencidos} sub="prazo ultrapassado" color="#dc2626" bg="#fef2f2" warn={alertas.vencidos > 0} />
-          <AlertaCard label="Pago no Mês" value={fmtBRL(alertas.pago_mes)} sub="pagamentos do mês atual" color="#059669" bg="#f0fdf4" />
-        </div>
-      )}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 16 }}>
+        {alertas && (
+          <>
+            <AlertaCard label="Total a Pagar" value={fmtBRL(alertas.total_a_pagar)} sub="saldo pendente" color="#dc2626" bg="#fef2f2" />
+            <AlertaCard label="Pendentes" value={alertas.pendente} sub="aguardando pagamento" color="#d97706" bg="#fffbeb" warn={alertas.pendente > 0} />
+            <AlertaCard label="Vencidos" value={alertas.vencidos} sub="prazo ultrapassado" color="#dc2626" bg="#fef2f2" warn={alertas.vencidos > 0} />
+            <AlertaCard label="Pago no Mês" value={fmtBRL(alertas.pago_mes)} sub="pagamentos do mês atual" color="#059669" bg="#f0fdf4" />
+          </>
+        )}
+        {vencimentoAlertas.hoje.length > 0 && (
+          <AlertaCard label="Vencendo Hoje" value={fmtBRL(vencimentoAlertas.valorHoje)} sub={`${vencimentoAlertas.hoje.length} conta(s) — filtro atual`} color="#dc2626" bg="#fef2f2" warn />
+        )}
+        {vencimentoAlertas.em7.length > 0 && (
+          <AlertaCard label="Vencendo em 7 dias" value={fmtBRL(vencimentoAlertas.valor7)} sub={`${vencimentoAlertas.em7.length} conta(s) — filtro atual`} color="#d97706" bg="#fffbeb" warn />
+        )}
+      </div>
 
       {/* Filtros */}
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, padding: '10px 14px', background: '#f5f7fa', border: '1px solid #dce1e8', borderRadius: 8 }}>
+      <div className="surface-card" style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12, padding: '10px 14px' }}>
         <div>
           <label className="field-label">Filial</label>
           <select className="input" value={filterFilial} onChange={(e) => setFilterFilial(e.target.value)} style={{ minWidth: 140 }}>
@@ -322,7 +348,8 @@ export default function ContasPagarPage() {
                           <td style={editBg}><InlineInput value={ef.tipo_hora} onChange={(v) => setField('tipo_hora', v)} opts={['fixo', 'extra']} /></td>
                           <td style={editBg}><InlineInput value={ef.competencia} onChange={(v) => setField('competencia', v)} type="date" /></td>
                           <td style={editBg}>
-                            <InlineInput value={ef.fornecedor_nome} onChange={(v) => setField('fornecedor_nome', v)} style={{ width: 140 }} />
+                            <input list="dl-fornecedores-cp" value={ef.fornecedor_nome || ''} onChange={(e) => setField('fornecedor_nome', e.target.value)} style={{ fontSize: 11, padding: '3px 6px', border: '1px solid #c7d2e0', borderRadius: 5, background: '#fff', width: 140 }} />
+                            <datalist id="dl-fornecedores-cp">{fornecedoresDB.map((f) => <option key={f.id} value={f.nome} />)}</datalist>
                             <div style={{ marginTop: 2 }}><InlineInput value={ef.tipo_documento} onChange={(v) => setField('tipo_documento', v)} opts={TIPO_DOCS} style={{ minWidth: 70 }} /></div>
                           </td>
                           <td style={editBg}><InlineInput value={ef.numero_documento} onChange={(v) => setField('numero_documento', v)} style={{ width: 110, fontFamily: 'monospace' }} /></td>
@@ -500,7 +527,7 @@ export default function ContasPagarPage() {
               </div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <label className="field-label">Beneficiário / Empresa</label>
-                <input className="input" value={newForm.fornecedor_nome || ''} onChange={(e) => setNewForm((p) => ({ ...p, fornecedor_nome: e.target.value }))} placeholder="Ex: João da Silva, Hotel XYZ, Posto ABC…" />
+                <input list="dl-fornecedores-cp" className="input" value={newForm.fornecedor_nome || ''} onChange={(e) => setNewForm((p) => ({ ...p, fornecedor_nome: e.target.value }))} placeholder="Ex: João da Silva, Hotel XYZ, Posto ABC…" />
               </div>
               <div>
                 <label className="field-label">Tipo de Documento</label>

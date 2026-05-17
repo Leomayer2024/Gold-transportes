@@ -22,6 +22,9 @@ import VeiculosPage from './components/VeiculosPage'
 import VeiculosCarregamentoPage from './components/VeiculosCarregamentoPage'
 import WorkforceBoardPage from './components/WorkforceBoardPage'
 import PedidosCompraPage from './components/PedidosCompraPage'
+import PedidosCompraGraficosPage from './components/PedidosCompraGraficosPage'
+import ItensCatalogoPage from './components/ItensCatalogoPage'
+import AprovacoesPage from './components/AprovacoesPage'
 import FeriadosPage from './components/FeriadosPage'
 import NotasCTEPage from './components/NotasCTEPage'
 import GestaoAcessosPage from './components/GestaoAcessosPage'
@@ -41,6 +44,8 @@ import HorasExtrasMetricasPage from './components/HorasExtrasMetricasPage'
 import ContasReceberPage from './components/ContasReceberPage'
 import ContasPagarPage from './components/ContasPagarPage'
 import BancoPage from './components/BancoPage'
+import FornecedoresPage from './components/FornecedoresPage'
+import ClientesPage from './components/ClientesPage'
 
 function PlaceholderPage({ title, text }) {
   return (
@@ -133,6 +138,15 @@ export default function App() {
           <Route element={<AccessRoute requiredScope="menu.pedidos_compra" />}>
             <Route path="/pedidos-compra" element={<PedidosCompraPage />} />
           </Route>
+          <Route element={<AccessRoute requiredScope="aprovar.pedidos_compra" />}>
+            <Route path="/aprovacoes" element={<AprovacoesPage />} />
+          </Route>
+          <Route element={<AccessRoute requiredScope="menu.pedidos_compra" />}>
+            <Route path="/pedidos-compra-graficos" element={<PedidosCompraGraficosPage />} />
+          </Route>
+          <Route element={<AccessRoute requiredScope="menu.pedidos_compra" />}>
+            <Route path="/itens-catalogo" element={<ItensCatalogoPage />} />
+          </Route>
           <Route element={<AccessRoute requiredScope="menu.feriados" />}>
             <Route path="/feriados" element={<FeriadosPage />} />
           </Route>
@@ -178,6 +192,12 @@ export default function App() {
           </Route>
           <Route element={<AccessRoute requiredScope="menu.banco" />}>
             <Route path="/banco" element={<BancoPage />} />
+          </Route>
+          <Route element={<AccessRoute requiredScope="menu.fornecedores" />}>
+            <Route path="/fornecedores" element={<FornecedoresPage />} />
+          </Route>
+          <Route element={<AccessRoute requiredScope="menu.clientes" />}>
+            <Route path="/clientes" element={<ClientesPage />} />
           </Route>
         </Route>
       </Route>

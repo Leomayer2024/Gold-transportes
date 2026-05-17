@@ -1,527 +1,511 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { api } from '../services/api'
-import '../styles/approvals.css'
+import { useAuth } from '../context/AuthContext'
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function fmt(v) {
+  if (!v) return '—'
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v))
+}
+
+function fmtDate(v) {
+  if (!v) return '—'
+  try {
+    return new Intl.DateTimeFormat('pt-BR', {
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    }).format(new Date(v))
+  } catch { return '—' }
+}
+
+function fmtDateOnly(v) {
+  if (!v) return '—'
+  try { return new Intl.DateTimeFormat('pt-BR').format(new Date(v + 'T00:00:00')) } catch { return '—' }
+}
+
+const STATUS_LABEL = {
+  rascunho: 'Rascunho',
+  pendente_aprovacao: 'Pendente',
+  em_analise: 'Em Análise',
+  aprovado: 'Aprovado',
+  reprovado: 'Reprovado',
+  cancelado: 'Cancelado',
+  em_compra: 'Em Compra',
+  recebido: 'Recebido',
+}
+
+const STATUS_TONE = {
+  rascunho: 'neutral',
+  pendente_aprovacao: 'warning',
+  em_analise: 'info',
+  aprovado: 'success',
+  reprovado: 'danger',
+  cancelado: 'neutral',
+  em_compra: 'info',
+  recebido: 'success',
+}
+
+const FORMA_LABEL = {
+  pix: 'PIX',
+  dinheiro: 'Dinheiro',
+  cartao_debito: 'Cartão Débito',
+  cartao_credito: 'Cartão Crédito',
+  boleto: 'Boleto',
+  credito_fornecedor: 'Crédito Fornecedor',
+}
+
+const REEMBOLSO_LABEL = {
+  pix: 'PIX',
+  dinheiro: 'Dinheiro',
+  transferencia: 'Transferência',
+  cartao: 'Cartão',
+  nenhum: 'Nenhum',
+}
+
+// ─── Badge de Status ─────────────────────────────────────────────────────────
+
+function StatusBadge({ status }) {
+  const tone = STATUS_TONE[status] || 'neutral'
+  const label = STATUS_LABEL[status] || status
+  return (
+    <span className={`badge badge--${tone}`} style={{ fontSize: '0.72rem', fontWeight: 600, padding: '2px 8px', borderRadius: 12 }}>
+      {label}
+    </span>
+  )
+}
+
+// ─── Modal de detalhe + ações ────────────────────────────────────────────────
+
+function DetalheModal({ pedido, onClose, onAction, actionLoading }) {
+  const [motivo, setMotivo] = useState('')
+  const [showMotivo, setShowMotivo] = useState(false)
+
+  const canAnalise = ['pendente_aprovacao'].includes(pedido.status)
+  const canAprovar = ['pendente_aprovacao', 'em_analise'].includes(pedido.status)
+  const canReprovar = ['pendente_aprovacao', 'em_analise'].includes(pedido.status)
+
+  function handleReprovar() {
+    if (!motivo.trim()) { alert('Informe o motivo da reprovação.'); return }
+    onAction('reprovar', pedido, motivo)
+  }
+
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(0,0,0,0.55)', display: 'flex',
+        alignItems: 'center', justifyContent: 'center', padding: 16,
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          background: 'var(--surface-card, #1e2330)', borderRadius: 12,
+          padding: 28, maxWidth: 640, width: '100%', maxHeight: '90vh',
+          overflowY: 'auto', boxShadow: '0 8px 40px rgba(0,0,0,0.4)',
+        }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Cabeçalho */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 20 }}>
+          <div>
+            <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Pedido de Compra
+            </p>
+            <h2 style={{ margin: '2px 0 6px', fontSize: '1.15rem' }}>
+              {pedido.numero_pedido || `#${pedido.id}`}
+              {pedido.numero_solicitacao && (
+                <span style={{ marginLeft: 10, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                  Sol. {pedido.numero_solicitacao}
+                </span>
+              )}
+            </h2>
+            <StatusBadge status={pedido.status} />
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.4rem', color: 'var(--text-muted)' }}>✕</button>
+        </div>
+
+        {/* Dados principais */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px', marginBottom: 20 }}>
+          {[
+            ['Fornecedor', pedido.fornecedor || '—'],
+            ['Valor total', fmt(pedido.valor_total)],
+            ['Data do pedido', fmtDateOnly(pedido.data_pedido)],
+            ['Precisa até', fmtDateOnly(pedido.data_necessidade)],
+            ['Forma de pagamento', FORMA_LABEL[pedido.forma_pagamento] || pedido.forma_pagamento || '—'],
+            ['Tipo de reembolso', REEMBOLSO_LABEL[pedido.tipo_reembolso] || pedido.tipo_reembolso || '—'],
+            pedido.chave_pix && ['Chave PIX', pedido.chave_pix],
+            pedido.dados_bancarios && ['Dados bancários', pedido.dados_bancarios],
+            ['Centro de custo', pedido.centro_custo || '—'],
+            ['Prazo pagamento', pedido.prazo_pagamento || '—'],
+          ].filter(Boolean).map(([label, value]) => (
+            <div key={label}>
+              <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>{label}</p>
+              <p style={{ margin: '2px 0 0', fontWeight: 500, fontSize: '0.9rem', wordBreak: 'break-all' }}>{value}</p>
+            </div>
+          ))}
+        </div>
+
+        {pedido.observacoes && (
+          <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--surface-card-2, rgba(255,255,255,0.04))', borderRadius: 8 }}>
+            <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Observações</p>
+            <p style={{ margin: '4px 0 0', fontSize: '0.88rem' }}>{pedido.observacoes}</p>
+          </div>
+        )}
+
+        {/* Rastreio de aprovação */}
+        {(pedido.em_analise_por_nome || pedido.aprovado_por_nome || pedido.reprovado_por_nome) && (
+          <div style={{ marginBottom: 16, borderTop: '1px solid var(--border, rgba(255,255,255,0.08))', paddingTop: 14 }}>
+            <p style={{ margin: '0 0 10px', fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>Histórico de aprovação</p>
+            {pedido.em_analise_por_nome && (
+              <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'flex-start' }}>
+                <span style={{ fontSize: '1rem' }}>🔍</span>
+                <div>
+                  <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600 }}>Em análise por {pedido.em_analise_por_nome}</p>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtDate(pedido.em_analise_em)}</p>
+                </div>
+              </div>
+            )}
+            {pedido.aprovado_por_nome && (
+              <div style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'flex-start' }}>
+                <span style={{ fontSize: '1rem' }}>✅</span>
+                <div>
+                  <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600 }}>Aprovado por {pedido.aprovado_por_nome}</p>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtDate(pedido.aprovado_em)}</p>
+                </div>
+              </div>
+            )}
+            {pedido.reprovado_por_nome && (
+              <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                <span style={{ fontSize: '1rem' }}>❌</span>
+                <div>
+                  <p style={{ margin: 0, fontSize: '0.82rem', fontWeight: 600 }}>Reprovado por {pedido.reprovado_por_nome}</p>
+                  <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)' }}>{fmtDate(pedido.reprovado_em)}</p>
+                  {pedido.motivo_reprovacao && (
+                    <p style={{ margin: '4px 0 0', fontSize: '0.82rem', color: '#ff6b6b', fontStyle: 'italic' }}>
+                      "{pedido.motivo_reprovacao}"
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Contas a pagar vinculado */}
+        {pedido.contas_pagar_id && (
+          <div style={{ marginBottom: 16, padding: '8px 14px', background: 'rgba(81,207,102,0.08)', borderRadius: 8, border: '1px solid rgba(81,207,102,0.2)' }}>
+            <p style={{ margin: 0, fontSize: '0.8rem', color: '#51cf66' }}>
+              ✅ Conta a pagar gerada automaticamente (ID #{pedido.contas_pagar_id})
+            </p>
+          </div>
+        )}
+
+        {/* Ações */}
+        {(canAnalise || canAprovar || canReprovar) && (
+          <div style={{ borderTop: '1px solid var(--border, rgba(255,255,255,0.08))', paddingTop: 18, marginTop: 4 }}>
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: showMotivo ? 14 : 0 }}>
+              {canAnalise && (
+                <button
+                  className="btn btn--neutral"
+                  onClick={() => onAction('em_analise', pedido)}
+                  disabled={actionLoading}
+                  style={{ fontSize: '0.85rem' }}
+                >
+                  🔍 Iniciar Análise
+                </button>
+              )}
+              {canAprovar && (
+                <button
+                  className="btn btn--primary"
+                  onClick={() => onAction('aprovar', pedido)}
+                  disabled={actionLoading}
+                  style={{ fontSize: '0.85rem' }}
+                >
+                  ✅ Aprovar
+                </button>
+              )}
+              {canReprovar && (
+                <button
+                  className="btn btn--danger"
+                  onClick={() => setShowMotivo(v => !v)}
+                  disabled={actionLoading}
+                  style={{ fontSize: '0.85rem' }}
+                >
+                  ❌ Reprovar
+                </button>
+              )}
+            </div>
+            {showMotivo && (
+              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                <input
+                  className="field-input"
+                  placeholder="Motivo da reprovação (obrigatório)"
+                  value={motivo}
+                  onChange={e => setMotivo(e.target.value)}
+                  style={{ flex: 1, fontSize: '0.88rem' }}
+                />
+                <button
+                  className="btn btn--danger"
+                  onClick={handleReprovar}
+                  disabled={actionLoading || !motivo.trim()}
+                  style={{ fontSize: '0.85rem', whiteSpace: 'nowrap' }}
+                >
+                  Confirmar
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Card de pedido na lista ─────────────────────────────────────────────────
+
+function PedidoCard({ pedido, onOpen }) {
+  return (
+    <div
+      onClick={() => onOpen(pedido)}
+      style={{
+        padding: '14px 18px', borderRadius: 10, cursor: 'pointer',
+        background: 'var(--surface-card, #1e2330)',
+        border: '1px solid var(--border, rgba(255,255,255,0.08))',
+        transition: 'border-color 0.15s',
+      }}
+      onMouseEnter={e => (e.currentTarget.style.borderColor = 'var(--accent, #4a90e2)')}
+      onMouseLeave={e => (e.currentTarget.style.borderColor = 'var(--border, rgba(255,255,255,0.08))')}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+        <div>
+          <p style={{ margin: 0, fontWeight: 700, fontSize: '0.95rem' }}>
+            {pedido.numero_pedido || `Pedido #${pedido.id}`}
+          </p>
+          {pedido.numero_solicitacao && (
+            <p style={{ margin: '1px 0 0', fontSize: '0.72rem', color: 'var(--text-muted)' }}>
+              Sol. {pedido.numero_solicitacao}
+            </p>
+          )}
+        </div>
+        <StatusBadge status={pedido.status} />
+      </div>
+      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+        <span>{pedido.fornecedor || 'Fornecedor não informado'}</span>
+        <span style={{ fontWeight: 600, color: 'var(--text)', marginLeft: 'auto' }}>{fmt(pedido.valor_total)}</span>
+      </div>
+      {pedido.data_pedido && (
+        <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+          {fmtDateOnly(pedido.data_pedido)}
+          {pedido.data_necessidade && ` · precisa até ${fmtDateOnly(pedido.data_necessidade)}`}
+        </p>
+      )}
+      {pedido.motivo_reprovacao && (
+        <p style={{ margin: '6px 0 0', fontSize: '0.78rem', color: '#ff6b6b', fontStyle: 'italic' }}>
+          Motivo: "{pedido.motivo_reprovacao}"
+        </p>
+      )}
+    </div>
+  )
+}
+
+// ─── Página principal ────────────────────────────────────────────────────────
+
+const TABS = [
+  { id: 'pendente', label: 'Pendentes', statuses: ['pendente_aprovacao'] },
+  { id: 'em_analise', label: 'Em Análise', statuses: ['em_analise'] },
+  { id: 'aprovado', label: 'Aprovados', statuses: ['aprovado'] },
+  { id: 'reprovado', label: 'Reprovados', statuses: ['reprovado'] },
+  { id: 'todos', label: 'Todos', statuses: null },
+]
 
 export default function AprovacoesPage() {
-  const [approvals, setApprovals] = useState({
-    pending: [],
-    approved: [],
-    rejected: [],
-    inProgress: [],
-  })
+  const { profile } = useAuth()
+  const [pedidos, setPedidos] = useState([])
+  const [colaboradores, setColaboradores] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
-  const [selectedApproval, setSelectedApproval] = useState(null)
-  const [showModal, setShowModal] = useState(false)
-  const [actionInProgress, setActionInProgress] = useState(false)
-  const [rejectionReason, setRejectionReason] = useState('')
-  const [activeTab, setActiveTab] = useState('pending')
-  const [filterType, setFilterType] = useState('all')
+  const [activeTab, setActiveTab] = useState('pendente')
+  const [selected, setSelected] = useState(null)
+  const [actionLoading, setActionLoading] = useState(false)
+  const [feedback, setFeedback] = useState('')
+  const _loaded = useRef(false)
 
-  useEffect(() => {
-    loadApprovals()
-  }, [filterType])
-
-  async function loadApprovals() {
+  const load = useCallback(async () => {
     try {
-      setLoading(true)
+      if (!_loaded.current) setLoading(true)
       setError('')
 
-      // Buscar dados de múltiplas tabelas em paralelo
-      const [manutencoes, pedidos, pneus, horasExtras] = await Promise.all([
-        api.get('/api/manutencoes?ativo=true'),
-        api.get('/api/pedidos_compra?ativo=true'),
-        api.get('/api/veiculos_pneus?ativo=true'),
-        api.get('/api/horas_extras'),
+      const [pedidosResp, colabsResp] = await Promise.all([
+        api.list('pedidos_compra', { ativo: 'true', per_page: 200 }),
+        api.list('colaboradores', {}),
       ])
 
-      // Agrupar por status
-      const pending = []
-      const approved = []
-      const rejected = []
-      const inProgress = []
+      const pedidosData = Array.isArray(pedidosResp) ? pedidosResp : (pedidosResp?.data || [])
+      const colabsData = Array.isArray(colabsResp) ? colabsResp : (colabsResp?.data || [])
 
-      // Processar Manutenções
-      if (manutencoes?.data) {
-        manutencoes.data.forEach((m) => {
-          if (m.status === 'aguardando_aprovacao') {
-            pending.push({
-              id: m.id,
-              type: 'manutencao',
-              numero: `MAN-${String(m.id).padStart(6, '0')}`,
-              descricao: m.titulo,
-              valor: m.valor_estimado || 0,
-              prioridade: m.prioridade,
-              data_criacao: m.data_abertura,
-              solicitado_por: m.solicitado_por,
-              veiculo: m.veiculo?.placa || `Veículo #${m.veiculo_id}`,
-              observacoes: m.descricao,
-              detalhes: m,
-            })
-          } else if (m.status === 'aprovada') {
-            approved.push({
-              id: m.id,
-              type: 'manutencao',
-              numero: `MAN-${String(m.id).padStart(6, '0')}`,
-              descricao: m.titulo,
-              valor: m.valor_estimado || 0,
-              data_acao: m.aprovado_em,
-              aprovado_por: m.aprovado_por,
-            })
-          } else if (m.status === 'reprovada') {
-            rejected.push({
-              id: m.id,
-              type: 'manutencao',
-              numero: `MAN-${String(m.id).padStart(6, '0')}`,
-              descricao: m.titulo,
-              valor: m.valor_estimado || 0,
-              motivo: m.motivo_reprovacao,
-              data_acao: m.reprovado_em,
-              rejeitado_por: m.reprovado_por,
-            })
-          } else if (m.status === 'em_execucao') {
-            inProgress.push({
-              id: m.id,
-              type: 'manutencao',
-              numero: `MAN-${String(m.id).padStart(6, '0')}`,
-              descricao: m.titulo,
-              valor: m.valor_estimado || 0,
-              prioridade: m.prioridade,
-              data_criacao: m.data_inicio,
-              veiculo: m.veiculo?.placa || `Veículo #${m.veiculo_id}`,
-            })
-          }
-        })
+      const colabMap = {}
+      for (const c of colabsData) {
+        if (c.id) colabMap[c.id] = c.nome_completo
       }
+      setColaboradores(colabMap)
 
-      // Processar Pedidos de Compra
-      if (pedidos?.data) {
-        pedidos.data.forEach((pc) => {
-          if (pc.status === 'aguardando_aprovacao') {
-            pending.push({
-              id: pc.id,
-              type: 'pedido_compra',
-              numero: pc.numero_pedido,
-              descricao: `Compra de ${pc.pedidos_compra_itens?.length || 0} itens`,
-              valor: pc.valor_total || 0,
-              prioridade: 'normal',
-              data_criacao: pc.data_pedido,
-              solicitado_por: pc.criado_por,
-              fornecedor: pc.fornecedor,
-              observacoes: pc.observacoes,
-              detalhes: pc,
-            })
-          } else if (pc.status === 'aprovado') {
-            approved.push({
-              id: pc.id,
-              type: 'pedido_compra',
-              numero: pc.numero_pedido,
-              descricao: `Compra de ${pc.pedidos_compra_itens?.length || 0} itens`,
-              valor: pc.valor_total || 0,
-              data_acao: pc.data_pedido,
-              aprovado_por: 'Sistema',
-            })
-          } else if (pc.status === 'reprovado') {
-            rejected.push({
-              id: pc.id,
-              type: 'pedido_compra',
-              numero: pc.numero_pedido,
-              descricao: `Compra de ${pc.pedidos_compra_itens?.length || 0} itens`,
-              valor: pc.valor_total || 0,
-              motivo: 'Não informado',
-              data_acao: pc.data_pedido,
-            })
-          }
-        })
-      }
+      // Enriquece com nomes dos colaboradores
+      const enriched = pedidosData.map(p => ({
+        ...p,
+        em_analise_por_nome: p.em_analise_por ? (colabMap[p.em_analise_por] || `#${p.em_analise_por}`) : null,
+        aprovado_por_nome: p.aprovado_por ? (colabMap[p.aprovado_por] || `#${p.aprovado_por}`) : null,
+        reprovado_por_nome: p.reprovado_por ? (colabMap[p.reprovado_por] || `#${p.reprovado_por}`) : null,
+      }))
 
-      setApprovals({
-        pending: filterType === 'all' ? pending : pending.filter((a) => a.type === filterType),
-        approved: filterType === 'all' ? approved : approved.filter((a) => a.type === filterType),
-        rejected: filterType === 'all' ? rejected : rejected.filter((a) => a.type === filterType),
-        inProgress: filterType === 'all' ? inProgress : inProgress.filter((a) => a.type === filterType),
-      })
+      setPedidos(enriched)
     } catch (err) {
-      console.error('Erro ao carregar aprovações:', err)
-      setError('Falha ao carregar solicitações. Tente novamente.')
+      console.error(err)
+      setError('Falha ao carregar aprovações.')
     } finally {
+      _loaded.current = true
       setLoading(false)
     }
-  }
+  }, [])
 
-  async function handleApprove(approval) {
-    if (!window.confirm(`Tem certeza que deseja aprovar ${approval.numero}?`)) return
+  useEffect(() => { load() }, [load])
 
+  async function handleAction(action, pedido, motivo = '') {
+    setActionLoading(true)
+    setFeedback('')
     try {
-      setActionInProgress(true)
-      if (approval.type === 'manutencao') {
-        await api.patch(`/api/manutencoes/${approval.id}`, {
-          status: 'aprovada',
-        })
-      } else if (approval.type === 'pedido_compra') {
-        await api.patch(`/api/pedidos_compra/${approval.id}`, {
-          status: 'aprovado',
-        })
+      if (action === 'em_analise') {
+        await api.emAnalise(pedido.id)
+        setFeedback('Pedido marcado como em análise.')
+      } else if (action === 'aprovar') {
+        await api.aprovacaoAprovar(pedido.id, 'pedidos_compra')
+        setFeedback('Pedido aprovado! Conta a pagar gerada automaticamente.')
+      } else if (action === 'reprovar') {
+        await api.aprovacaoReprovar(pedido.id, 'pedidos_compra', motivo)
+        setFeedback('Pedido reprovado.')
       }
-      setShowModal(false)
-      loadApprovals()
+      setSelected(null)
+      await load()
     } catch (err) {
-      alert(`Erro ao aprovar: ${err.message}`)
+      alert(`Erro: ${err.message || 'Falha na operação.'}`)
     } finally {
-      setActionInProgress(false)
+      setActionLoading(false)
     }
   }
 
-  async function handleReject(approval) {
-    if (!rejectionReason.trim()) {
-      alert('Informe o motivo da rejeição')
-      return
-    }
+  const tabData = TABS.find(t => t.id === activeTab)
+  const filtered = tabData?.statuses
+    ? pedidos.filter(p => tabData.statuses.includes(p.status))
+    : pedidos
 
-    if (!window.confirm(`Tem certeza que deseja rejeitar ${approval.numero}?`)) return
-
-    try {
-      setActionInProgress(true)
-      if (approval.type === 'manutencao') {
-        await api.patch(`/api/manutencoes/${approval.id}`, {
-          status: 'reprovada',
-          motivo_reprovacao: rejectionReason,
-        })
-      } else if (approval.type === 'pedido_compra') {
-        await api.patch(`/api/pedidos_compra/${approval.id}`, {
-          status: 'reprovado',
-        })
-      }
-      setShowModal(false)
-      setRejectionReason('')
-      loadApprovals()
-    } catch (err) {
-      alert(`Erro ao rejeitar: ${err.message}`)
-    } finally {
-      setActionInProgress(false)
-    }
-  }
-
-  function getStatusBadge(status) {
-    const badges = {
-      pending: { color: '#ff6b6b', label: '🔴 Pendente' },
-      approved: { color: '#51cf66', label: '✅ Aprovado' },
-      rejected: { color: '#ff6b6b', label: '❌ Reprovado' },
-      inProgress: { color: '#ffd43b', label: '⚙️ Em Execução' },
-    }
-    return badges[status] || badges.pending
-  }
-
-  function getPriorityColor(prioridade) {
-    const colors = {
-      baixa: '#95a5a6',
-      normal: '#3498db',
-      alta: '#f39c12',
-      critica: '#e74c3c',
-    }
-    return colors[prioridade?.toLowerCase()] || colors.normal
-  }
-
-  function formatCurrency(value) {
-    return new Intl.NumberFormat('pt-BR', {
-      style: 'currency',
-      currency: 'BRL',
-    }).format(Number(value || 0))
-  }
-
-  function formatDate(dateString) {
-    if (!dateString) return '-'
-    return new Date(dateString).toLocaleDateString('pt-BR')
+  const counts = {}
+  for (const t of TABS) {
+    counts[t.id] = t.statuses
+      ? pedidos.filter(p => t.statuses.includes(p.status)).length
+      : pedidos.length
   }
 
   if (loading) {
     return (
-      <div className="approvals-page">
-        <h1>⏳ Carregando aprovações...</h1>
-      </div>
+      <section className="page-shell">
+        <div className="page-header"><div><h1>Aprovações</h1></div></div>
+        <p style={{ padding: 24, color: 'var(--text-muted)' }}>Carregando...</p>
+      </section>
     )
   }
 
   return (
-    <div className="approvals-page">
-      <div className="approvals-header">
-        <h1>📋 Acompanhamento de Solicitações</h1>
-        <p>Gerencie aprovações de manutenções, compras e solicitações</p>
-      </div>
-
-      {error && <div className="error-banner">{error}</div>}
-
-      <div className="approvals-controls">
-        <div className="filter-group">
-          <label>Filtrar por tipo:</label>
-          <select value={filterType} onChange={(e) => setFilterType(e.target.value)}>
-            <option value="all">Todos os tipos</option>
-            <option value="manutencao">Manutenções</option>
-            <option value="pedido_compra">Pedidos de Compra</option>
-          </select>
+    <section className="page-shell">
+      <div className="page-header">
+        <div>
+          <span className="eyebrow">Compras</span>
+          <h1>Aprovações de Pedidos</h1>
+          <p>Fluxo: Pendente → Em Análise → Aprovado → Conta a Pagar gerada automaticamente</p>
         </div>
-      </div>
-
-      <div className="approvals-tabs">
-        <button
-          className={`tab-button ${activeTab === 'pending' ? 'active' : ''}`}
-          onClick={() => setActiveTab('pending')}
-        >
-          🔴 Pendentes ({approvals.pending.length})
-        </button>
-        <button
-          className={`tab-button ${activeTab === 'inProgress' ? 'active' : ''}`}
-          onClick={() => setActiveTab('inProgress')}
-        >
-          ⚙️ Em Execução ({approvals.inProgress.length})
-        </button>
-        <button
-          className={`tab-button ${activeTab === 'approved' ? 'active' : ''}`}
-          onClick={() => setActiveTab('approved')}
-        >
-          ✅ Aprovadas ({approvals.approved.length})
-        </button>
-        <button
-          className={`tab-button ${activeTab === 'rejected' ? 'active' : ''}`}
-          onClick={() => setActiveTab('rejected')}
-        >
-          ❌ Rejeitadas ({approvals.rejected.length})
+        <button className="btn btn--ghost" onClick={load} style={{ fontSize: '0.85rem' }}>
+          ↺ Atualizar
         </button>
       </div>
 
-      <div className="approvals-content">
-        {activeTab === 'pending' && (
-          <div className="approval-section">
-            {approvals.pending.length === 0 ? (
-              <div className="empty-state">
-                <p>✅ Nenhuma solicitação pendente de aprovação!</p>
-              </div>
-            ) : (
-              <div className="approval-list">
-                {approvals.pending.map((approval) => (
-                  <div key={`${approval.type}-${approval.id}`} className="approval-card">
-                    <div className="approval-header">
-                      <div className="approval-title">
-                        <h3>{approval.numero}</h3>
-                        <span className="type-badge">{approval.type === 'manutencao' ? '🔧 Manutenção' : '📦 Compra'}</span>
-                        {approval.prioridade && (
-                          <span
-                            className="priority-badge"
-                            style={{ backgroundColor: getPriorityColor(approval.prioridade) }}
-                          >
-                            {approval.prioridade?.toUpperCase()}
-                          </span>
-                        )}
-                      </div>
-                      <div className="approval-value">{formatCurrency(approval.valor)}</div>
-                    </div>
-
-                    <div className="approval-details">
-                      <p className="descricao">{approval.descricao}</p>
-                      {approval.veiculo && <p className="veiculo">🚛 {approval.veiculo}</p>}
-                      {approval.fornecedor && <p className="fornecedor">🏭 {approval.fornecedor}</p>}
-                      <p className="data">📅 {formatDate(approval.data_criacao)}</p>
-                      {approval.observacoes && <p className="obs">{approval.observacoes}</p>}
-                    </div>
-
-                    <div className="approval-actions">
-                      <button
-                        className="btn-primary"
-                        onClick={() => {
-                          setSelectedApproval(approval)
-                          setShowModal(true)
-                          setRejectionReason('')
-                        }}
-                      >
-                        👁️ Ver Detalhes
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'inProgress' && (
-          <div className="approval-section">
-            {approvals.inProgress.length === 0 ? (
-              <div className="empty-state">
-                <p>Nenhuma solicitação em execução</p>
-              </div>
-            ) : (
-              <div className="approval-list">
-                {approvals.inProgress.map((approval) => (
-                  <div key={`${approval.type}-${approval.id}`} className="approval-card in-progress">
-                    <div className="approval-header">
-                      <div className="approval-title">
-                        <h3>{approval.numero}</h3>
-                        <span className="status-badge">⚙️ Em Execução</span>
-                      </div>
-                      <div className="approval-value">{formatCurrency(approval.valor)}</div>
-                    </div>
-
-                    <div className="approval-details">
-                      <p className="descricao">{approval.descricao}</p>
-                      {approval.veiculo && <p className="veiculo">🚛 {approval.veiculo}</p>}
-                      <p className="data">📅 Iniciado em {formatDate(approval.data_criacao)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'approved' && (
-          <div className="approval-section">
-            {approvals.approved.length === 0 ? (
-              <div className="empty-state">
-                <p>Nenhuma solicitação aprovada</p>
-              </div>
-            ) : (
-              <div className="approval-list">
-                {approvals.approved.map((approval) => (
-                  <div key={`${approval.type}-${approval.id}`} className="approval-card approved">
-                    <div className="approval-header">
-                      <div className="approval-title">
-                        <h3>{approval.numero}</h3>
-                        <span className="status-badge" style={{ backgroundColor: '#51cf66' }}>
-                          ✅ Aprovado
-                        </span>
-                      </div>
-                      <div className="approval-value">{formatCurrency(approval.valor)}</div>
-                    </div>
-
-                    <div className="approval-details">
-                      <p className="descricao">{approval.descricao}</p>
-                      <p className="data">✅ Aprovado em {formatDate(approval.data_acao)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {activeTab === 'rejected' && (
-          <div className="approval-section">
-            {approvals.rejected.length === 0 ? (
-              <div className="empty-state">
-                <p>Nenhuma solicitação rejeitada</p>
-              </div>
-            ) : (
-              <div className="approval-list">
-                {approvals.rejected.map((approval) => (
-                  <div key={`${approval.type}-${approval.id}`} className="approval-card rejected">
-                    <div className="approval-header">
-                      <div className="approval-title">
-                        <h3>{approval.numero}</h3>
-                        <span className="status-badge" style={{ backgroundColor: '#ff6b6b' }}>
-                          ❌ Rejeitado
-                        </span>
-                      </div>
-                      <div className="approval-value">{formatCurrency(approval.valor)}</div>
-                    </div>
-
-                    <div className="approval-details">
-                      <p className="descricao">{approval.descricao}</p>
-                      {approval.motivo && <p className="motivo">📝 Motivo: {approval.motivo}</p>}
-                      <p className="data">❌ Rejeitado em {formatDate(approval.data_acao)}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
-      {showModal && selectedApproval && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{selectedApproval.numero}</h2>
-              <button className="btn-close" onClick={() => setShowModal(false)}>
-                ✕
-              </button>
-            </div>
-
-            <div className="modal-body">
-              <div className="detail-group">
-                <label>Tipo:</label>
-                <p>{selectedApproval.type === 'manutencao' ? '🔧 Manutenção' : '📦 Pedido de Compra'}</p>
-              </div>
-
-              <div className="detail-group">
-                <label>Descrição:</label>
-                <p>{selectedApproval.descricao}</p>
-              </div>
-
-              <div className="detail-group">
-                <label>Valor:</label>
-                <p style={{ fontSize: '1.2em', fontWeight: 'bold', color: '#2ecc71' }}>
-                  {formatCurrency(selectedApproval.valor)}
-                </p>
-              </div>
-
-              {selectedApproval.veiculo && (
-                <div className="detail-group">
-                  <label>Veículo:</label>
-                  <p>{selectedApproval.veiculo}</p>
-                </div>
-              )}
-
-              {selectedApproval.prioridade && (
-                <div className="detail-group">
-                  <label>Prioridade:</label>
-                  <p style={{ color: getPriorityColor(selectedApproval.prioridade), fontWeight: 'bold' }}>
-                    {selectedApproval.prioridade?.toUpperCase()}
-                  </p>
-                </div>
-              )}
-
-              {selectedApproval.observacoes && (
-                <div className="detail-group">
-                  <label>Observações:</label>
-                  <p>{selectedApproval.observacoes}</p>
-                </div>
-              )}
-
-              <div className="detail-group">
-                <label>Motivo da Rejeição (se aplicável):</label>
-                <textarea
-                  className="rejection-input"
-                  value={rejectionReason}
-                  onChange={(e) => setRejectionReason(e.target.value)}
-                  placeholder="Explique por que está rejeitando esta solicitação..."
-                  disabled={actionInProgress}
-                />
-              </div>
-            </div>
-
-            <div className="modal-footer">
-              <button className="btn-secondary" onClick={() => setShowModal(false)} disabled={actionInProgress}>
-                ❌ Fechar
-              </button>
-              <button
-                className="btn-danger"
-                onClick={() => handleReject(selectedApproval)}
-                disabled={actionInProgress || !rejectionReason.trim()}
-              >
-                {actionInProgress ? '⏳ Processando...' : '❌ Rejeitar'}
-              </button>
-              <button
-                className="btn-primary"
-                onClick={() => handleApprove(selectedApproval)}
-                disabled={actionInProgress}
-              >
-                {actionInProgress ? '⏳ Processando...' : '✅ Aprovar'}
-              </button>
-            </div>
-          </div>
+      {error && (
+        <div style={{ padding: '10px 16px', background: 'rgba(255,107,107,0.12)', borderRadius: 8, marginBottom: 16, color: '#ff6b6b' }}>
+          {error}
         </div>
       )}
-    </div>
+
+      {feedback && (
+        <div style={{ padding: '10px 16px', background: 'rgba(81,207,102,0.12)', borderRadius: 8, marginBottom: 16, color: '#51cf66' }}>
+          {feedback}
+        </div>
+      )}
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', gap: 4, marginBottom: 20, flexWrap: 'wrap' }}>
+        {TABS.map(t => (
+          <button
+            key={t.id}
+            onClick={() => setActiveTab(t.id)}
+            style={{
+              padding: '7px 16px', borderRadius: 20, border: 'none', cursor: 'pointer',
+              fontSize: '0.83rem', fontWeight: 600, transition: 'all 0.15s',
+              background: activeTab === t.id ? 'var(--accent, #4a90e2)' : 'var(--surface-card, #1e2330)',
+              color: activeTab === t.id ? '#fff' : 'var(--text-muted)',
+            }}
+          >
+            {t.label}
+            {counts[t.id] > 0 && (
+              <span style={{
+                marginLeft: 6, background: activeTab === t.id ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.1)',
+                borderRadius: 10, padding: '1px 6px', fontSize: '0.72rem',
+              }}>
+                {counts[t.id]}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Resumo numérico */}
+      <div style={{ display: 'flex', gap: 12, marginBottom: 24, flexWrap: 'wrap' }}>
+        {[
+          { label: 'Pendentes', count: counts.pendente, color: '#ffd43b' },
+          { label: 'Em Análise', count: counts.em_analise, color: '#74c0fc' },
+          { label: 'Aprovados', count: counts.aprovado, color: '#51cf66' },
+          { label: 'Reprovados', count: counts.reprovado, color: '#ff6b6b' },
+        ].map(({ label, count, color }) => (
+          <div key={label} style={{
+            padding: '10px 18px', borderRadius: 10, background: 'var(--surface-card, #1e2330)',
+            border: `1px solid ${color}33`, minWidth: 100, textAlign: 'center',
+          }}>
+            <p style={{ margin: 0, fontSize: '1.6rem', fontWeight: 700, color }}>{count}</p>
+            <p style={{ margin: '2px 0 0', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{label}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Lista */}
+      {filtered.length === 0 ? (
+        <div className="surface-card empty-state">
+          <p>Nenhum pedido {tabData?.label?.toLowerCase() || ''} encontrado.</p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {filtered.map(p => (
+            <PedidoCard key={p.id} pedido={p} onOpen={setSelected} />
+          ))}
+        </div>
+      )}
+
+      {/* Modal */}
+      {selected && (
+        <DetalheModal
+          pedido={selected}
+          onClose={() => setSelected(null)}
+          onAction={handleAction}
+          actionLoading={actionLoading}
+        />
+      )}
+    </section>
   )
 }

@@ -213,6 +213,29 @@ export const api = {
     return request(`/dashboard/frota${qs ? `?${qs}` : ''}`)
   },
 
+  // ─── Pedidos de Compra ────────────────────────────────────────────────────
+  preAlocarNumeroPedido: () => request('/pedidos_compra/pre-alocar-numero'),
+  emAnalise: (id) =>
+    request(`/approvals/${id}/em-analise`, {
+      method: 'POST',
+      body: JSON.stringify({ resource_type: 'pedidos_compra' }),
+    }),
+  aprovacaoAprovar: (id, resourceType, comentario) =>
+    request(`/approvals/${id}/approve`, {
+      method: 'POST',
+      body: JSON.stringify({ resource_type: resourceType, comentario: comentario || '' }),
+    }),
+  aprovacaoReprovar: (id, resourceType, motivo) =>
+    request(`/approvals/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ resource_type: resourceType, motivo }),
+    }),
+  getPedidosCompraMetricas: (params = {}) => {
+    const search = new URLSearchParams(params)
+    const suffix = search.toString() ? `?${search.toString()}` : ''
+    return request(`/pedidos-compra/metricas${suffix}`)
+  },
+
   // ─── Acompanhamento / Aprovações ──────────────────────────────────────────
   getApprovals: (params = {}) => {
     const search = new URLSearchParams(params)

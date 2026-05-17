@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../services/api'
 
 const TIPOS_CONTA = ['corrente', 'poupanca', 'investimento', 'caixa']
@@ -69,9 +69,10 @@ export default function BancoPage() {
   const [showNovoLan, setShowNovoLan] = useState(false)
   const [lanForm, setLanForm] = useState({ tipo: 'SAIDA', categoria: 'PAGAMENTO_HE' })
   const [savingLan, setSavingLan] = useState(false)
+  const _loaded = useRef(false)
 
   const carregar = useCallback(() => {
-    setLoading(true)
+    if (!_loaded.current) setLoading(true)
     Promise.all([
       api.bancoContas(),
       api.bancoSaldos(),
@@ -83,7 +84,7 @@ export default function BancoPage() {
         setFiliais(f.items || f || [])
       })
       .catch(() => {})
-      .finally(() => setLoading(false))
+      .finally(() => { _loaded.current = true; setLoading(false) })
   }, [])
 
   const carregarLancamentos = useCallback((contaId) => {

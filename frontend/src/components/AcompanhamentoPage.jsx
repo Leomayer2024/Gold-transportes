@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../services/api'
+import { useAuth } from '../context/AuthContext'
 import '../styles/acompanhamento.css'
 
 // ─── Constantes ──────────────────────────────────────────────────────────────
@@ -12,15 +13,34 @@ const TIPOS = {
   pneus:          'Pneu',
 }
 
-const STATUS_PENDENTE  = ['pendente', 'pendente_aprovacao', 'aguardando_aprovacao', 'solicitado']
+const REEMBOLSO_LABEL = {
+  pix:          'PIX',
+  dinheiro:     'Dinheiro em espécie',
+  transferencia:'Transferência bancária',
+  cartao:       'Cartão',
+}
+
+const FORMA_PAG_LABEL = {
+  dinheiro:          'Dinheiro',
+  pix:               'PIX',
+  cartao_debito:     'Cartão débito',
+  cartao_credito:    'Cartão crédito',
+  boleto:            'Boleto',
+  credito_fornecedor:'Crédito fornecedor',
+}
+
+const STATUS_PENDENTE  = ['pendente', 'pendente_aprovacao', 'aguardando_aprovacao', 'solicitado', 'analise', 'em_analise']
+const STATUS_EM_ANALISE = ['analise', 'em_analise']
 const STATUS_APROVADO  = ['aprovado', 'aprovada']
 const STATUS_REJEITADO = ['reprovado', 'reprovada', 'cancelado']
 
 const STATUS_LABEL = {
   pendente:             'Pendente',
-  pendente_aprovacao:   'Aguard. Aprovação',
+  pendente_aprovacao:   'Pendente',
   aguardando_aprovacao: 'Aguard. Aprovação',
   solicitado:           'Solicitado',
+  analise:              'Em Análise',
+  em_analise:           'Em Análise',
   aprovado:             'Aprovado',
   aprovada:             'Aprovada',
   reprovado:            'Reprovado',
@@ -64,10 +84,13 @@ const CAMPOS_MODAL = {
     { k: 'fornecedor',       l: 'Fornecedor' },
     { k: 'data_pedido',      l: 'Data do pedido', date: true },
     { k: 'data_necessidade', l: 'Necessário até', date: true },
-    { k: 'forma_pagamento',  l: 'Forma de pagamento' },
+    { k: 'forma_pagamento',  l: 'Forma de pagamento', formaPag: true },
     { k: 'prazo_pagamento',  l: 'Prazo de pagamento' },
     { k: 'centro_custo',     l: 'Centro de custo' },
-    { k: 'valor_total_calculado', l: 'Valor total', moeda: true },
+    { k: 'valor_total',      l: 'Valor total', moeda: true },
+    { k: 'tipo_reembolso',   l: 'Tipo de reembolso', reembolso: true },
+    { k: 'chave_pix',        l: 'Chave PIX' },
+    { k: 'dados_bancarios',  l: 'Dados bancários', full: true },
     { k: 'observacoes',      l: 'Observações', full: true },
   ],
   horas_extras: [
@@ -97,9 +120,10 @@ const CAMPOS_MODAL = {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function statusTone(status) {
-  if (STATUS_APROVADO.includes(status))  return 'success'
-  if (STATUS_REJEITADO.includes(status)) return 'danger'
-  if (STATUS_PENDENTE.includes(status))  return 'warning'
+  if (STATUS_APROVADO.includes(status))   return 'success'
+  if (STATUS_REJEITADO.includes(status))  return 'danger'
+  if (STATUS_EM_ANALISE.includes(status)) return 'warning'
+  if (STATUS_PENDENTE.includes(status))   return 'neutral'
   return 'neutral'
 }
 
@@ -145,16 +169,20 @@ const TABS = [
 
 // ─── Modal de atendimento ─────────────────────────────────────────────────────
 
-function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar }) {
-  const [acao, setAcao]         = useState(null) // 'aprovar' | 'rejeitar'
+function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalisar }) {
+  const [acao, setAcao]         = useState(null) // 'analisar' | 'aprovar' | 'rejeitar'
   const [motivo, setMotivo]     = useState('')
   const [processando, setProc]  = useState(false)
-  const [osGerada, setOsGerada] = useState(null)
   const [erroAcao, setErroAcao] = useState('')
 
   const fi    = solicitacao.full_item || {}
   const tipo  = solicitacao.resource_type
   const campos = CAMPOS_MODAL[tipo] || []
+
+  const isPedido    = tipo === 'pedidos_compra'
+  const statusAtual = solicitacao.status
+  const estaEmAnalise = STATUS_EM_ANALISE.includes(statusAtual)
+  const estaPendente  = STATUS_PENDENTE.includes(statusAtual) && !estaEmAnalise
 
   function renderValor(campo) {
     const v = fi[campo.k]
@@ -162,55 +190,33 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar }) {
     if (campo.moeda)    return fmtMoeda(v)
     if (campo.date)     return fmtDate(v)
     if (campo.datetime) return fmtDatetime(v)
+    if (campo.reembolso) return REEMBOLSO_LABEL[v] || v
+    if (campo.formaPag)  return FORMA_PAG_LABEL[v] || v
     return String(v)
   }
 
-  async function confirmar() {
-    if (acao === 'rejeitar' && !motivo.trim()) {
+  async function confirmar(acaoOverride) {
+    const _acao = acaoOverride || acao
+    if (_acao === 'rejeitar' && !motivo.trim()) {
       setErroAcao('Informe o motivo da rejeição.')
       return
     }
     setErroAcao('')
     setProc(true)
     try {
-      if (acao === 'aprovar') {
-        const res = await api.approveRequest(solicitacao.id, tipo, motivo)
-        if (res?.numero_solicitacao) setOsGerada(res.numero_solicitacao)
-        else setOsGerada(null)
+      if (_acao === 'analisar') {
+        await api.emAnalise(solicitacao.id)
+      } else if (_acao === 'aprovar') {
+        await api.approveRequest(solicitacao.id, tipo, motivo)
       } else {
         await api.rejectRequest(solicitacao.id, tipo, motivo)
       }
       onRefresh()
-      if (acao === 'rejeitar') onClose()
+      onClose()
     } catch (err) {
       setErroAcao(err.message || 'Falha ao processar.')
-    } finally {
       setProc(false)
     }
-  }
-
-  // Tela de sucesso após aprovar
-  if (osGerada !== undefined && acao === 'aprovar' && !processando && osGerada !== null && erroAcao === '') {
-    return (
-      <div className="acomp-overlay" onClick={onClose}>
-        <div className="acomp-modal" onClick={e => e.stopPropagation()}>
-          <div style={{ padding: '32px 24px', textAlign: 'center', display: 'grid', gap: 16 }}>
-            <div className="acomp-num-sol-grande">{osGerada}</div>
-            <div>
-              <strong style={{ fontSize: 14, display: 'block', marginBottom: 4 }}>
-                Solicitação aprovada com sucesso!
-              </strong>
-              <span style={{ fontSize: 12, color: 'var(--muted)' }}>
-                Número de OS gerado e vinculado ao registro.
-              </span>
-            </div>
-            <button className="button-primary" onClick={onClose} type="button">
-              Fechar
-            </button>
-          </div>
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -254,121 +260,177 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar }) {
             })}
           </div>
 
-          {/* Histórico de aprovação já existente */}
-          {(fi.aprovado_por || fi.reprovado_por) && (
+          {/* Histórico de aprovação */}
+          {(fi.em_analise_por || fi.aprovado_por || fi.reprovado_por) && (
             <div className="acomp-hist-bloco">
+              {fi.em_analise_por && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginBottom: 4 }}>
+                  <span>🔍</span>
+                  <span>
+                    Em análise por <strong>{fi.em_analise_por_nome || `#${fi.em_analise_por}`}</strong>
+                    {fi.em_analise_em && ` — ${fmtDatetime(fi.em_analise_em)}`}
+                  </span>
+                </div>
+              )}
               {fi.aprovado_por && (
-                <span style={{ color: 'var(--success)', fontSize: 11 }}>
-                  ✓ Aprovado por ID {fi.aprovado_por}
-                  {fi.aprovado_em && ` em ${fmtDatetime(fi.aprovado_em)}`}
-                </span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: 'var(--success, #1a7340)', marginBottom: 4 }}>
+                  <span>✅</span>
+                  <span>
+                    Aprovado por <strong>{fi.aprovado_por_nome || `#${fi.aprovado_por}`}</strong>
+                    {fi.aprovado_em && ` — ${fmtDatetime(fi.aprovado_em)}`}
+                  </span>
+                </div>
               )}
               {fi.reprovado_por && (
-                <span style={{ color: 'var(--danger)', fontSize: 11 }}>
-                  ✗ Reprovado por ID {fi.reprovado_por}
-                  {fi.reprovado_em && ` em ${fmtDatetime(fi.reprovado_em)}`}
-                  {fi.motivo_reprovacao && ` — ${fi.motivo_reprovacao}`}
-                </span>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontSize: 12, color: 'var(--danger, #c00)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span>❌</span>
+                    <span>
+                      Reprovado por <strong>{fi.reprovado_por_nome || `#${fi.reprovado_por}`}</strong>
+                      {fi.reprovado_em && ` — ${fmtDatetime(fi.reprovado_em)}`}
+                    </span>
+                  </div>
+                  {fi.motivo_reprovacao && (
+                    <div style={{ marginLeft: 22, fontStyle: 'italic', fontSize: 11 }}>
+                      "{fi.motivo_reprovacao}"
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}
 
-          {/* Ações — só para pendentes com permissão */}
-          {STATUS_PENDENTE.includes(solicitacao.status) && podeAprovar && (
-            <div className="acomp-modal-acoes">
-              {acao === null ? (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button
-                    type="button"
-                    className="button-secondary acomp-btn-no"
-                    style={{ flex: 1 }}
-                    onClick={() => setAcao('rejeitar')}
-                  >
-                    Rejeitar solicitação
-                  </button>
-                  <button
-                    type="button"
-                    className="button-primary"
-                    style={{ flex: 1 }}
-                    onClick={() => setAcao('aprovar')}
-                  >
-                    Aprovar solicitação
-                  </button>
+          {/* Ações — lógica por etapa para pedidos_compra, genérica para o resto */}
+          {STATUS_PENDENTE.includes(solicitacao.status) && (() => {
+            // Determina se o usuário pode agir nesta etapa
+            let podeFazerAlgo = false
+            let acaoPrimaria = null   // 'analisar' | 'aprovar'
+            let labelPrimaria = ''
+
+            if (isPedido) {
+              if (estaPendente && podeAnalisar) {
+                podeFazerAlgo = true
+                acaoPrimaria  = 'analisar'
+                labelPrimaria = 'Enviar para análise'
+              } else if (estaEmAnalise && podeAprovar) {
+                podeFazerAlgo = true
+                acaoPrimaria  = 'aprovar'
+                labelPrimaria = 'Aprovar pedido'
+              }
+            } else {
+              podeFazerAlgo = podeAprovar
+              acaoPrimaria  = 'aprovar'
+              labelPrimaria = 'Aprovar solicitação'
+            }
+
+            // Pode rejeitar se pode fazer algo
+            const podeRejeitar = podeFazerAlgo
+
+            if (!podeFazerAlgo) {
+              return (
+                <div className="alert-warn" style={{ marginTop: 12 }}>
+                  {isPedido && estaPendente
+                    ? 'Aguardando analista colocar em análise. Você não tem permissão para esta etapa.'
+                    : isPedido && estaEmAnalise
+                    ? 'Aguardando aprovação. Você não tem permissão para aprovar.'
+                    : 'Você não tem permissão para aprovar este tipo de solicitação.'}
                 </div>
-              ) : (
-                <div style={{ display: 'grid', gap: 10 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                    <span className={`status-chip tone-${acao === 'aprovar' ? 'success' : 'danger'}`}>
-                      {acao === 'aprovar' ? 'Aprovando' : 'Rejeitando'}
-                    </span>
-                    <button
-                      type="button"
-                      className="button-link"
-                      onClick={() => { setAcao(null); setMotivo(''); setErroAcao('') }}
-                      disabled={processando}
-                    >
-                      ← voltar
-                    </button>
-                  </div>
+              )
+            }
 
-                  <label className="field">
-                    <span>
-                      {acao === 'rejeitar' ? 'Motivo da rejeição (obrigatório)' : 'Comentário (opcional)'}
-                    </span>
-                    <textarea
-                      rows={3}
-                      placeholder={acao === 'rejeitar'
-                        ? 'Explique o motivo da rejeição...'
-                        : 'Deixe um comentário sobre esta aprovação...'}
-                      value={motivo}
-                      onChange={e => setMotivo(e.target.value)}
-                      disabled={processando}
-                      style={{ resize: 'vertical' }}
-                    />
-                  </label>
-
-                  {erroAcao && <div className="alert-error">{erroAcao}</div>}
-
-                  <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                    <button
-                      type="button"
-                      className="button-secondary"
-                      onClick={() => { setAcao(null); setMotivo(''); setErroAcao('') }}
-                      disabled={processando}
-                    >
-                      Cancelar
-                    </button>
-                    {acao === 'aprovar' ? (
-                      <button
-                        type="button"
-                        className="button-primary"
-                        disabled={processando}
-                        onClick={confirmar}
-                      >
-                        {processando ? 'Aprovando...' : 'Confirmar aprovação'}
-                      </button>
-                    ) : (
+            return (
+              <div className="acomp-modal-acoes">
+                {acao === null ? (
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {podeRejeitar && (
                       <button
                         type="button"
                         className="button-secondary acomp-btn-no"
-                        disabled={processando || !motivo.trim()}
-                        onClick={confirmar}
-                        style={{ padding: '5px 14px' }}
+                        style={{ flex: 1 }}
+                        onClick={() => setAcao('rejeitar')}
                       >
-                        {processando ? 'Rejeitando...' : 'Confirmar rejeição'}
+                        Rejeitar solicitação
                       </button>
                     )}
+                    <button
+                      type="button"
+                      className="button-primary"
+                      style={{ flex: 1 }}
+                      onClick={() => acaoPrimaria === 'analisar' ? confirmar('analisar') : setAcao('aprovar')}
+                      disabled={processando}
+                    >
+                      {processando && acaoPrimaria === 'analisar' ? 'Enviando...' : labelPrimaria}
+                    </button>
                   </div>
-                </div>
-              )}
-            </div>
-          )}
+                ) : (
+                  <div style={{ display: 'grid', gap: 10 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span className={`status-chip tone-${acao === 'aprovar' ? 'success' : 'danger'}`}>
+                        {acao === 'aprovar' ? 'Aprovando' : 'Rejeitando'}
+                      </span>
+                      <button
+                        type="button"
+                        className="button-link"
+                        onClick={() => { setAcao(null); setMotivo(''); setErroAcao('') }}
+                        disabled={processando}
+                      >
+                        ← voltar
+                      </button>
+                    </div>
 
-          {STATUS_PENDENTE.includes(solicitacao.status) && !podeAprovar && (
-            <div className="alert-warn" style={{ marginTop: 12 }}>
-              Você não tem permissão para aprovar este tipo de solicitação.
-            </div>
-          )}
+                    <label className="field">
+                      <span>
+                        {acao === 'rejeitar' ? 'Motivo da rejeição (obrigatório)' : 'Comentário (opcional)'}
+                      </span>
+                      <textarea
+                        rows={3}
+                        placeholder={acao === 'rejeitar'
+                          ? 'Explique o motivo da rejeição...'
+                          : 'Deixe um comentário sobre esta aprovação...'}
+                        value={motivo}
+                        onChange={e => setMotivo(e.target.value)}
+                        disabled={processando}
+                        style={{ resize: 'vertical' }}
+                      />
+                    </label>
+
+                    {erroAcao && <div className="alert-error">{erroAcao}</div>}
+
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                      <button
+                        type="button"
+                        className="button-secondary"
+                        onClick={() => { setAcao(null); setMotivo(''); setErroAcao('') }}
+                        disabled={processando}
+                      >
+                        Cancelar
+                      </button>
+                      {acao === 'aprovar' ? (
+                        <button
+                          type="button"
+                          className="button-primary"
+                          disabled={processando}
+                          onClick={confirmar}
+                        >
+                          {processando ? 'Aprovando...' : 'Confirmar aprovação'}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="button-secondary acomp-btn-no"
+                          disabled={processando || !motivo.trim()}
+                          onClick={confirmar}
+                          style={{ padding: '5px 14px' }}
+                        >
+                          {processando ? 'Rejeitando...' : 'Confirmar rejeição'}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })()}
         </div>
       </div>
     </div>
@@ -378,15 +440,18 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar }) {
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function AcompanhamentoPage() {
+  const { profile } = useAuth()
+  const permissoes = profile?.permission_scopes || []
+
   const [solicitacoes, setSolicitacoes] = useState([])
   const [historico, setHistorico]       = useState([])
-  const [permissoes, setPermissoes]     = useState([])
   const [loading, setLoading]           = useState(true)
   const [erro, setErro]                 = useState('')
   const [aba, setAba]                   = useState('pendentes')
   const [fTipo, setFTipo]               = useState('')
   const [fBusca, setFBusca]             = useState('')
   const [atendendo, setAtendendo]       = useState(null)
+  const _loaded = useRef(false)
 
   useEffect(() => {
     carregar()
@@ -396,33 +461,34 @@ export default function AcompanhamentoPage() {
 
   async function carregar() {
     try {
-      setLoading(true)
+      if (!_loaded.current) setLoading(true)
       setErro('')
-      const [meRes, apRes, histRes] = await Promise.all([
-        api.getProfile().catch(() => ({})),
+      const [apRes, histRes] = await Promise.all([
         api.getApprovals({ limit: 500, status: 'all' }),
         api.getApprovalsHistory({ days: 30, limit: 100 }),
       ])
-      setPermissoes(meRes?.permission_scopes || meRes?.permissions || [])
       setSolicitacoes(apRes.items || [])
       setHistorico(histRes.items || [])
     } catch (err) {
       setErro('Falha ao carregar solicitações.')
     } finally {
+      _loaded.current = true
       setLoading(false)
     }
   }
 
   function podeAprovar(resourceType) {
-    if (!permissoes) return false
-    if (Array.isArray(permissoes)) {
-      return (
-        permissoes.includes('admin') ||
-        permissoes.includes(`aprovar.${resourceType}`) ||
-        (permissoes.includes('menu.pedidos_compra') && resourceType === 'pedidos_compra')
-      )
-    }
-    return Boolean(permissoes.edit || permissoes[`aprovar.${resourceType}`])
+    return (
+      permissoes.includes('admin') ||
+      permissoes.includes(`aprovar.${resourceType}`)
+    )
+  }
+
+  function podeAnalisar(resourceType) {
+    return (
+      permissoes.includes('admin') ||
+      permissoes.includes(`analisar.${resourceType}`)
+    )
   }
 
   const stats = useMemo(() => ({
@@ -598,12 +664,10 @@ export default function AcompanhamentoPage() {
                         <td>
                           <button
                             type="button"
-                            className={`button-secondary acomp-btn-atender${
-                              STATUS_PENDENTE.includes(s.status) ? ' acomp-btn-atender-pendente' : ''
-                            }`}
+                            className={`button-secondary${STATUS_PENDENTE.includes(s.status) ? ' acomp-btn-atender-pendente' : ''}`}
                             onClick={() => setAtendendo(s)}
                           >
-                            Atender
+                            {STATUS_PENDENTE.includes(s.status) ? 'Atender' : 'Ver detalhes'}
                           </button>
                         </td>
                       </tr>
@@ -675,6 +739,7 @@ export default function AcompanhamentoPage() {
           onClose={() => setAtendendo(null)}
           onRefresh={carregar}
           podeAprovar={podeAprovar(atendendo.resource_type)}
+          podeAnalisar={podeAnalisar(atendendo.resource_type)}
         />
       )}
     </section>
