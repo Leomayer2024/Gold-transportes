@@ -4,7 +4,7 @@
 
 export const CATEGORIAS = [
   { value: 'pessoal',      label: 'Pessoal',      cor: '#3a4a5a' },
-  { value: 'saude',        label: 'Saúde',        cor: '#2a6e47' },
+  { value: 'saude',        label: 'Saúde e Segurança (SST)', cor: '#2a6e47' },
   { value: 'habilitacao',  label: 'Habilitação',  cor: '#8a5c00' },
   { value: 'treinamento',  label: 'Treinamento',  cor: '#1f4d8a' },
   { value: 'contratual',   label: 'Contratual',   cor: '#5a4a8a' },
