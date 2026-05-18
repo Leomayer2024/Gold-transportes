@@ -77,13 +77,15 @@ function StatusBadge({ status }) {
 
 // ─── Modal de detalhe + ações ────────────────────────────────────────────────
 
-function DetalheModal({ pedido, onClose, onAction, actionLoading }) {
+function DetalheModal({ pedido, onClose, onAction, actionLoading, podeAnalisar, podeAprovar }) {
   const [motivo, setMotivo] = useState('')
   const [showMotivo, setShowMotivo] = useState(false)
 
-  const canAnalise = ['pendente_aprovacao'].includes(pedido.status)
-  const canAprovar = ['pendente_aprovacao', 'em_analise'].includes(pedido.status)
-  const canReprovar = ['pendente_aprovacao', 'em_analise'].includes(pedido.status)
+  const isEtapa1 = ['pendente_aprovacao', 'pendente'].includes(pedido.status)
+  const isEtapa2 = ['em_analise', 'analise'].includes(pedido.status)
+  const canAnalise  = isEtapa1 && podeAnalisar
+  const canAprovar  = isEtapa2 && podeAprovar
+  const canReprovar = canAnalise || canAprovar
 
   function handleReprovar() {
     if (!motivo.trim()) { alert('Informe o motivo da reprovação.'); return }
@@ -127,18 +129,18 @@ function DetalheModal({ pedido, onClose, onAction, actionLoading }) {
         </div>
 
         {/* Dados principais */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px', marginBottom: 20 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px', marginBottom: 16 }}>
           {[
             ['Fornecedor', pedido.fornecedor || '—'],
-            ['Valor total', fmt(pedido.valor_total)],
+            ['Valor total', fmt(pedido.valor_total_calculado ?? pedido.valor_total)],
             ['Data do pedido', fmtDateOnly(pedido.data_pedido)],
             ['Precisa até', fmtDateOnly(pedido.data_necessidade)],
             ['Forma de pagamento', FORMA_LABEL[pedido.forma_pagamento] || pedido.forma_pagamento || '—'],
-            ['Tipo de reembolso', REEMBOLSO_LABEL[pedido.tipo_reembolso] || pedido.tipo_reembolso || '—'],
+            pedido.prazo_pagamento && ['Prazo pagamento', pedido.prazo_pagamento],
+            pedido.centro_custo && ['Centro de custo', pedido.centro_custo],
+            pedido.tipo_reembolso && ['Tipo de reembolso', REEMBOLSO_LABEL[pedido.tipo_reembolso] || pedido.tipo_reembolso],
             pedido.chave_pix && ['Chave PIX', pedido.chave_pix],
             pedido.dados_bancarios && ['Dados bancários', pedido.dados_bancarios],
-            ['Centro de custo', pedido.centro_custo || '—'],
-            ['Prazo pagamento', pedido.prazo_pagamento || '—'],
           ].filter(Boolean).map(([label, value]) => (
             <div key={label}>
               <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>{label}</p>
@@ -146,6 +148,49 @@ function DetalheModal({ pedido, onClose, onAction, actionLoading }) {
             </div>
           ))}
         </div>
+
+        {/* Itens do pedido */}
+        {Array.isArray(pedido.itens) && pedido.itens.length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <p style={{ margin: '0 0 8px', fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600 }}>
+              Itens ({pedido.itens.length})
+            </p>
+            <div style={{ overflowX: 'auto', borderRadius: 8, border: '1px solid var(--border, rgba(255,255,255,0.08))' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: 'var(--surface-card-2, rgba(255,255,255,0.04))' }}>
+                    {['Descrição', 'Cat.', 'Qtd', 'Un', 'Valor unit.', 'Total'].map(h => (
+                      <th key={h} style={{ padding: '6px 10px', textAlign: h === 'Descrição' || h === 'Cat.' ? 'left' : 'right', color: 'var(--text-muted)', fontWeight: 600, whiteSpace: 'nowrap' }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pedido.itens.map((it, i) => {
+                    const tot = (parseFloat(it.quantidade) || 0) * (parseFloat(it.valor_unitario) || 0)
+                    return (
+                      <tr key={it.id || i} style={{ borderTop: '1px solid var(--border, rgba(255,255,255,0.06))' }}>
+                        <td style={{ padding: '5px 10px' }}>{it.descricao}</td>
+                        <td style={{ padding: '5px 10px', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>{it.categoria}</td>
+                        <td style={{ padding: '5px 10px', textAlign: 'right' }}>{it.quantidade}</td>
+                        <td style={{ padding: '5px 6px', color: 'var(--text-muted)' }}>{it.unidade}</td>
+                        <td style={{ padding: '5px 10px', textAlign: 'right' }}>{fmt(it.valor_unitario)}</td>
+                        <td style={{ padding: '5px 10px', textAlign: 'right', fontWeight: 600 }}>{fmt(tot)}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr style={{ borderTop: '2px solid var(--border, rgba(255,255,255,0.12))' }}>
+                    <td colSpan={5} style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 700 }}>Total:</td>
+                    <td style={{ padding: '6px 10px', textAlign: 'right', fontWeight: 800, color: '#51cf66' }}>
+                      {fmt(pedido.valor_total_calculado ?? pedido.valor_total)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )}
 
         {pedido.observacoes && (
           <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--surface-card-2, rgba(255,255,255,0.04))', borderRadius: 8 }}>
@@ -293,7 +338,7 @@ function PedidoCard({ pedido, onOpen }) {
       </div>
       <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
         <span>{pedido.fornecedor || 'Fornecedor não informado'}</span>
-        <span style={{ fontWeight: 600, color: 'var(--text)', marginLeft: 'auto' }}>{fmt(pedido.valor_total)}</span>
+        <span style={{ fontWeight: 600, color: 'var(--text)', marginLeft: 'auto' }}>{fmt(pedido.valor_total_calculado ?? pedido.valor_total)}</span>
       </div>
       {pedido.data_pedido && (
         <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
@@ -322,6 +367,10 @@ const TABS = [
 
 export default function AprovacoesPage() {
   const { profile } = useAuth()
+  const _perms = profile?.permission_scopes || []
+  const _isAdmin = _perms.includes('admin')
+  const podeAnalisar = _isAdmin || _perms.includes('analisar.pedidos_compra')
+  const podeAprovar  = _isAdmin || _perms.includes('aprovar.pedidos_compra')
   const [pedidos, setPedidos] = useState([])
   const [colaboradores, setColaboradores] = useState({})
   const [loading, setLoading] = useState(true)
@@ -331,6 +380,14 @@ export default function AprovacoesPage() {
   const [actionLoading, setActionLoading] = useState(false)
   const [feedback, setFeedback] = useState('')
   const _loaded = useRef(false)
+
+  async function openModal(pedido) {
+    setSelected(pedido)
+    try {
+      const det = await api.getPedidoDetalhes(pedido.id)
+      setSelected(prev => prev?.id === pedido.id ? { ...prev, itens: det.itens || [] } : prev)
+    } catch (_) {}
+  }
 
   const load = useCallback(async () => {
     try {
@@ -492,7 +549,7 @@ export default function AprovacoesPage() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {filtered.map(p => (
-            <PedidoCard key={p.id} pedido={p} onOpen={setSelected} />
+            <PedidoCard key={p.id} pedido={p} onOpen={openModal} />
           ))}
         </div>
       )}
@@ -504,6 +561,8 @@ export default function AprovacoesPage() {
           onClose={() => setSelected(null)}
           onAction={handleAction}
           actionLoading={actionLoading}
+          podeAnalisar={podeAnalisar}
+          podeAprovar={podeAprovar}
         />
       )}
     </section>

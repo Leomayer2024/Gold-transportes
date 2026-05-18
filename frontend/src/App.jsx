@@ -46,6 +46,7 @@ import ContasPagarPage from './components/ContasPagarPage'
 import BancoPage from './components/BancoPage'
 import FornecedoresPage from './components/FornecedoresPage'
 import ClientesPage from './components/ClientesPage'
+import MeuPerfilPage from './components/MeuPerfilPage'
 
 function PlaceholderPage({ title, text }) {
   return (
@@ -157,6 +158,7 @@ export default function App() {
             <Route path="/gestao-acessos" element={<GestaoAcessosPage />} />
           </Route>
           <Route path="/assinatura" element={<AssinaturaPage />} />
+          <Route path="/meu-perfil" element={<MeuPerfilPage />} />
           <Route element={<AccessRoute requiredScope="menu.estoque" />}>
             <Route path="/estoque" element={<EstoquePage />} />
           </Route>

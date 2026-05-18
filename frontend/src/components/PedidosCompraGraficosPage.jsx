@@ -15,7 +15,9 @@ function formatMes(mes) {
 
 const STATUS_LABELS = {
   rascunho: 'Rascunho',
+  pendente: 'Pendente',
   pendente_aprovacao: 'Pend. aprovação',
+  analise: 'Em análise',
   em_analise: 'Em análise',
   aprovado: 'Aprovado',
   reprovado: 'Reprovado',
@@ -28,16 +30,27 @@ const STATUS_COLORS = {
   aprovado: '#22c55e',
   recebido: '#16a34a',
   em_compra: '#f59e0b',
+  analise: '#6366f1',
   em_analise: '#6366f1',
+  pendente: '#94a3b8',
   pendente_aprovacao: '#94a3b8',
   rascunho: '#cbd5e1',
   reprovado: '#ef4444',
   cancelado: '#f87171',
 }
 
-function BarChart({ data, valueKey, labelKey, color = 'var(--accent, #1a73e8)', formatValue, title, colorFn }) {
-  if (!data?.length) return <div style={{ color: '#aaa', fontSize: 13, padding: '12px 0' }}>Sem dados suficientes.</div>
-  const max = Math.max(...data.map((d) => d[valueKey] || 0), 0.001)
+const CATEGORIA_LABELS = {
+  limpeza: 'Limpeza', manutencao: 'Manutenção', epi: 'EPI',
+  escritorio: 'Escritório', alimentacao: 'Alimentação', combustivel: 'Combustível',
+  informatica: 'Informática', uniforme: 'Uniforme', ferramentas: 'Ferramentas', outro: 'Outro',
+}
+
+const FILIAL_COLORS = ['#1a73e8','#22c55e','#f59e0b','#6366f1','#ef4444','#14b8a6','#ec4899','#8b5cf6','#f97316','#06b6d4']
+
+function BarChart({ data, valueKey, labelKey, color = 'var(--accent, #1a73e8)', formatValue, title, colorFn, maxItems = 12 }) {
+  const slice = data?.slice(0, maxItems) || []
+  if (!slice.length) return <div style={{ color: '#aaa', fontSize: 13, padding: '12px 0' }}>Sem dados suficientes.</div>
+  const max = Math.max(...slice.map((d) => d[valueKey] || 0), 0.001)
   return (
     <div>
       {title && (
@@ -46,9 +59,9 @@ function BarChart({ data, valueKey, labelKey, color = 'var(--accent, #1a73e8)', 
         </div>
       )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {data.map((d, i) => {
+        {slice.map((d, i) => {
           const pct = Math.max((d[valueKey] / max) * 100, 1)
-          const bg = colorFn ? colorFn(d) : color
+          const bg = colorFn ? colorFn(d, i) : color
           return (
             <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
               <div style={{ width: 150, fontSize: 12, textAlign: 'right', color: '#444', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 0 }} title={d[labelKey]}>
@@ -60,6 +73,9 @@ function BarChart({ data, valueKey, labelKey, color = 'var(--accent, #1a73e8)', 
                   {formatValue ? formatValue(d[valueKey]) : d[valueKey]}
                 </span>
               </div>
+              {d.quantidade != null && (
+                <span style={{ fontSize: 11, color: '#888', minWidth: 36, textAlign: 'right' }}>{d.quantidade} ped.</span>
+              )}
             </div>
           )
         })}
@@ -79,16 +95,14 @@ function LineChart({ data, valueKey, labelKey, color = 'var(--accent, #1a73e8)',
   }
   const values = data.map((d) => d[valueKey] || 0)
   const max = Math.max(...values, 0.001)
-  const min = 0
-  const h = 130
-  const w = 560
+  const h = 130, w = 560
   const pad = { top: 12, right: 20, bottom: 32, left: 70 }
   const innerW = w - pad.left - pad.right
   const innerH = h - pad.top - pad.bottom
 
   const points = data.map((d, i) => ({
     x: pad.left + (i / Math.max(data.length - 1, 1)) * innerW,
-    y: pad.top + (1 - (d[valueKey] - min) / (max - min)) * innerH,
+    y: pad.top + (1 - (d[valueKey] || 0) / max) * innerH,
     d,
   }))
 
@@ -111,13 +125,7 @@ function LineChart({ data, valueKey, labelKey, color = 'var(--accent, #1a73e8)',
           {points.map((p, i) => (
             <g key={i}>
               <circle cx={p.x} cy={p.y} r={5} fill="#fff" stroke={color} strokeWidth="2" />
-              <text
-                x={p.x}
-                y={pad.top + innerH + 18}
-                textAnchor="middle"
-                fontSize={10}
-                fill="#666"
-              >
+              <text x={p.x} y={pad.top + innerH + 18} textAnchor="middle" fontSize={10} fill="#666">
                 {p.d[labelKey]}
               </text>
               {i === data.length - 1 && (
@@ -162,13 +170,31 @@ export default function PedidosCompraGraficosPage() {
   const [metricas, setMetricas] = useState(null)
   const [loading, setLoading] = useState(true)
   const [erro, setErro] = useState('')
+  const [fFilial, setFFilial] = useState('')
+  const [filiais, setFiliais] = useState([])
 
-  useEffect(() => {
-    api.getPedidosCompraMetricas()
-      .then(setMetricas)
+  function load(filialId) {
+    setLoading(true)
+    setErro('')
+    const params = {}
+    if (filialId) params.filial_id = filialId
+    api.getPedidosCompraMetricas(params)
+      .then((data) => {
+        setMetricas(data)
+        if (data?.filiais_disponiveis?.length) {
+          setFiliais(data.filiais_disponiveis)
+        }
+      })
       .catch((err) => setErro(err.message || 'Falha ao carregar métricas.'))
       .finally(() => setLoading(false))
-  }, [])
+  }
+
+  useEffect(() => { load('') }, [])
+
+  function handleFilialChange(val) {
+    setFFilial(val)
+    load(val)
+  }
 
   if (loading) {
     return (
@@ -192,6 +218,7 @@ export default function PedidosCompraGraficosPage() {
     por_pagamento = [],
     por_categoria = [],
     top_fornecedores = [],
+    top_filiais = [],
     total_pedidos = 0,
     valor_total_geral = 0,
     ticket_medio = 0,
@@ -204,15 +231,32 @@ export default function PedidosCompraGraficosPage() {
     label: STATUS_LABELS[d.status] || d.status,
   }))
 
+  const porCategoriaFormatado = por_categoria.map((d) => ({
+    ...d,
+    categoria_label: CATEGORIA_LABELS[d.categoria] || d.categoria,
+  }))
+
   return (
     <section className="page-shell">
       <div className="page-header">
         <div>
           <span className="eyebrow">Compras</span>
           <h1>Gráficos — Pedidos de compra</h1>
-          <p>Visão analítica dos pedidos: volume, valor, status e fornecedores.</p>
+          <p>Visão analítica dos pedidos: volume, valor, filiais, fornecedores e categorias.</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          {filiais.length > 1 && (
+            <select
+              value={fFilial}
+              onChange={(e) => handleFilialChange(e.target.value)}
+              style={{ fontSize: 13, padding: '6px 10px', borderRadius: 6, border: '1px solid #d0d5dd', minWidth: 160 }}
+            >
+              <option value="">Todas as filiais</option>
+              {filiais.map((f) => (
+                <option key={f.id} value={f.id}>{f.label}</option>
+              ))}
+            </select>
+          )}
           <button className="button-secondary" onClick={() => navigate('/pedidos-compra')} type="button">
             ← Pedidos
           </button>
@@ -222,22 +266,10 @@ export default function PedidosCompraGraficosPage() {
       {/* Cards de resumo */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
         <StatCard label="Total de pedidos" value={total_pedidos} />
-        <StatCard
-          label="Valor total"
-          value={formatBRL(valor_total_geral)}
-          color="#1a7340"
-        />
-        <StatCard
-          label="Ticket médio"
-          value={formatBRL(ticket_medio)}
-          sub="por pedido com valor"
-          color="#6366f1"
-        />
-        <StatCard
-          label="Fornecedores únicos"
-          value={top_fornecedores.length}
-          color="#f59e0b"
-        />
+        <StatCard label="Valor total" value={formatBRL(valor_total_geral)} color="#1a7340" />
+        <StatCard label="Ticket médio" value={formatBRL(ticket_medio)} sub="por pedido com valor" color="#6366f1" />
+        <StatCard label="Fornecedores únicos" value={top_fornecedores.length} color="#f59e0b" />
+        {!fFilial && <StatCard label="Filiais ativas" value={top_filiais.length} color="#14b8a6" />}
       </div>
 
       {/* Linha do tempo de gastos */}
@@ -250,6 +282,21 @@ export default function PedidosCompraGraficosPage() {
             labelKey="mes_label"
             formatValue={formatBRL}
             color="#1a73e8"
+          />
+        </div>
+      )}
+
+      {/* Top Filiais — só quando não há filtro de filial */}
+      {!fFilial && top_filiais.length > 0 && (
+        <div className="surface-card" style={{ padding: '20px 24px', marginBottom: 16 }}>
+          <BarChart
+            title="Top filiais por valor (R$)"
+            data={top_filiais}
+            valueKey="valor_total"
+            labelKey="filial"
+            formatValue={formatBRL}
+            colorFn={(_, i) => FILIAL_COLORS[i % FILIAL_COLORS.length]}
+            maxItems={10}
           />
         </div>
       )}
@@ -281,13 +328,13 @@ export default function PedidosCompraGraficosPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 16 }}>
         {/* Por categoria */}
-        {por_categoria.length > 0 && (
+        {porCategoriaFormatado.length > 0 && (
           <div className="surface-card" style={{ padding: '20px 24px' }}>
             <BarChart
               title="Gasto por categoria (R$)"
-              data={por_categoria}
+              data={porCategoriaFormatado}
               valueKey="valor_total"
-              labelKey="categoria"
+              labelKey="categoria_label"
               formatValue={formatBRL}
               color="#f59e0b"
             />
@@ -303,7 +350,8 @@ export default function PedidosCompraGraficosPage() {
               valueKey="valor_total"
               labelKey="fornecedor"
               formatValue={formatBRL}
-              color="#22c55e"
+              colorFn={(_, i) => FILIAL_COLORS[i % FILIAL_COLORS.length]}
+              maxItems={10}
             />
           </div>
         )}

@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { getAllNavigation } from '../lib/permissions'
@@ -77,6 +77,7 @@ function extractOrder(groups) {
 
 export default function Sidebar() {
   const { profile, user, signOut } = useAuth()
+  const navigate = useNavigate()
   const userId = user?.id
   const appVersion = `v${packageInfo.version}`
   const databaseOnline = Boolean(profile?.database_online)
@@ -365,7 +366,12 @@ export default function Sidebar() {
       </nav>
 
       <div className="sidebar-user-card">
-        <div className="sidebar-user-main">
+        <button
+          className="sidebar-user-main sidebar-user-main--clickable"
+          onClick={() => navigate('/meu-perfil')}
+          title="Ver meu perfil"
+          type="button"
+        >
           {profile?.foto_url ? (
             <img alt={profile?.nome_completo || 'Colaborador'} className="sidebar-avatar" src={profile.foto_url} />
           ) : (
@@ -379,14 +385,15 @@ export default function Sidebar() {
               <small>{databaseOnline ? 'Online' : 'Offline'}</small>
             </div>
           </div>
-        </div>
+        </button>
 
         <button
           className="sidebar-logout-button"
-          onClick={(event) => {
+          onClick={async (event) => {
             confirmNav(event)
             if (event.defaultPrevented) return
-            signOut()
+            await signOut()
+            navigate('/login', { replace: true })
           }}
           type="button"
         >

@@ -48,6 +48,31 @@ function copiar(texto, setCopied) {
   }).catch(() => {})
 }
 
+function exportarCSV(rows) {
+  const header = ['Nome', 'Cargo', 'Base', 'E-mail', 'Tipo acesso', 'Status', 'Último acesso']
+  const data = rows.map((a) => [
+    a.nome_completo || '',
+    a.cargo || '',
+    a.filial_label || '',
+    a.email || '',
+    [a.permissao_app && 'App', a.permissao_desktop && 'Desktop'].filter(Boolean).join(' + ') || '',
+    a.ativo ? 'Ativo' : 'Inativo',
+    a.ultimo_login ? formatDateTime(a.ultimo_login) : 'Nunca acessou',
+  ])
+  const csv = [header, ...data]
+    .map((row) => row.map((v) => `"${String(v).replace(/"/g, '""')}"`).join(','))
+    .join('\n')
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `acessos_${new Date().toISOString().slice(0, 10)}.csv`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
 // ─── Modal de edição de e-mail ──────────────────────────────────────────────
 
 function ModalEditarEmail({ colab, onClose, onSaved }) {
@@ -314,6 +339,15 @@ export default function GestaoAcessosPage() {
           <h1>Gestão de acessos</h1>
           <p>Visualize quem tem acesso ao sistema e redefina senhas. Esta tela é visível apenas para o administrador master.</p>
         </div>
+        <button
+          type="button"
+          className="button-secondary"
+          onClick={() => exportarCSV(acessos)}
+          disabled={acessos.length === 0}
+          title="Exportar lista completa de e-mails e acessos"
+        >
+          ↓ Exportar e-mails (CSV)
+        </button>
       </div>
 
       {/* Cards de estatísticas */}

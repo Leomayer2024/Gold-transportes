@@ -203,6 +203,8 @@
   font-size: 11px;
   color: var(--ink);
   font-weight: 600;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 /* Bloco histórico de aprovação */

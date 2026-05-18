@@ -87,7 +87,7 @@ const CAMPOS_MODAL = {
     { k: 'forma_pagamento',  l: 'Forma de pagamento', formaPag: true },
     { k: 'prazo_pagamento',  l: 'Prazo de pagamento' },
     { k: 'centro_custo',     l: 'Centro de custo' },
-    { k: 'valor_total',      l: 'Valor total', moeda: true },
+    { k: 'valor_total_calculado', l: 'Valor total', moeda: true },
     { k: 'tipo_reembolso',   l: 'Tipo de reembolso', reembolso: true },
     { k: 'chave_pix',        l: 'Chave PIX' },
     { k: 'dados_bancarios',  l: 'Dados bancários', full: true },
@@ -169,11 +169,14 @@ const TABS = [
 
 // ─── Modal de atendimento ─────────────────────────────────────────────────────
 
-function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalisar }) {
+function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalisar, isSuperAdmin }) {
   const [acao, setAcao]         = useState(null) // 'analisar' | 'aprovar' | 'rejeitar'
   const [motivo, setMotivo]     = useState('')
   const [processando, setProc]  = useState(false)
   const [erroAcao, setErroAcao] = useState('')
+
+  // Garante que o erro da ação anterior nunca aparece em outro modo
+  useEffect(() => { setErroAcao('') }, [acao])
 
   const fi    = solicitacao.full_item || {}
   const tipo  = solicitacao.resource_type
@@ -260,8 +263,51 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
             })}
           </div>
 
+          {/* Itens do pedido (apenas pedidos_compra) */}
+          {isPedido && Array.isArray(fi.itens) && fi.itens.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 8 }}>
+                Itens do pedido ({fi.itens.length})
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ borderBottom: '1px solid var(--border, #e5e5e5)' }}>
+                      <th style={{ textAlign: 'left', padding: '4px 8px', color: 'var(--text-muted)', fontWeight: 600 }}>Descrição</th>
+                      <th style={{ textAlign: 'left', padding: '4px 8px', color: 'var(--text-muted)', fontWeight: 600 }}>Categoria</th>
+                      <th style={{ textAlign: 'right', padding: '4px 8px', color: 'var(--text-muted)', fontWeight: 600 }}>Qtd</th>
+                      <th style={{ textAlign: 'left', padding: '4px 4px', color: 'var(--text-muted)', fontWeight: 600 }}>Un</th>
+                      <th style={{ textAlign: 'right', padding: '4px 8px', color: 'var(--text-muted)', fontWeight: 600 }}>Valor unit.</th>
+                      <th style={{ textAlign: 'right', padding: '4px 8px', color: 'var(--text-muted)', fontWeight: 600 }}>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {fi.itens.map((it, i) => (
+                      <tr key={it.id || i} style={{ borderBottom: '1px solid var(--border, #f0f0f0)' }}>
+                        <td style={{ padding: '5px 8px' }}>{it.descricao}</td>
+                        <td style={{ padding: '5px 8px', color: 'var(--text-muted)' }}>{it.categoria}</td>
+                        <td style={{ padding: '5px 8px', textAlign: 'right' }}>{it.quantidade}</td>
+                        <td style={{ padding: '5px 4px', color: 'var(--text-muted)' }}>{it.unidade}</td>
+                        <td style={{ padding: '5px 8px', textAlign: 'right' }}>{fmtMoeda(it.valor_unitario)}</td>
+                        <td style={{ padding: '5px 8px', textAlign: 'right', fontWeight: 600 }}>{fmtMoeda(it.total_item)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr>
+                      <td colSpan={5} style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontSize: 13 }}>Total:</td>
+                      <td style={{ padding: '6px 8px', textAlign: 'right', fontWeight: 700, fontSize: 13, color: 'var(--success, #1a7340)' }}>
+                        {fmtMoeda(fi.valor_total_calculado || 0)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
+
           {/* Histórico de aprovação */}
-          {(fi.em_analise_por || fi.aprovado_por || fi.reprovado_por) && (
+          {isSuperAdmin && (fi.em_analise_por || fi.aprovado_por || fi.reprovado_por) && (
             <div className="acomp-hist-bloco">
               {fi.em_analise_por && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, marginBottom: 4 }}>
@@ -300,37 +346,37 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
             </div>
           )}
 
-          {/* Ações — lógica por etapa para pedidos_compra, genérica para o resto */}
+          {/* Ações */}
           {STATUS_PENDENTE.includes(solicitacao.status) && (() => {
-            // Determina se o usuário pode agir nesta etapa
             let podeFazerAlgo = false
-            let acaoPrimaria = null   // 'analisar' | 'aprovar'
+            let acaoPrimaria  = null
             let labelPrimaria = ''
+            let labelBtnPrimario = ''
 
             if (isPedido) {
               if (estaPendente && podeAnalisar) {
-                podeFazerAlgo = true
-                acaoPrimaria  = 'analisar'
-                labelPrimaria = 'Enviar para análise'
+                podeFazerAlgo   = true
+                acaoPrimaria    = 'analisar'
+                labelPrimaria   = 'Aprovar'
+                labelBtnPrimario = processando ? 'Aprovando...' : 'Aprovar'
               } else if (estaEmAnalise && podeAprovar) {
-                podeFazerAlgo = true
-                acaoPrimaria  = 'aprovar'
-                labelPrimaria = 'Aprovar pedido'
+                podeFazerAlgo   = true
+                acaoPrimaria    = 'aprovar'
+                labelPrimaria   = 'Aprovar pedido'
+                labelBtnPrimario = processando ? 'Aprovando...' : 'Aprovar pedido'
               }
-            } else {
-              podeFazerAlgo = podeAprovar
-              acaoPrimaria  = 'aprovar'
-              labelPrimaria = 'Aprovar solicitação'
+            } else if (podeAprovar) {
+              podeFazerAlgo   = true
+              acaoPrimaria    = 'aprovar'
+              labelPrimaria   = 'Aprovar solicitação'
+              labelBtnPrimario = processando ? 'Aprovando...' : 'Aprovar solicitação'
             }
-
-            // Pode rejeitar se pode fazer algo
-            const podeRejeitar = podeFazerAlgo
 
             if (!podeFazerAlgo) {
               return (
                 <div className="alert-warn" style={{ marginTop: 12 }}>
                   {isPedido && estaPendente
-                    ? 'Aguardando analista colocar em análise. Você não tem permissão para esta etapa.'
+                    ? 'Aguardando analista iniciar análise. Você não tem permissão para esta etapa.'
                     : isPedido && estaEmAnalise
                     ? 'Aguardando aprovação. Você não tem permissão para aprovar.'
                     : 'Você não tem permissão para aprovar este tipo de solicitação.'}
@@ -338,93 +384,109 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
               )
             }
 
+            function cancelarAcao() { setAcao(null); setMotivo(''); setErroAcao('') }
+
             return (
               <div className="acomp-modal-acoes">
-                {acao === null ? (
+                {/* ── Botões iniciais ── */}
+                {acao === null && (
                   <div style={{ display: 'flex', gap: 8 }}>
-                    {podeRejeitar && (
-                      <button
-                        type="button"
-                        className="button-secondary acomp-btn-no"
-                        style={{ flex: 1 }}
-                        onClick={() => setAcao('rejeitar')}
-                      >
-                        Rejeitar solicitação
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      className="button-secondary acomp-btn-no"
+                      style={{ flex: 1 }}
+                      onClick={() => { setAcao('rejeitar'); setMotivo(''); setErroAcao('') }}
+                      disabled={processando}
+                    >
+                      Rejeitar
+                    </button>
                     <button
                       type="button"
                       className="button-primary"
                       style={{ flex: 1 }}
-                      onClick={() => acaoPrimaria === 'analisar' ? confirmar('analisar') : setAcao('aprovar')}
+                      onClick={() => {
+                        if (acaoPrimaria === 'analisar') {
+                          confirmar('analisar')
+                        } else {
+                          setMotivo('')
+                          setAcao('aprovar')
+                        }
+                      }}
                       disabled={processando}
                     >
-                      {processando && acaoPrimaria === 'analisar' ? 'Enviando...' : labelPrimaria}
+                      {processando ? 'Processando...' : labelPrimaria}
                     </button>
                   </div>
-                ) : (
-                  <div style={{ display: 'grid', gap: 10 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span className={`status-chip tone-${acao === 'aprovar' ? 'success' : 'danger'}`}>
-                        {acao === 'aprovar' ? 'Aprovando' : 'Rejeitando'}
-                      </span>
-                      <button
-                        type="button"
-                        className="button-link"
-                        onClick={() => { setAcao(null); setMotivo(''); setErroAcao('') }}
-                        disabled={processando}
-                      >
-                        ← voltar
-                      </button>
-                    </div>
+                )}
 
-                    <label className="field">
-                      <span>
-                        {acao === 'rejeitar' ? 'Motivo da rejeição (obrigatório)' : 'Comentário (opcional)'}
-                      </span>
+                {/* ── Painel de aprovação ── */}
+                {acao === 'aprovar' && (
+                  <div style={{
+                    border: '1px solid #c3e6cb', borderRadius: 8,
+                    background: 'rgba(40,167,69,0.06)', padding: '14px 16px',
+                    display: 'grid', gap: 10,
+                  }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--success, #1a7340)' }}>
+                      Confirmar aprovação de: <em style={{ fontWeight: 400 }}>{solicitacao.titulo || `#${solicitacao.id}`}</em>
+                    </div>
+                    <label className="field" style={{ margin: 0 }}>
+                      <span>Comentário (opcional)</span>
                       <textarea
-                        rows={3}
-                        placeholder={acao === 'rejeitar'
-                          ? 'Explique o motivo da rejeição...'
-                          : 'Deixe um comentário sobre esta aprovação...'}
+                        rows={2}
+                        placeholder="Deixe um comentário sobre esta aprovação..."
                         value={motivo}
                         onChange={e => setMotivo(e.target.value)}
                         disabled={processando}
                         style={{ resize: 'vertical' }}
                       />
                     </label>
-
                     {erroAcao && <div className="alert-error">{erroAcao}</div>}
-
                     <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                      <button
-                        type="button"
-                        className="button-secondary"
-                        onClick={() => { setAcao(null); setMotivo(''); setErroAcao('') }}
-                        disabled={processando}
-                      >
+                      <button type="button" className="button-secondary" onClick={cancelarAcao} disabled={processando}>
                         Cancelar
                       </button>
-                      {acao === 'aprovar' ? (
-                        <button
-                          type="button"
-                          className="button-primary"
-                          disabled={processando}
-                          onClick={confirmar}
-                        >
-                          {processando ? 'Aprovando...' : 'Confirmar aprovação'}
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          className="button-secondary acomp-btn-no"
-                          disabled={processando || !motivo.trim()}
-                          onClick={confirmar}
-                          style={{ padding: '5px 14px' }}
-                        >
-                          {processando ? 'Rejeitando...' : 'Confirmar rejeição'}
-                        </button>
-                      )}
+                      <button type="button" className="button-primary" onClick={() => confirmar()} disabled={processando}>
+                        {processando ? 'Aprovando...' : 'Confirmar aprovação'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Painel de rejeição ── */}
+                {acao === 'rejeitar' && (
+                  <div style={{
+                    border: '1px solid #f5c6cb', borderRadius: 8,
+                    background: 'rgba(220,53,69,0.05)', padding: '14px 16px',
+                    display: 'grid', gap: 10,
+                  }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--danger, #c00)' }}>
+                      Rejeitar: <em style={{ fontWeight: 400 }}>{solicitacao.titulo || `#${solicitacao.id}`}</em>
+                    </div>
+                    <label className="field" style={{ margin: 0 }}>
+                      <span>Motivo da rejeição <strong style={{ color: 'var(--danger,#c00)' }}>*</strong></span>
+                      <textarea
+                        rows={2}
+                        placeholder="Explique o motivo da rejeição..."
+                        value={motivo}
+                        onChange={e => setMotivo(e.target.value)}
+                        disabled={processando}
+                        style={{ resize: 'vertical' }}
+                      />
+                    </label>
+                    {erroAcao && <div className="alert-error">{erroAcao}</div>}
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                      <button type="button" className="button-secondary" onClick={cancelarAcao} disabled={processando}>
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        className="button-secondary acomp-btn-no"
+                        onClick={() => confirmar()}
+                        disabled={processando || !motivo.trim()}
+                        style={{ padding: '5px 14px' }}
+                      >
+                        {processando ? 'Rejeitando...' : 'Confirmar rejeição'}
+                      </button>
                     </div>
                   </div>
                 )}
@@ -740,6 +802,7 @@ export default function AcompanhamentoPage() {
           onRefresh={carregar}
           podeAprovar={podeAprovar(atendendo.resource_type)}
           podeAnalisar={podeAnalisar(atendendo.resource_type)}
+          isSuperAdmin={profile?.is_super_admin}
         />
       )}
     </section>

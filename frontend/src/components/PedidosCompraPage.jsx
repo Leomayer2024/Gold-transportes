@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../services/api'
+import { useAuth } from '../context/AuthContext'
 
 // ─── Constantes ───────────────────────────────────────────────────────────────
 
@@ -35,6 +36,15 @@ const PAGAMENTO_OPTS = [
   { value: 'cartao_credito', label: 'Cartão crédito' },
   { value: 'boleto', label: 'Boleto' },
   { value: 'credito_fornecedor', label: 'Crédito fornecedor' },
+]
+
+// Formas que exigem prazo e vencimento
+const PRAZO_FORMAS = new Set(['boleto', 'credito_fornecedor', 'cartao_credito', 'cartao_debito'])
+
+const PRAZO_OPTS = [
+  'À vista', '7 dias', '14 dias', '15 dias', '21 dias', '28 dias',
+  '30 dias', '45 dias', '60 dias', '90 dias', '120 dias',
+  '30/60 dias', '15/30/45 dias', '30/60/90 dias',
 ]
 
 const REEMBOLSO_OPTS = [
@@ -77,6 +87,12 @@ function todayIso() {
   return new Date().toISOString().slice(0, 10)
 }
 
+function addDias(isoDate, dias) {
+  const d = new Date((isoDate || todayIso()) + 'T00:00:00')
+  d.setDate(d.getDate() + dias)
+  return d.toISOString().slice(0, 10)
+}
+
 function emptyItem() {
   return {
     _key: `k-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
@@ -92,10 +108,11 @@ function emptyItem() {
 }
 
 function emptyForm() {
+  const hoje = todayIso()
   return {
     filial_id: '',
-    data_pedido: todayIso(),
-    data_necessidade: '',
+    data_pedido: hoje,
+    data_necessidade: addDias(hoje, 5),
     data_vencimento: '',
     fornecedor: '',
     forma_pagamento: '',
@@ -157,54 +174,66 @@ function itemTotal(item) {
   return qty * price
 }
 
-// ─── Autocomplete genérico ────────────────────────────────────────────────────
+// ─── Combobox de fornecedor ───────────────────────────────────────────────────
 
-function AutocompleteInput({ value, onChange, items, placeholder, className, style }) {
-  const [showSug, setShowSug] = useState(false)
+function FornecedorCombobox({ value, onChange, fornecedores, placeholder = 'Digite ou selecione o fornecedor...' }) {
+  const [open, setOpen] = useState(false)
+  const [busca, setBusca] = useState(value || '')
   const wrapRef = useRef(null)
 
-  const suggestions = useMemo(() => {
-    const q = (value || '').trim().toLowerCase()
-    if (q.length < 2) return []
-    return items.filter((it) => it.toLowerCase().includes(q)).slice(0, 10)
-  }, [value, items])
+  useEffect(() => { setBusca(value || '') }, [value])
+
+  const filtrados = useMemo(() => {
+    const q = busca.trim().toLowerCase()
+    const list = fornecedores || []
+    if (!q) return list.slice(0, 40)
+    return list.filter((f) => f.toLowerCase().includes(q)).slice(0, 40)
+  }, [busca, fornecedores])
 
   useEffect(() => {
-    function handleOutside(e) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target)) setShowSug(false)
+    function outside(e) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target)) setOpen(false)
     }
-    document.addEventListener('mousedown', handleOutside)
-    return () => document.removeEventListener('mousedown', handleOutside)
+    document.addEventListener('mousedown', outside)
+    return () => document.removeEventListener('mousedown', outside)
   }, [])
 
+  function select(nome) { onChange(nome); setBusca(nome); setOpen(false) }
+
   return (
-    <div ref={wrapRef} style={{ position: 'relative', ...style }}>
+    <div ref={wrapRef} style={{ position: 'relative' }}>
       <input
-        className={className || 'field'}
         type="text"
         placeholder={placeholder}
-        value={value}
+        value={busca}
         autoComplete="off"
-        onChange={(e) => { onChange(e.target.value); setShowSug(true) }}
-        onFocus={() => { if (suggestions.length) setShowSug(true) }}
+        onChange={(e) => { setBusca(e.target.value); onChange(e.target.value); setOpen(true) }}
+        onFocus={() => setOpen(true)}
+        style={{ width: '100%' }}
       />
-      {showSug && suggestions.length > 0 && (
+      {open && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 300,
-          background: '#fff', border: '1px solid #ddd', borderRadius: 6,
-          boxShadow: '0 4px 16px rgba(0,0,0,0.12)', maxHeight: 200, overflow: 'auto',
+          background: '#fff', border: '1px solid #d0d5dd', borderRadius: 8,
+          boxShadow: '0 6px 20px rgba(0,0,0,0.13)', maxHeight: 260, overflow: 'auto',
         }}>
-          {suggestions.map((s) => (
-            <div
-              key={s}
-              onMouseDown={(e) => { e.preventDefault(); onChange(s); setShowSug(false) }}
-              style={{ padding: '8px 12px', cursor: 'pointer', fontSize: 13, borderBottom: '1px solid #f0f0f0' }}
-              onMouseEnter={(e) => { e.currentTarget.style.background = '#eff4ff' }}
-              onMouseLeave={(e) => { e.currentTarget.style.background = '' }}
-            >
-              {s}
+          {filtrados.length === 0 ? (
+            <div style={{ padding: '10px 14px', color: '#888', fontSize: 13, fontStyle: 'italic' }}>
+              {busca.trim() ? `"${busca}" — será salvo como digitado` : 'Nenhum fornecedor cadastrado.'}
             </div>
-          ))}
+          ) : (
+            filtrados.map((f, i) => (
+              <div
+                key={i}
+                onMouseDown={(e) => { e.preventDefault(); select(f) }}
+                style={{ padding: '9px 14px', cursor: 'pointer', fontSize: 13, borderBottom: '1px solid #f0f0f0' }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = '#eff4ff' }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = '' }}
+              >
+                {f}
+              </div>
+            ))
+          )}
         </div>
       )}
     </div>
@@ -556,20 +585,15 @@ function ItemRow({ item, onChange, onRemove, isOnly, catalogoItens, onSelectCata
         <input
           className="pedido-item-inp"
           type="text"
-          placeholder="Digite para buscar no catálogo…"
+          placeholder="Descrição do item…"
           value={item.descricao}
           autoComplete="off"
-          style={item.descricao && !item._from_catalog && !item.id ? { borderColor: '#dc2626', background: '#fff5f5' } : {}}
           onChange={(e) => {
             onChange('descricao', e.target.value)
-            if (!item.id) onChange('_from_catalog', false)
             setShowSug(true)
           }}
           onFocus={() => { if (suggestions.length) setShowSug(true) }}
         />
-        {item.descricao && !item._from_catalog && !item.id && (
-          <div style={{ fontSize: 10, color: '#dc2626', marginTop: 2, lineHeight: 1.2 }}>Selecione do catálogo</div>
-        )}
         {showSug && suggestions.length > 0 && (
           <div style={{
             position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 200,
@@ -579,7 +603,7 @@ function ItemRow({ item, onChange, onRemove, isOnly, catalogoItens, onSelectCata
             {suggestions.map((it) => (
               <div
                 key={it.id}
-                onMouseDown={(e) => { e.preventDefault(); onSelectCatalog(it); setShowSug(false) }}
+                onMouseDown={(e) => { e.preventDefault(); onSelectCatalog(it, true); setShowSug(false) }}
                 style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
                 onMouseEnter={(e) => { e.currentTarget.style.background = '#eff4ff' }}
                 onMouseLeave={(e) => { e.currentTarget.style.background = '' }}
@@ -655,6 +679,97 @@ function ItemRow({ item, onChange, onRemove, isOnly, catalogoItens, onSelectCata
   )
 }
 
+// ─── Modal seletor de catálogo ────────────────────────────────────────────────
+
+function ModalCatalogo({ catalogoItens, onAdd, onClose }) {
+  const [busca, setBusca] = useState('')
+  const [selecionados, setSelecionados] = useState({}) // id → true
+
+  const filtrados = useMemo(() => {
+    const q = busca.trim().toLowerCase()
+    if (!q) return catalogoItens
+    return catalogoItens.filter((it) =>
+      it.nome.toLowerCase().includes(q) ||
+      (CATEGORIA_LABELS[it.categoria] || '').toLowerCase().includes(q) ||
+      (it.fornecedor_habitual || '').toLowerCase().includes(q)
+    )
+  }, [busca, catalogoItens])
+
+  function toggle(id) {
+    setSelecionados((prev) => ({ ...prev, [id]: !prev[id] }))
+  }
+
+  function confirmar() {
+    const itensEscolhidos = catalogoItens.filter((it) => selecionados[it.id])
+    if (!itensEscolhidos.length) { onClose(); return }
+    itensEscolhidos.forEach((it) => onAdd(it))
+    onClose()
+  }
+
+  const qtdSel = Object.values(selecionados).filter(Boolean).length
+
+  return (
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }}>
+      <div style={{ background: '#fff', borderRadius: 10, width: '100%', maxWidth: 600, maxHeight: '85vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        <div style={{ padding: '16px 20px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', gap: 12 }}>
+          <strong style={{ flex: 1, fontSize: 15 }}>Selecionar itens do catálogo</strong>
+          <button type="button" className="button-secondary" style={{ padding: '4px 10px' }} onClick={onClose}>✕</button>
+        </div>
+
+        <div style={{ padding: '12px 20px', borderBottom: '1px solid #f0f0f0' }}>
+          <input
+            type="text"
+            className="pedido-item-inp"
+            style={{ width: '100%', boxSizing: 'border-box' }}
+            placeholder="Buscar no catálogo..."
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            autoFocus
+          />
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {filtrados.length === 0 && (
+            <div style={{ padding: '24px 20px', color: '#aaa', textAlign: 'center', fontSize: 13 }}>Nenhum item encontrado.</div>
+          )}
+          {filtrados.map((it) => (
+            <label
+              key={it.id}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 20px', borderBottom: '1px solid #f5f5f5', cursor: 'pointer', background: selecionados[it.id] ? '#eff4ff' : '' }}
+            >
+              <input
+                type="checkbox"
+                checked={!!selecionados[it.id]}
+                onChange={() => toggle(it.id)}
+                style={{ width: 16, height: 16, flexShrink: 0 }}
+              />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 13 }}>{it.nome}</div>
+                <div style={{ fontSize: 11, color: '#888' }}>
+                  {CATEGORIA_LABELS[it.categoria] || it.categoria} · {it.unidade}
+                  {it.fornecedor_habitual ? ` · ${it.fornecedor_habitual}` : ''}
+                </div>
+              </div>
+              {it.valor_referencia && (
+                <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent, #1a73e8)', flexShrink: 0 }}>
+                  {formatCurrency(it.valor_referencia)}
+                </div>
+              )}
+            </label>
+          ))}
+        </div>
+
+        <div style={{ padding: '12px 20px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button type="button" className="button-secondary" onClick={onClose}>Cancelar</button>
+          <button type="button" className="button-primary" onClick={confirmar} disabled={!qtdSel}>
+            {qtdSel > 0 ? `Adicionar ${qtdSel} item${qtdSel > 1 ? 'ns' : ''}` : 'Selecione itens'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Formulário unificado: pedido + itens ─────────────────────────────────────
 
 function FormularioPedido({ pedidoInicial, itensIniciais, onSaved, onCancel }) {
@@ -680,8 +795,8 @@ function FormularioPedido({ pedidoInicial, itensIniciais, onSaved, onCancel }) {
   const [fornecedoresDB, setFornecedoresDB] = useState([])
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
-  const [showCatalogo, setShowCatalogo] = useState(false)
   const [numeroSolicitacaoPre, setNumeroSolicitacaoPre] = useState(pedidoInicial?.numero_solicitacao || null)
+  const [showCatalogo, setShowCatalogo] = useState(false)
 
   const isEditing = Boolean(pedidoInicial?.id)
 
@@ -694,13 +809,12 @@ function FormularioPedido({ pedidoInicial, itensIniciais, onSaved, onCancel }) {
   }, [])
 
   useEffect(() => {
-    api.list('filiais', { ativo: true }).then(setFiliais).catch(() => {})
+    api.filiaisDisponiveis().then(setFiliais).catch(() => {})
   }, [])
 
   useEffect(() => {
-    if (!form.filial_id) { setColaboradores([]); return }
-    api.list('colaboradores', { ativo: true, filial_id: form.filial_id }).then(setColaboradores).catch(() => {})
-  }, [form.filial_id])
+    api.colaboradoresComEscopo('menu.pedidos_compra').then(setColaboradores).catch(() => {})
+  }, [])
 
   useEffect(() => {
     api.list('itens_catalogo', { ativo: true, limit: 1000 })
@@ -717,7 +831,10 @@ function FormularioPedido({ pedidoInicial, itensIniciais, onSaved, onCancel }) {
   }, [form.filial_id])
 
   useEffect(() => {
-    if (!['boleto', 'credito_fornecedor'].includes(form.forma_pagamento)) return
+    if (!PRAZO_FORMAS.has(form.forma_pagamento)) {
+      setForm((prev) => ({ ...prev, prazo_pagamento: '', data_vencimento: '' }))
+      return
+    }
     const v = calcularVencimento(form.data_pedido, form.prazo_pagamento)
     if (v) setForm((prev) => ({ ...prev, data_vencimento: v }))
   }, [form.forma_pagamento, form.prazo_pagamento, form.data_pedido])
@@ -749,6 +866,7 @@ function FormularioPedido({ pedidoInicial, itensIniciais, onSaved, onCancel }) {
       descricao: catalogItem.nome,
       categoria: catalogItem.categoria || 'outro',
       unidade: catalogItem.unidade || 'un',
+      valor_unitario: catalogItem.valor_referencia ? String(catalogItem.valor_referencia) : it.valor_unitario,
       _from_catalog: true,
     }))
   }
@@ -777,8 +895,8 @@ function FormularioPedido({ pedidoInicial, itensIniciais, onSaved, onCancel }) {
     if (!form.filial_id) { setError('Selecione a filial.'); return }
     const itensValidos = itens.filter((it) => it.descricao.trim())
     if (!itensValidos.length) { setError('Adicione ao menos 1 item com descrição.'); return }
-    const semCatalogo = itensValidos.filter((it) => !it.id && !it._from_catalog)
-    if (semCatalogo.length) { setError('Selecione cada item novo a partir do catálogo: digite no campo de descrição e clique em uma sugestão.'); return }
+    const semValor = itensValidos.filter((it) => !(parseFloat(String(it.valor_unitario).replace(',', '.')) > 0))
+    if (semValor.length) { setError(`Informe o valor unitário de todos os itens (${semValor.length} item(ns) sem valor).`); return }
 
     setSaving(true)
     try {
@@ -860,9 +978,6 @@ function FormularioPedido({ pedidoInicial, itensIniciais, onSaved, onCancel }) {
           )}
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <button type="button" className="button-secondary" onClick={() => navigate('/itens-catalogo')}>
-            Catálogo de itens
-          </button>
           <button type="button" className="button-secondary" onClick={onCancel} disabled={saving}>← Voltar</button>
           <button type="submit" form="pedido-form" className="button-primary" disabled={saving}>
             {saving ? 'Salvando...' : isEditing ? 'Salvar alterações' : '✓ Criar pedido'}
@@ -885,11 +1000,10 @@ function FormularioPedido({ pedidoInicial, itensIniciais, onSaved, onCancel }) {
 
           <label className="field">
             <span>Fornecedor</span>
-            <AutocompleteInput
+            <FornecedorCombobox
               value={form.fornecedor}
               onChange={(v) => setField('fornecedor', v)}
-              items={fornecedoresDB.map((f) => f.nome)}
-              placeholder="Nome do fornecedor ou loja"
+              fornecedores={fornecedoresDB.map((f) => f.nome)}
             />
           </label>
 
@@ -899,11 +1013,10 @@ function FormularioPedido({ pedidoInicial, itensIniciais, onSaved, onCancel }) {
           </label>
 
           <label className="field">
-            <span>Precisa até</span>
+            <span>Previsão de entrega</span>
             <input
               type="date"
               value={form.data_necessidade}
-              min={form.data_pedido || todayIso()}
               onChange={(e) => setField('data_necessidade', e.target.value)}
             />
           </label>
@@ -916,31 +1029,32 @@ function FormularioPedido({ pedidoInicial, itensIniciais, onSaved, onCancel }) {
             </select>
           </label>
 
-          <label className="field">
-            <span>Prazo de pagamento</span>
-            <input
-              type="text"
-              list="dl-prazos"
-              placeholder="Ex.: à vista, 30 dias"
-              value={form.prazo_pagamento}
-              onChange={(e) => setField('prazo_pagamento', e.target.value)}
-            />
-            <datalist id="dl-prazos">
-              {['À vista', '15 dias', '30 dias', '45 dias', '30/60 dias', '15/30/45 dias'].map((p) => (
-                <option key={p} value={p} />
-              ))}
-            </datalist>
-          </label>
+          {PRAZO_FORMAS.has(form.forma_pagamento) && (
+            <label className="field">
+              <span>Prazo de pagamento</span>
+              <input
+                type="text"
+                list="dl-prazos"
+                placeholder="Selecione ou digite"
+                value={form.prazo_pagamento}
+                onChange={(e) => setField('prazo_pagamento', e.target.value)}
+              />
+              <datalist id="dl-prazos">
+                {PRAZO_OPTS.map((p) => <option key={p} value={p} />)}
+              </datalist>
+            </label>
+          )}
 
-          <label className="field">
-            <span>Vencimento{['boleto', 'credito_fornecedor'].includes(form.forma_pagamento) ? ' (calculado)' : ''}</span>
-            <input
-              type="date"
-              value={form.data_vencimento}
-              min={form.data_pedido || todayIso()}
-              onChange={(e) => setField('data_vencimento', e.target.value)}
-            />
-          </label>
+          {PRAZO_FORMAS.has(form.forma_pagamento) && (
+            <label className="field">
+              <span>Vencimento{form.prazo_pagamento ? ' (calculado)' : ''}</span>
+              <input
+                type="date"
+                value={form.data_vencimento}
+                onChange={(e) => setField('data_vencimento', e.target.value)}
+              />
+            </label>
+          )}
 
           <label className="field">
             <span>Centro de custo</span>
@@ -963,9 +1077,8 @@ function FormularioPedido({ pedidoInicial, itensIniciais, onSaved, onCancel }) {
             <select
               value={form.criado_por}
               onChange={(e) => setField('criado_por', e.target.value)}
-              disabled={!form.filial_id}
             >
-              <option value="">{form.filial_id ? 'Selecione...' : 'Selecione a filial primeiro'}</option>
+              <option value="">Selecione...</option>
               {colaboradores.map((c) => (
                 <option key={c.id} value={c.id}>{c.nome_completo}{c.cargo ? ` — ${c.cargo}` : ''}</option>
               ))}
@@ -1035,14 +1148,6 @@ function FormularioPedido({ pedidoInicial, itensIniciais, onSaved, onCancel }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
           <strong style={{ fontSize: 14 }}>Itens do pedido</strong>
           <span style={{ fontSize: 12, color: '#888' }}>{itens.length} {itens.length === 1 ? 'item' : 'itens'}</span>
-          <button
-            type="button"
-            className="button-secondary"
-            style={{ fontSize: 12, padding: '3px 10px' }}
-            onClick={() => setShowCatalogo(true)}
-          >
-            + Do catálogo
-          </button>
           {grandTotal > 0 && (
             <span style={{ marginLeft: 'auto', fontWeight: 700, fontSize: 15, color: 'var(--accent, #1a73e8)' }}>
               Total: {formatCurrency(grandTotal)}
@@ -1093,25 +1198,31 @@ function FormularioPedido({ pedidoInicial, itensIniciais, onSaved, onCancel }) {
           </table>
         </div>
 
-        <button type="button" className="button-secondary" onClick={addItem}>
-          + Adicionar item
-        </button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button type="button" className="button-secondary" onClick={addItem}>+ Adicionar item</button>
+          {catalogoItens.length > 0 && (
+            <button type="button" className="button-secondary" onClick={() => setShowCatalogo(true)}>
+              Selecionar do catálogo
+            </button>
+          )}
+        </div>
       </form>
 
       {showCatalogo && (
-        <CatalogoModal
-          filialId={form.filial_id || null}
+        <ModalCatalogo
+          catalogoItens={catalogoItens}
           onAdd={addFromCatalog}
           onClose={() => setShowCatalogo(false)}
         />
       )}
+
     </div>
   )
 }
 
 // ─── Painel de itens expandido na lista ──────────────────────────────────────
 
-function PedidoExpandido({ pedidoId, onShowPdf }) {
+function PedidoExpandido({ pedidoId, onShowPdf, isSuperAdmin }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -1206,8 +1317,28 @@ function PedidoExpandido({ pedidoId, onShowPdf }) {
         </div>
       )}
 
+      {/* Observações gerais */}
+      {pedido.observacoes && (
+        <div style={{
+          marginBottom: 8,
+          padding: '8px 12px',
+          background: '#fffbeb',
+          border: '1px solid #fde68a',
+          borderLeft: '3px solid #f59e0b',
+          borderRadius: 6,
+          fontSize: 13,
+          color: '#78350f',
+          whiteSpace: 'pre-wrap',
+        }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: '#b45309', marginBottom: 3, letterSpacing: '0.05em' }}>
+            Observações
+          </div>
+          {pedido.observacoes}
+        </div>
+      )}
+
       {/* Fluxo de aprovação */}
-      {temAprovacao && (
+      {isSuperAdmin && temAprovacao && (
         <div style={{ marginBottom: 8 }}>
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: '#666', marginBottom: 6, letterSpacing: '0.04em' }}>
             Fluxo de aprovação
@@ -1266,12 +1397,16 @@ function PedidoExpandido({ pedidoId, onShowPdf }) {
 
 // ─── Chip de status com avanço rápido ────────────────────────────────────────
 
-function StatusBadge({ pedido, onRefresh }) {
+function StatusBadge({ pedido, onRefresh, isAutor }) {
   const [busy, setBusy] = useState(false)
   const next = STATUS_NEXT[pedido.status]
-  const canCancel = CAN_CANCEL.has(pedido.status)
+  const canCancel = isAutor && CAN_CANCEL.has(pedido.status)
 
   async function advance(s) {
+    if (s === 'cancelado') {
+      const num = pedido.numero_solicitacao || pedido.numero_pedido || `#${pedido.id}`
+      if (!window.confirm(`Cancelar o pedido ${num}?\n\nEsta ação não pode ser desfeita.`)) return
+    }
     setBusy(true)
     try { await api.updatePedidoStatus(pedido.id, s); onRefresh() } finally { setBusy(false) }
   }
@@ -1310,6 +1445,7 @@ function StatusBadge({ pedido, onRefresh }) {
 
 export default function PedidosCompraPage() {
   const navigate = useNavigate()
+  const { profile } = useAuth()
   const [mode, setMode] = useState('list')          // 'list' | 'form'
   const [editTarget, setEditTarget] = useState(null) // { pedido, itens } | null
   const [pedidos, setPedidos] = useState([])
@@ -1325,9 +1461,13 @@ export default function PedidosCompraPage() {
   const [fFilial, setFFilial] = useState('')
   const [fStatus, setFStatus] = useState('')
   const [fBusca, setFBusca] = useState('')
+  const [fDataDe, setFDataDe] = useState('')
+  const [fDataAte, setFDataAte] = useState('')
+  const [fFornecedor, setFFornecedor] = useState('')
+  const [fCategoria, setFCategoria] = useState('')
 
   useEffect(() => {
-    api.list('filiais', { ativo: true }).then(setFiliais).catch(() => {})
+    api.filiaisDisponiveis().then(setFiliais).catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -1351,15 +1491,30 @@ export default function PedidosCompraPage() {
     return () => { active = false }
   }, [fFilial, fStatus, refreshKey, mode])
 
+  // Ordena por numero_solicitacao do maior para o menor
+  const pedidosOrdenados = useMemo(() => {
+    function solNum(ns) {
+      if (!ns) return 0
+      const m = String(ns).match(/\d+/)
+      return m ? parseInt(m[0], 10) : 0
+    }
+    return [...pedidos].sort((a, b) => solNum(b.numero_solicitacao) - solNum(a.numero_solicitacao))
+  }, [pedidos])
+
   const filtrados = useMemo(() => {
+    let list = pedidosOrdenados
+    if (fDataDe)     list = list.filter((p) => (p.data_pedido || '') >= fDataDe)
+    if (fDataAte)    list = list.filter((p) => (p.data_pedido || '') <= fDataAte)
+    if (fFornecedor) list = list.filter((p) => (p.fornecedor || '').toLowerCase().includes(fFornecedor.trim().toLowerCase()))
+    if (fCategoria)  list = list.filter((p) => (p._categorias || []).includes(fCategoria))
     const q = fBusca.trim().toLowerCase()
-    if (!q) return pedidos
-    return pedidos.filter((p) =>
+    if (q) list = list.filter((p) =>
       [p.numero_pedido, p.numero_solicitacao, p.fornecedor, p.centro_custo, p.criado_por_nome]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q))
     )
-  }, [pedidos, fBusca])
+    return list
+  }, [pedidosOrdenados, fDataDe, fDataAte, fFornecedor, fCategoria, fBusca])
 
   function openNew() { setEditTarget(null); setMode('form') }
 
@@ -1381,6 +1536,20 @@ export default function PedidosCompraPage() {
   }
 
   function handleCancel() { setEditTarget(null); setMode('list') }
+
+  async function handleExcluirPedido(pedido) {
+    const num = pedido.numero_solicitacao || pedido.numero_pedido || `#${pedido.id}`
+    const confirmado = window.confirm(
+      `Tem certeza que deseja excluir o pedido ${num}?\n\nEsta ação não pode ser desfeita.`
+    )
+    if (!confirmado) return
+    try {
+      await api.remove('pedidos_compra', pedido.id)
+      setRefreshKey((k) => k + 1)
+    } catch (err) {
+      alert(err.message || 'Erro ao excluir pedido.')
+    }
+  }
 
   function toggleExpand(id) { setExpandedId((prev) => (prev === id ? null : id)) }
 
@@ -1435,16 +1604,55 @@ export default function PedidosCompraPage() {
               {STATUS_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </label>
+          <label className="field filter-field">
+            <span>Categoria</span>
+            <select value={fCategoria} onChange={(e) => setFCategoria(e.target.value)}>
+              <option value="">Todas</option>
+              {CATEGORIA_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </label>
+          <label className="field filter-field">
+            <span>Data de (pedido)</span>
+            <input type="date" value={fDataDe} onChange={(e) => setFDataDe(e.target.value)} />
+          </label>
+          <label className="field filter-field">
+            <span>Data até (pedido)</span>
+            <input type="date" value={fDataAte} onChange={(e) => setFDataAte(e.target.value)} />
+          </label>
+          <label className="field filter-field">
+            <span>Fornecedor</span>
+            <input
+              type="text"
+              placeholder="Filtrar por fornecedor..."
+              value={fFornecedor}
+              onChange={(e) => setFFornecedor(e.target.value)}
+            />
+          </label>
           <label className="field filter-field" style={{ gridColumn: 'span 2' }}>
             <span>Buscar</span>
             <input
               type="text"
-              placeholder="Número, solicitação, fornecedor, centro de custo..."
+              placeholder="Número, solicitação, centro de custo..."
               value={fBusca}
               onChange={(e) => setFBusca(e.target.value)}
             />
           </label>
         </div>
+        {(fDataDe || fDataAte || fFornecedor || fCategoria || fStatus) && (
+          <div style={{ marginTop: 8 }}>
+            <button
+              type="button"
+              className="button-secondary"
+              style={{ fontSize: 12, padding: '3px 10px' }}
+              onClick={() => { setFDataDe(''); setFDataAte(''); setFFornecedor(''); setFCategoria(''); setFStatus(''); setFBusca('') }}
+            >
+              ✕ Limpar filtros
+            </button>
+            <span style={{ fontSize: 12, color: '#888', marginLeft: 10 }}>
+              {filtrados.length} pedido(s) encontrado(s)
+            </span>
+          </div>
+        )}
       </div>
 
       {erro && <div className="alert-error">{erro}</div>}
@@ -1473,6 +1681,7 @@ export default function PedidosCompraPage() {
                   <th>Total</th>
                   <th>Status</th>
                   <th style={{ width: 70 }}>Editar</th>
+                  <th style={{ width: 50 }} />
                 </tr>
               </thead>
               <tbody>
@@ -1509,7 +1718,7 @@ export default function PedidosCompraPage() {
                       <td>{PAGAMENTO_LABELS[pedido.forma_pagamento] || <span style={{ color: '#bbb' }}>—</span>}</td>
                       <td><strong>{formatCurrency(pedido.valor_total_calculado ?? 0)}</strong></td>
                       <td>
-                        <StatusBadge pedido={pedido} onRefresh={() => setRefreshKey((k) => k + 1)} />
+                        <StatusBadge pedido={pedido} onRefresh={() => setRefreshKey((k) => k + 1)} isAutor={Number(profile?.id) === Number(pedido.criado_por)} />
                       </td>
                       <td>
                         <button
@@ -1521,11 +1730,23 @@ export default function PedidosCompraPage() {
                           Editar
                         </button>
                       </td>
+                      <td>
+                        {Number(profile?.id) === Number(pedido.criado_por) && (
+                          <button
+                            type="button"
+                            style={{ fontSize: 11, padding: '3px 8px', borderRadius: 4, border: '1px solid #fca5a5', background: '#fef2f2', cursor: 'pointer', color: '#dc2626' }}
+                            onClick={() => handleExcluirPedido(pedido)}
+                            title="Excluir pedido"
+                          >
+                            ✕
+                          </button>
+                        )}
+                      </td>
                     </tr>
                     {expandedId === pedido.id && (
                       <tr key={'exp-' + pedido.id} className="pedido-expand-row">
-                        <td colSpan={11} style={{ padding: 0 }}>
-                          <PedidoExpandido pedidoId={pedido.id} onShowPdf={setPdfData} />
+                        <td colSpan={12} style={{ padding: 0 }}>
+                          <PedidoExpandido pedidoId={pedido.id} onShowPdf={setPdfData} isSuperAdmin={profile?.is_super_admin} />
                         </td>
                       </tr>
                     )}

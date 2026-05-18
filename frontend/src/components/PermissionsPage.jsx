@@ -4,9 +4,9 @@ import { canCreateResource } from '../lib/permissions'
 import { api } from '../services/api'
 
 const PLATFORM_FILTER_OPTS = [
-  { value: 'all', label: 'Todos' },
-  { value: 'app', label: 'App' },
-  { value: 'web', label: 'Somente Web' },
+  { value: 'all',  label: 'Todos',         desc: 'Exibe todos os escopos do sistema.' },
+  { value: 'app',  label: 'SEG App',       desc: 'Escopos disponíveis no aplicativo mobile (projeto SEG_APP).' },
+  { value: 'web',  label: 'Apenas SEG Web',desc: 'Escopos exclusivos do sistema web (não existem no app).' },
 ]
 
 const INITIAL_FLAGS = {
@@ -27,43 +27,84 @@ const FLAGS_LABELS = [
   ['ativo', 'Colaborador ativo'],
 ]
 
-// Escopos que podem não vir do backend (retro-compatibilidade)
-const EXTRA_SCOPE_GROUPS = [
-  {
-    key: 'operacao_rtm',
-    title: 'Operação RTM',
-    items: [
-      {
-        name: 'menu.presenca',
-        label: 'Menu Presença',
-        platforms: ['web', 'app'],
-        description: 'Libera a tela de presença no grupo Operação RTM do menu lateral.',
-      },
-      {
-        name: 'manage.presenca',
-        label: 'Modificar presença',
-        platforms: ['web', 'app'],
-        description: 'Permite alterar e salvar o quadro diário de presença dos colaboradores.',
-      },
-    ],
-  },
-  {
-    key: 'rh',
-    title: 'RH',
-    items: [
-      {
-        name: 'menu.quadro_funcionarios',
-        label: 'Quadro de funcionários',
-        platforms: ['web', 'app'],
-        description: 'Libera a visão consolidada da equipe por base, com totais e status diários.',
-      },
-    ],
-  },
-]
 
 // ─── Componente reutilizável: grade de escopos ────────────────────────────────
 
+function PlatformFilterBar({ platformFilter, onChange }) {
+  const active = PLATFORM_FILTER_OPTS.find((o) => o.value === platformFilter) || PLATFORM_FILTER_OPTS[0]
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          Plataforma
+        </span>
+        {PLATFORM_FILTER_OPTS.map((opt) => (
+          <button
+            key={opt.value}
+            type="button"
+            className={`button-secondary${platformFilter === opt.value ? ' active' : ''}`}
+            style={{ fontSize: 12, padding: '3px 12px', borderRadius: 20 }}
+            onClick={() => onChange(opt.value)}
+          >
+            {opt.value === 'app' && <span style={{ marginRight: 4 }}>📱</span>}
+            {opt.value === 'web' && <span style={{ marginRight: 4 }}>💻</span>}
+            {opt.label}
+          </button>
+        ))}
+      </div>
+      {platformFilter !== 'all' && (
+        <div style={{
+          padding: '7px 12px', borderRadius: 6, fontSize: 12,
+          background: platformFilter === 'app' ? '#e8f5e9' : '#f0f4ff',
+          color: platformFilter === 'app' ? '#2e7d32' : '#1a237e',
+          border: `1px solid ${platformFilter === 'app' ? '#c8e6c9' : '#c5cae9'}`,
+        }}>
+          {active.desc}
+          {platformFilter === 'app' && (
+            <strong style={{ marginLeft: 6 }}>
+              Ative o filtro &quot;SEG App&quot; para ver só o que existe no aplicativo mobile.
+            </strong>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Constrói mapa: scopeName → lista de scopes que ele ativa automaticamente
+function buildAutoEnableMap(scopeGroups) {
+  const map = {}
+  for (const group of scopeGroups) {
+    for (const item of group.items || []) {
+      if (item.auto_enable?.length) map[item.name] = item.auto_enable
+    }
+  }
+  return map
+}
+
+// Constrói mapa: scopeName → label legível
+function buildLabelMap(scopeGroups) {
+  const map = {}
+  for (const group of scopeGroups) {
+    for (const item of group.items || []) map[item.name] = item.label
+  }
+  return map
+}
+
+// Handler de toggle com auto_enable: ao ativar um escopo, ativa também seus deps
+function makeToggleHandler(setScopes, autoEnableMap) {
+  return (name, checked) => {
+    setScopes((prev) => {
+      if (!checked) return prev.filter((x) => x !== name)
+      const deps = autoEnableMap[name] || []
+      return [...new Set([...prev, name, ...deps])]
+    })
+  }
+}
+
 function ScopeGrid({ scopeGroups, activeScopes, onToggle, platformFilter = 'all' }) {
+  const labelMap = useMemo(() => buildLabelMap(scopeGroups), [scopeGroups])
+
   const visibleGroups = useMemo(() => {
     if (platformFilter === 'all') return scopeGroups
     return scopeGroups
@@ -87,33 +128,49 @@ function ScopeGrid({ scopeGroups, activeScopes, onToggle, platformFilter = 'all'
             <span className="eyebrow">{group.title}</span>
             <h2>{group.title}</h2>
           </div>
-          {group.key === 'operacao_rtm' && (
-            <div className="readonly-box permissions-inline-note">
-              Para liberar a operação diária, marque pelo menos Menu Presença. Para permitir edição e salvamento do
-              quadro, marque também Modificar presença.
-            </div>
-          )}
+
           <div className="permissions-scope-grid">
             {group.items.map((item) => {
               const isApp = (item.platforms || ['web']).includes('app')
+              const isWebOnly = !isApp
+              const autoLabels = (item.auto_enable || []).map((s) => labelMap[s] || s)
+              const isChecked = activeScopes.includes(item.name)
               return (
-                <label className="permissions-scope-item" key={item.name}>
+                <label
+                  className="permissions-scope-item"
+                  key={item.name}
+                  style={{
+                    borderLeft: isApp ? '3px solid #4caf50' : '3px solid transparent',
+                    background: isChecked ? 'rgba(26,115,232,0.04)' : '',
+                  }}
+                >
                   <input
-                    checked={activeScopes.includes(item.name)}
+                    checked={isChecked}
                     onChange={(e) => onToggle(item.name, e.target.checked)}
                     type="checkbox"
                   />
                   <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                       <strong>{item.label}</strong>
                       {isApp && (
                         <span style={{
-                          fontSize: 10, fontWeight: 700, padding: '1px 6px', borderRadius: 4,
-                          background: '#e8f5e9', color: '#2e7d32', letterSpacing: '0.02em',
-                        }}>App</span>
+                          fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
+                          background: '#e8f5e9', color: '#2e7d32', border: '1px solid #a5d6a7',
+                        }}>📱 App</span>
+                      )}
+                      {isWebOnly && platformFilter === 'all' && (
+                        <span style={{
+                          fontSize: 10, padding: '2px 6px', borderRadius: 4,
+                          background: '#f5f5f5', color: '#888', border: '1px solid #e0e0e0',
+                        }}>💻 Web</span>
                       )}
                     </div>
                     <span>{item.description}</span>
+                    {autoLabels.length > 0 && (
+                      <span style={{ fontSize: 10, color: '#1a73e8', marginTop: 2, display: 'block' }}>
+                        ↳ Ativa também: {autoLabels.join(', ')}
+                      </span>
+                    )}
                     <small className="permissions-scope-code">{item.name}</small>
                   </div>
                 </label>
@@ -143,6 +200,9 @@ function AbaColaborador({ config, scopeGroups }) {
   const [error, setError] = useState('')
   const [cargos, setCargos] = useState([])
   const [platformFilter, setPlatformFilter] = useState('all')
+
+  const autoEnableMap = useMemo(() => buildAutoEnableMap(scopeGroups), [scopeGroups])
+  const handleToggleScope = useMemo(() => makeToggleHandler(setActiveScopes, autoEnableMap), [autoEnableMap])
 
   useEffect(() => {
     api.getCargosModelos().then(setCargos).catch(() => {})
@@ -369,26 +429,11 @@ function AbaColaborador({ config, scopeGroups }) {
             </div>
 
             {/* Escopos de menu e funcionalidade */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>Plataforma:</span>
-              {PLATFORM_FILTER_OPTS.map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  className={`button-secondary${platformFilter === opt.value ? ' active' : ''}`}
-                  style={{ fontSize: 12, padding: '3px 10px' }}
-                  onClick={() => setPlatformFilter(opt.value)}
-                >
-                  {opt.label}
-                </button>
-              ))}
-            </div>
+            <PlatformFilterBar platformFilter={platformFilter} onChange={setPlatformFilter} />
 
             <ScopeGrid
               activeScopes={activeScopes}
-              onToggle={(name, checked) =>
-                setActiveScopes((s) => (checked ? [...new Set([...s, name])] : s.filter((x) => x !== name)))
-              }
+              onToggle={handleToggleScope}
               scopeGroups={scopeGroups}
               platformFilter={platformFilter}
             />
@@ -422,6 +467,9 @@ function AbaCargos({ scopeGroups }) {
   const [feedback, setFeedback] = useState('')
   const [error, setError] = useState('')
   const [platformFilter, setPlatformFilter] = useState('all')
+
+  const autoEnableMap = useMemo(() => buildAutoEnableMap(scopeGroups), [scopeGroups])
+  const handleToggleCargoScope = useMemo(() => makeToggleHandler(setCargoScopes, autoEnableMap), [autoEnableMap])
 
   // Formulário novo cargo
   const [showAddForm, setShowAddForm] = useState(false)
@@ -678,9 +726,7 @@ function AbaCargos({ scopeGroups }) {
 
             <ScopeGrid
               activeScopes={cargoScopes}
-              onToggle={(name, checked) =>
-                setCargoScopes((s) => (checked ? [...new Set([...s, name])] : s.filter((x) => x !== name)))
-              }
+              onToggle={handleToggleCargoScope}
               scopeGroups={scopeGroups}
               platformFilter={platformFilter}
             />
@@ -708,26 +754,140 @@ function AbaCargos({ scopeGroups }) {
 // ─── Aba 3: configuração de workflows de aprovação ───────────────────────────
 
 const TIPO_ICONS = {
-  manutencoes:   '🔧',
+  manutencoes:    '🔧',
   pedidos_compra: '📦',
-  horas_extras:  '⏰',
+  horas_extras:   '⏰',
 }
 
-function AbaAprovacoes({ scopeGroups }) {
-  const [configs, setConfigs]     = useState([])
+function AprovadoresSelector({ scopeName, label, allCollaborators, onToggle }) {
+  const [colabIds, setColabIds] = useState(null) // null = loading
+  const [search, setSearch] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [localChanges, setLocalChanges] = useState({}) // colabId → true/false
+
+  useEffect(() => {
+    if (!scopeName) return
+    setColabIds(null)
+    setLocalChanges({})
+    api.permissoesPorEscopo(scopeName)
+      .then((r) => setColabIds(new Set(r.collab_ids || [])))
+      .catch(() => setColabIds(new Set()))
+  }, [scopeName])
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return (allCollaborators || []).filter(
+      (c) => !q || c.nome_completo?.toLowerCase().includes(q) || c.cargo?.toLowerCase().includes(q)
+    )
+  }, [allCollaborators, search])
+
+  function hasScope(colabId) {
+    if (localChanges[colabId] !== undefined) return localChanges[colabId]
+    return colabIds?.has(colabId) ?? false
+  }
+
+  function toggle(colabId, checked) {
+    setLocalChanges((prev) => ({ ...prev, [colabId]: checked }))
+  }
+
+  async function saveChanges() {
+    setSaving(true)
+    try {
+      const entries = Object.entries(localChanges)
+      await Promise.all(
+        entries.map(([id, ativo]) => api.toggleEscopo(Number(id), scopeName, ativo))
+      )
+      const refreshed = await api.permissoesPorEscopo(scopeName)
+      setColabIds(new Set(refreshed.collab_ids || []))
+      setLocalChanges({})
+      if (onToggle) onToggle()
+    } catch (err) {
+      alert('Erro ao salvar: ' + (err.message || 'Falha'))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const hasChanges = Object.keys(localChanges).length > 0
+
+  return (
+    <div style={{ marginBottom: 16 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <div>
+          <strong style={{ fontSize: 13 }}>{label}</strong>
+          <small style={{ marginLeft: 8, fontFamily: 'monospace', color: 'var(--text-muted)', fontSize: 11 }}>{scopeName}</small>
+        </div>
+        {hasChanges && (
+          <button className="button-primary" style={{ fontSize: 12, padding: '3px 12px' }} onClick={saveChanges} disabled={saving} type="button">
+            {saving ? 'Salvando...' : `Salvar (${Object.keys(localChanges).length} alterações)`}
+          </button>
+        )}
+      </div>
+      <input
+        className="field"
+        type="text"
+        placeholder="Buscar por nome ou cargo..."
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        style={{ marginBottom: 8, fontSize: 12 }}
+      />
+      {colabIds === null ? (
+        <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '6px 0' }}>Carregando...</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 3, maxHeight: 220, overflow: 'auto', borderRadius: 6, border: '1px solid var(--border, #e5e5e5)', padding: '4px 0' }}>
+          {filtered.length === 0 && (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '8px 12px' }}>Nenhum colaborador encontrado.</div>
+          )}
+          {filtered.map((c) => {
+            const checked = hasScope(c.id)
+            const changed = localChanges[c.id] !== undefined
+            return (
+              <label
+                key={c.id}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10, padding: '6px 12px', cursor: 'pointer',
+                  background: checked ? 'rgba(74,144,226,0.06)' : 'transparent',
+                  borderLeft: changed ? '3px solid #f59e0b' : '3px solid transparent',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={checked}
+                  onChange={(e) => toggle(c.id, e.target.checked)}
+                  style={{ flexShrink: 0 }}
+                />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ fontWeight: checked ? 600 : 400, fontSize: 13 }}>{c.nome_completo}</span>
+                  {c.cargo && <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 6 }}>{c.cargo}</span>}
+                </div>
+                {checked && !changed && <span style={{ fontSize: 10, color: '#2e7d32', fontWeight: 700 }}>✓ Aprovador</span>}
+                {changed && <span style={{ fontSize: 10, color: '#f59e0b', fontWeight: 700 }}>pendente</span>}
+              </label>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function AbaAprovacoes({ scopeGroups, config }) {
+  const [configs, setConfigs]       = useState([])
   const [selectedRt, setSelectedRt] = useState(null)
-  const [form, setForm]           = useState({})
-  const [loading, setLoading]     = useState(true)
-  const [saving, setSaving]       = useState(false)
-  const [feedback, setFeedback]   = useState('')
-  const [error, setError]         = useState('')
+  const [form, setForm]             = useState({})
+  const [loading, setLoading]       = useState(true)
+  const [saving, setSaving]         = useState(false)
+  const [feedback, setFeedback]     = useState('')
+  const [error, setError]           = useState('')
+
+  const allCollaborators = useMemo(() => config?.collaborators || [], [config])
 
   const menuScopes = useMemo(
     () => scopeGroups.flatMap((g) => g.items.filter((i) => i.name.startsWith('menu.'))),
     [scopeGroups],
   )
   const approvalScopes = useMemo(
-    () => scopeGroups.flatMap((g) => g.items.filter((i) => i.name.startsWith('aprovar.'))),
+    () => scopeGroups.flatMap((g) => g.items.filter((i) => i.name.startsWith('aprovar.') || i.name.startsWith('analisar.'))),
     [scopeGroups],
   )
 
@@ -748,10 +908,7 @@ function AbaAprovacoes({ scopeGroups }) {
 
   function handleSelect(cfg) {
     setSelectedRt(cfg.resource_type)
-    setForm({
-      ...cfg,
-      pending_statuses_str: (cfg.pending_statuses || []).join(', '),
-    })
+    setForm({ ...cfg, pending_statuses_str: (cfg.pending_statuses || []).join(', ') })
     setFeedback('')
     setError('')
   }
@@ -803,8 +960,7 @@ function AbaAprovacoes({ scopeGroups }) {
           <h2>Tipos de aprovação</h2>
         </div>
         <div className="readonly-box permissions-inline-note">
-          Selecione um processo para configurar quem aprova, quais status são usados e se ele aparece na tela de
-          Acompanhamento.
+          Selecione um processo para configurar quem aprova e gerenciar aprovadores designados.
         </div>
         {loading ? (
           <div className="empty-state">Carregando...</div>
@@ -820,9 +976,7 @@ function AbaAprovacoes({ scopeGroups }) {
                 style={{ opacity: cfg.ativo ? 1 : 0.5 }}
                 type="button"
               >
-                <strong>
-                  {TIPO_ICONS[cfg.resource_type] || '📋'} {cfg.label}
-                </strong>
+                <strong>{TIPO_ICONS[cfg.resource_type] || '📋'} {cfg.label}</strong>
                 <span style={{ fontSize: 12, fontFamily: 'monospace' }}>{cfg.approval_scope}</span>
                 <small>{cfg.ativo ? '● Ativo' : '○ Inativo'}</small>
               </button>
@@ -839,21 +993,42 @@ function AbaAprovacoes({ scopeGroups }) {
               <span className="eyebrow">Configuração</span>
               <h2>Selecione um processo</h2>
             </div>
-            <div className="empty-state">
-              Clique em um processo à esquerda para editar suas regras de aprovação.
-            </div>
+            <div className="empty-state">Clique em um processo à esquerda para editar.</div>
           </>
         ) : (
           <>
             <div className="section-title">
               <span className="eyebrow">Workflow</span>
-              <h2>
-                {TIPO_ICONS[selectedRt] || '📋'} {form.label}
-              </h2>
+              <h2>{TIPO_ICONS[selectedRt] || '📋'} {form.label}</h2>
               <small style={{ fontFamily: 'monospace', color: 'var(--text-muted)' }}>{selectedRt}</small>
             </div>
 
-            {/* Escopos */}
+            {/* ── Aprovadores designados ── */}
+            <div className="permissions-block">
+              <div className="section-title">
+                <span className="eyebrow">Pessoas</span>
+                <h2>Aprovadores designados</h2>
+              </div>
+              <div className="readonly-box permissions-inline-note" style={{ marginBottom: 12 }}>
+                Marque os colaboradores que podem atuar como aprovadores neste processo. Isso concede o escopo de permissão correspondente diretamente.
+              </div>
+
+              {selectedRt === 'pedidos_compra' && (
+                <AprovadoresSelector
+                  scopeName="analisar.pedidos_compra"
+                  label="Analistas (pendente → análise)"
+                  allCollaborators={allCollaborators}
+                />
+              )}
+
+              <AprovadoresSelector
+                scopeName={form.approval_scope}
+                label={selectedRt === 'pedidos_compra' ? 'Aprovadores (análise → aprovado)' : 'Aprovadores'}
+                allCollaborators={allCollaborators}
+              />
+            </div>
+
+            {/* ── Escopos ── */}
             <div className="permissions-block">
               <div className="section-title">
                 <span className="eyebrow">Acesso</span>
@@ -863,15 +1038,8 @@ function AbaAprovacoes({ scopeGroups }) {
                 {field(
                   'Escopo de visualização',
                   'Quem pode VER as solicitações na tela de Acompanhamento',
-                  <select
-                    value={form.view_scope || ''}
-                    onChange={(e) => setForm((f) => ({ ...f, view_scope: e.target.value }))}
-                  >
-                    {menuScopes.map((s) => (
-                      <option key={s.name} value={s.name}>
-                        {s.name} — {s.label}
-                      </option>
-                    ))}
+                  <select value={form.view_scope || ''} onChange={(e) => setForm((f) => ({ ...f, view_scope: e.target.value }))}>
+                    {menuScopes.map((s) => <option key={s.name} value={s.name}>{s.name} — {s.label}</option>)}
                     {!menuScopes.find((s) => s.name === form.view_scope) && form.view_scope && (
                       <option value={form.view_scope}>{form.view_scope}</option>
                     )}
@@ -880,15 +1048,8 @@ function AbaAprovacoes({ scopeGroups }) {
                 {field(
                   'Escopo de aprovação',
                   'Quem pode APROVAR ou REJEITAR',
-                  <select
-                    value={form.approval_scope || ''}
-                    onChange={(e) => setForm((f) => ({ ...f, approval_scope: e.target.value }))}
-                  >
-                    {approvalScopes.map((s) => (
-                      <option key={s.name} value={s.name}>
-                        {s.name} — {s.label}
-                      </option>
-                    ))}
+                  <select value={form.approval_scope || ''} onChange={(e) => setForm((f) => ({ ...f, approval_scope: e.target.value }))}>
+                    {approvalScopes.map((s) => <option key={s.name} value={s.name}>{s.name} — {s.label}</option>)}
                     {!approvalScopes.find((s) => s.name === form.approval_scope) && form.approval_scope && (
                       <option value={form.approval_scope}>{form.approval_scope}</option>
                     )}
@@ -897,78 +1058,42 @@ function AbaAprovacoes({ scopeGroups }) {
               </div>
             </div>
 
-            {/* Status */}
+            {/* ── Status ── */}
             <div className="permissions-block">
               <div className="section-title">
                 <span className="eyebrow">Status</span>
                 <h2>Fluxo de aprovação</h2>
               </div>
               <div className="readonly-box permissions-inline-note">
-                Define quais status uma solicitação tem enquanto aguarda aprovação e para qual status ela vai após ser
-                aprovada ou rejeitada.
+                Define quais status uma solicitação tem enquanto aguarda aprovação.
               </div>
               <div className="detail-grid permissions-meta-grid">
-                {field(
-                  'Status que aguardam aprovação',
-                  'Separar por vírgula — ex.: pendente, pendente_aprovacao',
-                  <input
-                    value={form.pending_statuses_str || ''}
-                    onChange={(e) => setForm((f) => ({ ...f, pending_statuses_str: e.target.value }))}
-                    placeholder="pendente_aprovacao"
-                  />,
-                )}
-                {field(
-                  'Status ao APROVAR',
-                  '',
-                  <input
-                    value={form.approved_status || ''}
-                    onChange={(e) => setForm((f) => ({ ...f, approved_status: e.target.value }))}
-                    placeholder="aprovado"
-                  />,
-                )}
-                {field(
-                  'Status ao REJEITAR',
-                  '',
-                  <input
-                    value={form.rejected_status || ''}
-                    onChange={(e) => setForm((f) => ({ ...f, rejected_status: e.target.value }))}
-                    placeholder="reprovado"
-                  />,
-                )}
+                {field('Status que aguardam aprovação', 'Separar por vírgula',
+                  <input value={form.pending_statuses_str || ''} onChange={(e) => setForm((f) => ({ ...f, pending_statuses_str: e.target.value }))} placeholder="pendente_aprovacao" />)}
+                {field('Status ao APROVAR', '',
+                  <input value={form.approved_status || ''} onChange={(e) => setForm((f) => ({ ...f, approved_status: e.target.value }))} placeholder="aprovado" />)}
+                {field('Status ao REJEITAR', '',
+                  <input value={form.rejected_status || ''} onChange={(e) => setForm((f) => ({ ...f, rejected_status: e.target.value }))} placeholder="reprovado" />)}
               </div>
             </div>
 
-            {/* Regras */}
+            {/* ── Regras ── */}
             <div className="permissions-block">
               <div className="section-title">
                 <span className="eyebrow">Regras</span>
                 <h2>Obrigatoriedade e visibilidade</h2>
               </div>
               <div className="permissions-checkbox-grid">
-                <label className="field checkbox-field permissions-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(form.require_comment_on_approve)}
-                    onChange={(e) => setForm((f) => ({ ...f, require_comment_on_approve: e.target.checked }))}
-                  />
-                  <span>Exigir comentário ao aprovar</span>
-                </label>
-                <label className="field checkbox-field permissions-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(form.require_comment_on_reject)}
-                    onChange={(e) => setForm((f) => ({ ...f, require_comment_on_reject: e.target.checked }))}
-                  />
-                  <span>Exigir motivo ao rejeitar</span>
-                </label>
-                <label className="field checkbox-field permissions-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={Boolean(form.ativo)}
-                    onChange={(e) => setForm((f) => ({ ...f, ativo: e.target.checked }))}
-                  />
-                  <span>Processo ativo na tela de Acompanhamento</span>
-                </label>
+                {[
+                  ['require_comment_on_approve', 'Exigir comentário ao aprovar'],
+                  ['require_comment_on_reject', 'Exigir motivo ao rejeitar'],
+                  ['ativo', 'Processo ativo na tela de Acompanhamento'],
+                ].map(([key, label]) => (
+                  <label key={key} className="field checkbox-field permissions-checkbox">
+                    <input type="checkbox" checked={Boolean(form[key])} onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.checked }))} />
+                    <span>{label}</span>
+                  </label>
+                ))}
               </div>
             </div>
 
@@ -977,7 +1102,7 @@ function AbaAprovacoes({ scopeGroups }) {
 
             <div className="button-row">
               <button className="button-primary" disabled={saving} onClick={handleSave} type="button">
-                {saving ? 'Salvando...' : 'Salvar configuração'}
+                {saving ? 'Salvando...' : 'Salvar configuração do workflow'}
               </button>
             </div>
           </>
@@ -990,6 +1115,7 @@ function AbaAprovacoes({ scopeGroups }) {
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function PermissionsPage() {
+  const { profile } = useAuth()
   const [activeTab, setActiveTab] = useState('colaborador')
   const [config, setConfig] = useState({ collaborators: [], filiais: [], scope_groups: [] })
   const [loading, setLoading] = useState(true)
@@ -1017,13 +1143,7 @@ export default function PermissionsPage() {
     }
   }, [])
 
-  // Mescla escopos do backend com extras legados
-  const scopeGroups = useMemo(() => {
-    const groups = config.scope_groups || []
-    const knownScopes = new Set(groups.flatMap((g) => g.items.map((i) => i.name)))
-    const extras = EXTRA_SCOPE_GROUPS.filter((eg) => eg.items.some((i) => !knownScopes.has(i.name)))
-    return [...groups, ...extras]
-  }, [config.scope_groups])
+  const scopeGroups = useMemo(() => config.scope_groups || [], [config.scope_groups])
 
   if (loading) {
     return (
@@ -1063,18 +1183,20 @@ export default function PermissionsPage() {
         >
           Cargos / Funções
         </button>
-        <button
-          className={`button-secondary${activeTab === 'aprovacoes' ? ' active' : ''}`}
-          onClick={() => setActiveTab('aprovacoes')}
-          type="button"
-        >
-          Aprovações
-        </button>
+        {profile?.is_super_admin && (
+          <button
+            className={`button-secondary${activeTab === 'aprovacoes' ? ' active' : ''}`}
+            onClick={() => setActiveTab('aprovacoes')}
+            type="button"
+          >
+            Aprovações
+          </button>
+        )}
       </div>
 
       {activeTab === 'colaborador' && <AbaColaborador config={config} scopeGroups={scopeGroups} />}
       {activeTab === 'cargos' && <AbaCargos scopeGroups={scopeGroups} />}
-      {activeTab === 'aprovacoes' && <AbaAprovacoes scopeGroups={scopeGroups} />}
+      {activeTab === 'aprovacoes' && profile?.is_super_admin && <AbaAprovacoes scopeGroups={scopeGroups} config={config} />}
     </section>
   )
 }

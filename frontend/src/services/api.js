@@ -70,6 +70,14 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
+  permissoesPorEscopo: (scope) => request(`/permissoes/por-escopo?scope=${encodeURIComponent(scope)}`),
+  colaboradoresComEscopo: (scope) => request(`/colaboradores/com-escopo?scope=${encodeURIComponent(scope)}`),
+  filiaisDisponiveis: () => request('/filiais/disponiveis'),
+  toggleEscopo: (colaborador_id, scope_name, ativo) =>
+    request('/permissoes/toggle-escopo', {
+      method: 'POST',
+      body: JSON.stringify({ colaborador_id, scope_name, ativo }),
+    }),
   getApprovalConfigs: () => request('/approval-configs'),
   updateApprovalConfig: (resourceType, payload) =>
     request(`/approval-configs/${resourceType}`, {

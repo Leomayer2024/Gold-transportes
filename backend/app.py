@@ -707,96 +707,134 @@ RESOURCE_DEFINITIONS = {
 }
 
 PERMISSION_SCOPE_GROUPS = [
+    # ── Acompanhamento / Aprovações ───────────────────────────────────────────
     {
-        'key': 'menus',
-        'title': 'Menus e telas',
+        'key': 'acompanhamento',
+        'title': 'Acompanhamento / Aprovações',
         'items': [
-            {'name': 'menu.dashboard',               'label': 'Dashboard',                        'platforms': ['web'],         'description': 'Permite abrir o painel inicial.'},
-            {'name': 'menu.filiais',                  'label': 'Filiais',                          'platforms': ['web'],         'description': 'Mostra o cadastro de filiais no menu.'},
-            {'name': 'menu.colaboradores',            'label': 'Colaboradores',                    'platforms': ['web'],         'description': 'Mostra o cadastro de colaboradores no menu.'},
-            {'name': 'menu.custos_rh',                'label': 'Custos RH',                        'platforms': ['web'],         'description': 'Mostra o painel de custos de mão de obra, contratos e acuracidade financeira por base.'},
-            {'name': 'menu.contratos_operacionais',   'label': 'Contratos operacionais',           'platforms': ['web'],         'description': 'Mostra o cadastro de contratos por base, com valor, headcount e cargos previstos.'},
-            {'name': 'menu.colaborador_documentos',   'label': 'Documentos RH',                    'platforms': ['web'],         'description': 'Mostra o controle documental de colaboradores, como CNH, ASO e certificados.'},
-            {'name': 'menu.eventos_rh',               'label': 'Planejamento RH',                  'platforms': ['web'],         'description': 'Mostra férias, afastamentos, licenças e demais eventos planejados do RH.'},
-            {'name': 'menu.veiculos',                 'label': 'Veículos',                         'platforms': ['web'],         'description': 'Mostra o cadastro de veículos no menu.'},
-            {'name': 'menu.rotas_carregamento',       'label': 'Referências de carregamento',      'platforms': ['web'],         'description': 'Mostra o cadastro das referências operacionais usadas no carregamento.'},
-            {'name': 'menu.veiculos_carregamento',    'label': 'Veículos de carregamento',         'platforms': ['web'],         'description': 'Mostra o cadastro dos caminhões terceiros usados na operação.'},
-            {'name': 'menu.motivos_parada_carregamento', 'label': 'Motivos de parada',             'platforms': ['web'],         'description': 'Mostra o cadastro dos motivos padrão de parada operacional.'},
-            {'name': 'menu.estoque',                  'label': 'Estoque',                          'platforms': ['web'],         'description': 'Mostra o módulo de estoque no menu.'},
-            {'name': 'menu.estoque_movimentos',       'label': 'Movimentos de estoque',            'platforms': ['web'],         'description': 'Mostra a tela de lançamento de movimentos de estoque (entradas, saídas, trocas).'},
-            {'name': 'menu.cargos',                   'label': 'Cargos / Funções',                 'platforms': ['web'],         'description': 'Mostra o cadastro de cargos e modelos de permissões por função.'},
-            {'name': 'menu.permissoes',               'label': 'Permissões',                       'platforms': ['web'],         'description': 'Mostra a tela de gestão de permissões.'},
-            {'name': 'menu.presenca',                 'label': 'Presença',                         'platforms': ['web', 'app'],  'description': 'Mostra o controle diário de presença.'},
-            {'name': 'menu.quadro_funcionarios',      'label': 'Quadro de funcionários',           'platforms': ['web', 'app'],  'description': 'Mostra o quadro por base com totais e status da equipe.'},
-            {'name': 'menu.bonificacao',              'label': 'Bonificação',                      'platforms': ['web'],         'description': 'Mostra o controle mensal de bonificação por colaborador e os totais pagos.'},
-            {'name': 'menu.bonificacao_metricas',     'label': 'Métricas de bonificação',          'platforms': ['web'],         'description': 'Mostra o cadastro das métricas e valores que compõem a bonificação.'},
-            {'name': 'menu.auditoria',                'label': 'Auditoria',                        'platforms': ['web'],         'description': 'Mostra a trilha de movimentações e alterações realizadas no sistema.'},
-            {'name': 'menu.carregamento',             'label': 'Carregamento',                     'platforms': ['web', 'app'],  'description': 'Mostra o painel de carregamento por turno, caminhão, referência operacional e eventos.'},
-            {'name': 'menu.pedidos_compra',           'label': 'Pedidos de compra',                'platforms': ['web', 'app'],  'description': 'Permite lançar pedidos de compra por base com itens, fornecedor, forma de pagamento e geração de PDF.'},
-            {'name': 'menu.fornecedores',             'label': 'Fornecedores',                     'platforms': ['web'],         'description': 'Acesso ao cadastro de fornecedores para sugestão nos pedidos de compra.'},
-            {'name': 'menu.clientes',                 'label': 'Clientes',                         'platforms': ['web'],         'description': 'Acesso ao cadastro de clientes para sugestão nos contratos e contas a receber.'},
-            {'name': 'menu.feriados',                 'label': 'Feriados',                         'platforms': ['web'],         'description': 'Permite visualizar e gerenciar feriados por UF, município e filial no calendário.'},
-            {'name': 'menu.notas_cte',                'label': 'Notas / CT-e',                     'platforms': ['web'],         'description': 'Permite lançar e controlar notas fiscais, CT-e e faturas pendentes de pagamento.'},
-            {'name': 'menu.gestao_acessos',           'label': 'Gestão de acessos',                'platforms': ['web'],         'description': 'Exclusivo do administrador master: visualizar colaboradores com acesso e redefinir senhas.'},
-            {'name': 'menu.manutencoes',              'label': 'Manutenção de frota',              'platforms': ['web'],         'description': 'Mostra o módulo de ordens de serviço de manutenção de veículos.'},
-            {'name': 'menu.abastecimentos',           'label': 'Abastecimentos',                   'platforms': ['web'],         'description': 'Mostra o histórico de abastecimentos por veículo e filial.'},
-            {'name': 'menu.pneus',                    'label': 'Controle de pneus',                'platforms': ['web'],         'description': 'Mostra o controle de pneus por posição e veículo.'},
-            {'name': 'menu.frota_dashboard',          'label': 'Dashboard de frota',               'platforms': ['web'],         'description': 'Mostra o painel consolidado de frota com custos, manutenções e consumo.'},
-            {'name': 'menu.veiculos_documentos',      'label': 'Documentos de frota',              'platforms': ['web'],         'description': 'Mostra o controle documental dos veículos: CRLV, seguro, licenças e outros documentos com vencimento.'},
-            {'name': 'menu.horas_extras',             'label': 'Horas extras',                     'platforms': ['web', 'app'],  'description': 'Mostra o registro e aprovação de horas extras por colaborador e filial.'},
-            {'name': 'menu.horas_extras_rtm',         'label': 'Calc. Horas Extras (RTM)',         'platforms': ['web', 'app'],  'description': 'Calculadora RTM: cola dados da planilha e calcula totais de horas extras com valores hora lidos automaticamente do contrato de cada colaborador.'},
-            {'name': 'menu.acompanhamento',           'label': 'Acompanhamento de solicitações',   'platforms': ['web', 'app'],  'description': 'Mostra a tela centralizada de aprovação de manutenções, pedidos de compra e horas extras.'},
-            {'name': 'menu.contas_receber',           'label': 'Contas a Receber',                 'platforms': ['web'],         'description': 'Controle de obrigações a receber de clientes (White Martins e outros), com status, documentos, SLA e alertas.'},
-            {'name': 'menu.contas_pagar',             'label': 'Contas a Pagar',                   'platforms': ['web'],         'description': 'Controle de obrigações a pagar: fornecedores, horas extras Gold, hospedagens e outras despesas.'},
-            {'name': 'menu.banco',                    'label': 'Banco / Conciliação',              'platforms': ['web'],         'description': 'Gestão de contas bancárias, lançamentos e conciliação com contas a receber e pagar.'},
+            {'name': 'menu.acompanhamento',     'label': 'Ver tela de acompanhamento',   'platforms': ['web', 'app'], 'auto_enable': [],                                             'description': 'Mostra a tela centralizada de aprovação de manutenções, pedidos de compra e horas extras.'},
+            {'name': 'aprovar.pedidos_compra',  'label': 'Aprovar pedidos de compra',    'platforms': ['web', 'app'], 'auto_enable': ['menu.acompanhamento', 'menu.pedidos_compra'], 'description': 'Permite aprovar ou reprovar pedidos de compra.'},
+            {'name': 'analisar.pedidos_compra', 'label': 'Analisar pedidos de compra',   'platforms': ['web', 'app'], 'auto_enable': ['menu.acompanhamento', 'menu.pedidos_compra'], 'description': 'Permite colocar um pedido em análise (pendente → analise) e rejeitá-lo nesta etapa.'},
+            {'name': 'aprovar.horas_extras',    'label': 'Aprovar horas extras',         'platforms': ['web', 'app'], 'auto_enable': ['menu.acompanhamento', 'menu.horas_extras'],   'description': 'Permite aprovar ou reprovar solicitações de horas extras.'},
+            {'name': 'aprovar.manutencoes',     'label': 'Aprovar OS de manutenção',     'platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.manutencoes'],    'description': 'Permite aprovar ou reprovar ordens de serviço de manutenção.'},
+            {'name': 'aprovar.abastecimentos',  'label': 'Aprovar abastecimentos',       'platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.abastecimentos'], 'description': 'Permite aprovar ou reprovar lançamentos de abastecimento.'},
+            {'name': 'aprovar.pneus',           'label': 'Aprovar controle de pneus',    'platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.pneus'],          'description': 'Permite aprovar ou reprovar lançamentos de controle de pneus.'},
         ],
     },
+    # ── RH ────────────────────────────────────────────────────────────────────
     {
-        'key': 'cadastros',
-        'title': 'Cadastro por módulo',
+        'key': 'rh',
+        'title': 'RH',
         'items': [
-            {'name': 'create.filiais',                      'label': 'Cadastrar filiais',                    'platforms': ['web'],        'description': 'Permite criar novas filiais.'},
-            {'name': 'create.colaboradores',                'label': 'Cadastrar colaboradores',              'platforms': ['web'],        'description': 'Permite criar novos colaboradores.'},
-            {'name': 'create.contratos_operacionais',       'label': 'Cadastrar contratos operacionais',     'platforms': ['web'],        'description': 'Permite criar e manter contratos por base para análise de acuracidade e custos.'},
-            {'name': 'create.colaborador_documentos',       'label': 'Cadastrar documentos RH',              'platforms': ['web'],        'description': 'Permite manter vencimentos, arquivos e dados documentais dos colaboradores.'},
-            {'name': 'create.eventos_rh',                   'label': 'Cadastrar eventos RH',                 'platforms': ['web'],        'description': 'Permite planejar férias, afastamentos, licenças e folgas programadas.'},
-            {'name': 'create.veiculos',                     'label': 'Cadastrar veículos',                   'platforms': ['web'],        'description': 'Permite criar novos veículos.'},
-            {'name': 'create.rotas_carregamento',           'label': 'Cadastrar referências de carregamento','platforms': ['web'],        'description': 'Permite criar referências operacionais usadas na operação de carregamento.'},
-            {'name': 'create.veiculos_carregamento',        'label': 'Cadastrar veículos de carregamento',   'platforms': ['web'],        'description': 'Permite criar caminhões terceiros usados no carregamento.'},
-            {'name': 'create.motivos_parada_carregamento',  'label': 'Cadastrar motivos de parada',          'platforms': ['web'],        'description': 'Permite manter os motivos padrão de parada operacional.'},
-            {'name': 'create.bonificacao_metricas',         'label': 'Cadastrar métricas de bonificação',    'platforms': ['web'],        'description': 'Permite criar e editar métricas usadas no cálculo da bonificação.'},
-            {'name': 'create.estoque',                      'label': 'Cadastrar estoque',                    'platforms': ['web'],        'description': 'Permite criar novos itens de estoque.'},
-            {'name': 'create.estoque_movimentos',           'label': 'Lançar movimentos de estoque',         'platforms': ['web'],        'description': 'Permite registrar entradas, saídas, trocas, devoluções e ajustes de estoque.'},
-            {'name': 'create.cargos',                       'label': 'Cadastrar cargos',                     'platforms': ['web'],        'description': 'Permite criar e editar cargos e seus modelos de permissão.'},
-            {'name': 'create.pedidos_compra',               'label': 'Lançar pedidos de compra',             'platforms': ['web', 'app'], 'description': 'Permite criar pedidos de compra, adicionar itens e alterar status.'},
-            {'name': 'analisar.pedidos_compra',             'label': 'Analisar pedidos de compra',           'platforms': ['web', 'app'], 'description': 'Permite colocar um pedido em análise (pendente → analise) e rejeitá-lo nesta etapa.'},
-            {'name': 'create.fornecedores',                 'label': 'Gerenciar fornecedores',               'platforms': ['web'],        'description': 'Permite criar e editar fornecedores no cadastro.'},
-            {'name': 'create.clientes',                     'label': 'Gerenciar clientes',                   'platforms': ['web'],        'description': 'Permite criar e editar clientes no cadastro.'},
-            {'name': 'create.feriados',                     'label': 'Cadastrar feriados',                   'platforms': ['web'],        'description': 'Permite criar e editar feriados no calendário.'},
-            {'name': 'create.notas_cte',                    'label': 'Lançar notas / CT-e',                  'platforms': ['web'],        'description': 'Permite criar, editar e quitar notas fiscais, CT-e e faturas.'},
-            {'name': 'create.contas_receber',               'label': 'Lançar contas a receber',              'platforms': ['web'],        'description': 'Permite criar e editar lançamentos de contas a receber.'},
-            {'name': 'create.contas_pagar',                 'label': 'Lançar contas a pagar',                'platforms': ['web'],        'description': 'Permite criar e editar lançamentos de contas a pagar.'},
-            {'name': 'create.banco',                        'label': 'Lançar no banco',                      'platforms': ['web'],        'description': 'Permite cadastrar contas bancárias, lançamentos e marcar conciliações.'},
-            {'name': 'create.manutencoes',                  'label': 'Abrir OS de manutenção',               'platforms': ['web'],        'description': 'Permite criar ordens de serviço de manutenção e adicionar peças/serviços.'},
-            {'name': 'create.abastecimentos',               'label': 'Registrar abastecimento',              'platforms': ['web'],        'description': 'Permite lançar abastecimentos de combustível por veículo.'},
-            {'name': 'create.pneus',                        'label': 'Gerenciar pneus',                      'platforms': ['web'],        'description': 'Permite cadastrar e atualizar o controle de pneus dos veículos.'},
-            {'name': 'aprovar.manutencoes',                 'label': 'Aprovar OS de manutenção',             'platforms': ['web'],        'description': 'Permite aprovar ou reprovar ordens de serviço de manutenção.'},
-            {'name': 'create.veiculos_documentos',          'label': 'Cadastrar documentos de frota',        'platforms': ['web'],        'description': 'Permite cadastrar e manter documentos dos veículos como CRLV, seguro e licenças.'},
-            {'name': 'create.horas_extras',                 'label': 'Lançar horas extras',                  'platforms': ['web', 'app'], 'description': 'Permite registrar solicitações de horas extras para colaboradores.'},
-            {'name': 'aprovar.horas_extras',                'label': 'Aprovar horas extras',                 'platforms': ['web', 'app'], 'description': 'Permite aprovar ou reprovar solicitações de horas extras.'},
-            {'name': 'aprovar.pedidos_compra',              'label': 'Aprovar pedidos de compra',            'platforms': ['web', 'app'], 'description': 'Permite aprovar ou reprovar pedidos de compra.'},
-            {'name': 'aprovar.abastecimentos',              'label': 'Aprovar abastecimentos',               'platforms': ['web'],        'description': 'Permite aprovar ou reprovar lançamentos de abastecimento.'},
-            {'name': 'aprovar.pneus',                       'label': 'Aprovar controle de pneus',            'platforms': ['web'],        'description': 'Permite aprovar ou reprovar lançamentos de controle de pneus.'},
+            {'name': 'menu.colaboradores',           'label': 'Ver colaboradores',                   'platforms': ['web'],        'auto_enable': [],                          'description': 'Mostra o cadastro de colaboradores no menu.'},
+            {'name': 'create.colaboradores',         'label': 'Cadastrar colaboradores',             'platforms': ['web'],        'auto_enable': ['menu.colaboradores'],       'description': 'Permite criar novos colaboradores.'},
+            {'name': 'menu.custos_rh',               'label': 'Ver custos RH',                       'platforms': ['web'],        'auto_enable': [],                          'description': 'Mostra o painel de custos de mão de obra, contratos e acuracidade financeira por base.'},
+            {'name': 'menu.contratos_operacionais',  'label': 'Ver contratos operacionais',          'platforms': ['web'],        'auto_enable': [],                          'description': 'Mostra o cadastro de contratos por base, com valor, headcount e cargos previstos.'},
+            {'name': 'create.contratos_operacionais','label': 'Cadastrar contratos operacionais',    'platforms': ['web'],        'auto_enable': ['menu.contratos_operacionais'], 'description': 'Permite criar e manter contratos por base para análise de acuracidade e custos.'},
+            {'name': 'menu.colaborador_documentos',  'label': 'Ver documentos RH',                   'platforms': ['web'],        'auto_enable': [],                          'description': 'Mostra o controle documental de colaboradores, como CNH, ASO e certificados.'},
+            {'name': 'create.colaborador_documentos','label': 'Cadastrar documentos RH',             'platforms': ['web'],        'auto_enable': ['menu.colaborador_documentos'], 'description': 'Permite manter vencimentos, arquivos e dados documentais dos colaboradores.'},
+            {'name': 'menu.eventos_rh',              'label': 'Ver planejamento RH',                 'platforms': ['web'],        'auto_enable': [],                          'description': 'Mostra férias, afastamentos, licenças e demais eventos planejados do RH.'},
+            {'name': 'create.eventos_rh',            'label': 'Cadastrar eventos RH',                'platforms': ['web'],        'auto_enable': ['menu.eventos_rh'],          'description': 'Permite planejar férias, afastamentos, licenças e folgas programadas.'},
+            {'name': 'menu.horas_extras',            'label': 'Ver horas extras',                    'platforms': ['web', 'app'], 'auto_enable': [],                          'description': 'Mostra o registro e aprovação de horas extras por colaborador e filial.'},
+            {'name': 'create.horas_extras',          'label': 'Lançar horas extras',                 'platforms': ['web', 'app'], 'auto_enable': ['menu.horas_extras'],        'description': 'Permite registrar solicitações de horas extras para colaboradores.'},
+            {'name': 'menu.horas_extras_rtm',        'label': 'Calc. Horas Extras (RTM)',            'platforms': ['web', 'app'], 'auto_enable': [],                          'description': 'Calculadora RTM: cola dados da planilha e calcula totais de horas extras.'},
+            {'name': 'menu.quadro_funcionarios',     'label': 'Ver quadro de funcionários',          'platforms': ['web', 'app'], 'auto_enable': [],                          'description': 'Mostra o quadro por base com totais e status da equipe.'},
+            {'name': 'menu.bonificacao',             'label': 'Ver bonificação',                     'platforms': ['web'],        'auto_enable': [],                          'description': 'Mostra o controle mensal de bonificação por colaborador e os totais pagos.'},
+            {'name': 'manage.bonificacao',           'label': 'Modificar bonificação',               'platforms': ['web', 'app'], 'auto_enable': ['menu.bonificacao'],         'description': 'Permite alterar lançamentos mensais de bonificação por colaborador.'},
+            {'name': 'menu.bonificacao_metricas',    'label': 'Ver métricas de bonificação',         'platforms': ['web'],        'auto_enable': [],                          'description': 'Mostra o cadastro das métricas e valores que compõem a bonificação.'},
+            {'name': 'create.bonificacao_metricas',  'label': 'Cadastrar métricas de bonificação',   'platforms': ['web'],        'auto_enable': ['menu.bonificacao_metricas'], 'description': 'Permite criar e editar métricas usadas no cálculo da bonificação.'},
         ],
     },
+    # ── Frota ─────────────────────────────────────────────────────────────────
+    {
+        'key': 'frota',
+        'title': 'Frota',
+        'items': [
+            {'name': 'menu.veiculos',              'label': 'Ver veículos',                  'platforms': ['web'], 'auto_enable': [],                         'description': 'Mostra o cadastro de veículos no menu.'},
+            {'name': 'create.veiculos',            'label': 'Cadastrar veículos',            'platforms': ['web'], 'auto_enable': ['menu.veiculos'],           'description': 'Permite criar novos veículos.'},
+            {'name': 'menu.frota_dashboard',       'label': 'Ver dashboard de frota',        'platforms': ['web'], 'auto_enable': [],                         'description': 'Mostra o painel consolidado de frota com custos, manutenções e consumo.'},
+            {'name': 'menu.manutencoes',           'label': 'Ver manutenções',               'platforms': ['web'], 'auto_enable': [],                         'description': 'Mostra o módulo de ordens de serviço de manutenção de veículos.'},
+            {'name': 'create.manutencoes',         'label': 'Abrir OS de manutenção',        'platforms': ['web'], 'auto_enable': ['menu.manutencoes'],        'description': 'Permite criar ordens de serviço de manutenção e adicionar peças/serviços.'},
+            {'name': 'menu.abastecimentos',        'label': 'Ver abastecimentos',            'platforms': ['web'], 'auto_enable': [],                         'description': 'Mostra o histórico de abastecimentos por veículo e filial.'},
+            {'name': 'create.abastecimentos',      'label': 'Registrar abastecimento',       'platforms': ['web'], 'auto_enable': ['menu.abastecimentos'],     'description': 'Permite lançar abastecimentos de combustível por veículo.'},
+            {'name': 'menu.pneus',                 'label': 'Ver controle de pneus',         'platforms': ['web'], 'auto_enable': [],                         'description': 'Mostra o controle de pneus por posição e veículo.'},
+            {'name': 'create.pneus',               'label': 'Gerenciar pneus',               'platforms': ['web'], 'auto_enable': ['menu.pneus'],              'description': 'Permite cadastrar e atualizar o controle de pneus dos veículos.'},
+            {'name': 'menu.veiculos_documentos',   'label': 'Ver documentos de frota',       'platforms': ['web'], 'auto_enable': [],                         'description': 'Mostra o controle documental dos veículos: CRLV, seguro, licenças e outros.'},
+            {'name': 'create.veiculos_documentos', 'label': 'Cadastrar documentos de frota', 'platforms': ['web'], 'auto_enable': ['menu.veiculos_documentos'], 'description': 'Permite cadastrar e manter documentos dos veículos como CRLV, seguro e licenças.'},
+        ],
+    },
+    # ── Compras ───────────────────────────────────────────────────────────────
+    {
+        'key': 'compras',
+        'title': 'Compras',
+        'items': [
+            {'name': 'menu.pedidos_compra',   'label': 'Ver pedidos de compra',    'platforms': ['web', 'app'], 'auto_enable': [],                     'description': 'Permite visualizar pedidos de compra e acompanhar aprovações. No web também libera o formulário de criação.'},
+            {'name': 'create.pedidos_compra', 'label': 'Criar pedidos de compra',  'platforms': ['web'],        'auto_enable': ['menu.pedidos_compra'], 'description': 'Permite criar pedidos de compra, adicionar itens e alterar status.'},
+            {'name': 'menu.fornecedores',     'label': 'Ver fornecedores',         'platforms': ['web'],        'auto_enable': [],                     'description': 'Acesso ao cadastro de fornecedores para sugestão nos pedidos de compra.'},
+            {'name': 'create.fornecedores',   'label': 'Cadastrar fornecedores',   'platforms': ['web'],        'auto_enable': ['menu.fornecedores'],   'description': 'Permite criar e editar fornecedores no cadastro.'},
+            {'name': 'menu.clientes',         'label': 'Ver clientes',             'platforms': ['web'],        'auto_enable': [],                     'description': 'Acesso ao cadastro de clientes para sugestão nos contratos e contas a receber.'},
+            {'name': 'create.clientes',       'label': 'Cadastrar clientes',       'platforms': ['web'],        'auto_enable': ['menu.clientes'],       'description': 'Permite criar e editar clientes no cadastro.'},
+            {'name': 'menu.notas_cte',        'label': 'Ver notas / CT-e',         'platforms': ['web'],        'auto_enable': [],                     'description': 'Permite lançar e controlar notas fiscais, CT-e e faturas pendentes de pagamento.'},
+            {'name': 'create.notas_cte',      'label': 'Lançar notas / CT-e',      'platforms': ['web'],        'auto_enable': ['menu.notas_cte'],      'description': 'Permite criar, editar e quitar notas fiscais, CT-e e faturas.'},
+            {'name': 'menu.feriados',         'label': 'Ver feriados',             'platforms': ['web'],        'auto_enable': [],                     'description': 'Permite visualizar e gerenciar feriados por UF, município e filial no calendário.'},
+            {'name': 'create.feriados',       'label': 'Cadastrar feriados',       'platforms': ['web'],        'auto_enable': ['menu.feriados'],       'description': 'Permite criar e editar feriados no calendário.'},
+        ],
+    },
+    # ── Financeiro ────────────────────────────────────────────────────────────
+    {
+        'key': 'financeiro',
+        'title': 'Financeiro',
+        'items': [
+            {'name': 'menu.contas_receber',   'label': 'Ver contas a receber',     'platforms': ['web'], 'auto_enable': [],                      'description': 'Controle de obrigações a receber de clientes, com status, documentos e SLA.'},
+            {'name': 'create.contas_receber', 'label': 'Lançar contas a receber',  'platforms': ['web'], 'auto_enable': ['menu.contas_receber'],  'description': 'Permite criar e editar lançamentos de contas a receber.'},
+            {'name': 'menu.contas_pagar',     'label': 'Ver contas a pagar',       'platforms': ['web'], 'auto_enable': [],                      'description': 'Controle de obrigações a pagar: fornecedores, horas extras Gold, hospedagens e despesas.'},
+            {'name': 'create.contas_pagar',   'label': 'Lançar contas a pagar',    'platforms': ['web'], 'auto_enable': ['menu.contas_pagar'],    'description': 'Permite criar e editar lançamentos de contas a pagar.'},
+            {'name': 'menu.banco',            'label': 'Ver banco / conciliação',  'platforms': ['web'], 'auto_enable': [],                      'description': 'Gestão de contas bancárias, lançamentos e conciliação com contas a receber e pagar.'},
+            {'name': 'create.banco',          'label': 'Lançar no banco',          'platforms': ['web'], 'auto_enable': ['menu.banco'],           'description': 'Permite cadastrar contas bancárias, lançamentos e marcar conciliações.'},
+        ],
+    },
+    # ── Estoque ───────────────────────────────────────────────────────────────
+    {
+        'key': 'estoque',
+        'title': 'Estoque',
+        'items': [
+            {'name': 'menu.estoque',             'label': 'Ver estoque',                  'platforms': ['web'], 'auto_enable': [],                                     'description': 'Mostra o módulo de estoque no menu.'},
+            {'name': 'create.estoque',           'label': 'Cadastrar estoque',            'platforms': ['web'], 'auto_enable': ['menu.estoque'],                       'description': 'Permite criar novos itens de estoque.'},
+            {'name': 'menu.estoque_movimentos',  'label': 'Ver movimentos de estoque',    'platforms': ['web'], 'auto_enable': ['menu.estoque'],                       'description': 'Mostra a tela de lançamento de movimentos de estoque (entradas, saídas, trocas).'},
+            {'name': 'create.estoque_movimentos','label': 'Lançar movimentos de estoque', 'platforms': ['web'], 'auto_enable': ['menu.estoque', 'menu.estoque_movimentos'], 'description': 'Permite registrar entradas, saídas, trocas, devoluções e ajustes de estoque.'},
+        ],
+    },
+    # ── Operação RTM ──────────────────────────────────────────────────────────
     {
         'key': 'operacao_rtm',
         'title': 'Operação RTM',
         'items': [
-            {'name': 'manage.presenca',                 'label': 'Modificar presença',         'platforms': ['web', 'app'], 'description': 'Permite alterar e salvar o quadro diário de presença.'},
-            {'name': 'manage.bonificacao',              'label': 'Modificar bonificação',       'platforms': ['web', 'app'], 'description': 'Permite alterar lançamentos mensais de bonificação por colaborador.'},
-            {'name': 'manage.programacao_carregamento', 'label': 'Programar carregamento',      'platforms': ['web', 'app'], 'description': 'Permite abrir jornadas e definir quais caminhões vão operar no turno.'},
-            {'name': 'manage.operacao_carregamento',    'label': 'Operar carregamento',         'platforms': ['web', 'app'], 'description': 'Permite registrar carga, paradas, ocorrências e fechamento do caminhão.'},
+            {'name': 'menu.presenca',                    'label': 'Ver presença',                    'platforms': ['web', 'app'], 'auto_enable': [],                      'description': 'Mostra o controle diário de presença.'},
+            {'name': 'manage.presenca',                  'label': 'Modificar presença',              'platforms': ['web', 'app'], 'auto_enable': ['menu.presenca'],        'description': 'Permite alterar e salvar o quadro diário de presença.'},
+            {'name': 'menu.carregamento',                'label': 'Ver carregamento',                'platforms': ['web', 'app'], 'auto_enable': [],                      'description': 'Mostra o painel de carregamento por turno, caminhão, referência operacional e eventos.'},
+            {'name': 'manage.programacao_carregamento',  'label': 'Programar carregamento',          'platforms': ['web', 'app'], 'auto_enable': ['menu.carregamento'],    'description': 'Permite abrir jornadas e definir quais caminhões vão operar no turno.'},
+            {'name': 'manage.operacao_carregamento',     'label': 'Operar carregamento',             'platforms': ['web', 'app'], 'auto_enable': ['menu.carregamento'],    'description': 'Permite registrar carga, paradas, ocorrências e fechamento do caminhão.'},
+            {'name': 'menu.rotas_carregamento',          'label': 'Ver referências de carregamento', 'platforms': ['web'],        'auto_enable': [],                      'description': 'Mostra o cadastro das referências operacionais usadas no carregamento.'},
+            {'name': 'create.rotas_carregamento',        'label': 'Cadastrar referências',           'platforms': ['web'],        'auto_enable': ['menu.rotas_carregamento'], 'description': 'Permite criar referências operacionais usadas na operação de carregamento.'},
+            {'name': 'menu.veiculos_carregamento',       'label': 'Ver veículos de carregamento',    'platforms': ['web'],        'auto_enable': [],                      'description': 'Mostra o cadastro dos caminhões terceiros usados na operação.'},
+            {'name': 'create.veiculos_carregamento',     'label': 'Cadastrar veículos de carregamento','platforms': ['web'],      'auto_enable': ['menu.veiculos_carregamento'], 'description': 'Permite criar caminhões terceiros usados no carregamento.'},
+            {'name': 'menu.motivos_parada_carregamento', 'label': 'Ver motivos de parada',           'platforms': ['web'],        'auto_enable': [],                      'description': 'Mostra o cadastro dos motivos padrão de parada operacional.'},
+            {'name': 'create.motivos_parada_carregamento','label': 'Cadastrar motivos de parada',    'platforms': ['web'],        'auto_enable': ['menu.motivos_parada_carregamento'], 'description': 'Permite manter os motivos padrão de parada operacional.'},
+        ],
+    },
+    # ── Administração ─────────────────────────────────────────────────────────
+    {
+        'key': 'administracao',
+        'title': 'Administração',
+        'items': [
+            {'name': 'menu.dashboard',      'label': 'Ver dashboard',          'platforms': ['web'], 'auto_enable': [],              'description': 'Permite abrir o painel inicial.'},
+            {'name': 'menu.filiais',        'label': 'Ver filiais',            'platforms': ['web'], 'auto_enable': [],              'description': 'Mostra o cadastro de filiais no menu.'},
+            {'name': 'create.filiais',      'label': 'Cadastrar filiais',      'platforms': ['web'], 'auto_enable': ['menu.filiais'], 'description': 'Permite criar novas filiais.'},
+            {'name': 'menu.auditoria',      'label': 'Ver auditoria',          'platforms': ['web'], 'auto_enable': [],              'description': 'Mostra a trilha de movimentações e alterações realizadas no sistema.'},
+            {'name': 'menu.gestao_acessos', 'label': 'Ver gestão de acessos',  'platforms': ['web'], 'auto_enable': [],              'description': 'Visualizar colaboradores com acesso ao sistema e redefinir senhas.'},
+            {'name': 'menu.permissoes',     'label': 'Ver permissões',         'platforms': ['web'], 'auto_enable': [],              'description': 'Mostra a tela de gestão de permissões.'},
+            {'name': 'menu.cargos',         'label': 'Ver cargos / funções',   'platforms': ['web'], 'auto_enable': [],              'description': 'Mostra o cadastro de cargos e modelos de permissões por função.'},
+            {'name': 'create.cargos',       'label': 'Cadastrar cargos',       'platforms': ['web'], 'auto_enable': ['menu.cargos'], 'description': 'Permite criar e editar cargos e seus modelos de permissão.'},
         ],
     },
 ]
@@ -1592,23 +1630,61 @@ def create_app():
         return response.data or []
 
     def find_auth_user_by_email(email):
+        """
+        Localiza um usuário no Supabase Auth pelo e-mail sem usar list_users
+        (list_users pode retornar 500 quando a base de usuários é grande ou
+        o endpoint está com instabilidade).
+
+        Estratégia 1 — verificar nossa tabela colaboradores: se já existe um
+        colaborador com esse e-mail e user_id vinculado, busca o auth user
+        pelo ID usando get_user_by_id (endpoint muito mais leve).
+
+        Estratégia 2 — tentar list_users como fallback silencioso caso a
+        estratégia 1 não encontre nada (novo colaborador, e-mail ainda não
+        cadastrado no nosso DB).
+        """
         if not email:
             return None
+        normalized = email.strip().lower()
 
-        page = 1
-        while True:
-            users = supabase.auth.admin.list_users(page=page, per_page=100)
-            if not users:
-                return None
+        # Estratégia 1: checar tabela colaboradores
+        try:
+            rows = (
+                supabase.table('colaboradores')
+                .select('user_id')
+                .ilike('email', normalized)
+                .not_.is_('user_id', 'null')
+                .limit(1)
+                .execute()
+                .data or []
+            )
+            if rows and rows[0].get('user_id'):
+                uid = str(rows[0]['user_id'])
+                result = supabase.auth.admin.get_user_by_id(uid)
+                user = getattr(result, 'user', None) or result
+                if user and getattr(user, 'email', '').lower() == normalized:
+                    return user
+        except Exception:
+            pass
 
-            for auth_user in users:
-                if getattr(auth_user, 'email', '').lower() == email.lower():
-                    return auth_user
+        # Estratégia 2: list_users como fallback (pode falhar — tratamos silenciosamente)
+        try:
+            page = 1
+            while page <= 20:
+                users_page = supabase.auth.admin.list_users(page=page, per_page=100)
+                users_list = getattr(users_page, 'users', None) or (users_page if isinstance(users_page, list) else [])
+                if not users_list:
+                    break
+                for u in users_list:
+                    if getattr(u, 'email', '').lower() == normalized:
+                        return u
+                if len(users_list) < 100:
+                    break
+                page += 1
+        except Exception:
+            pass  # list_users falhou; seguimos para create_user
 
-            if len(users) < 100:
-                return None
-
-            page += 1
+        return None
 
     def ensure_auth_user(email, full_name):
         normalized_email = (email or '').strip().lower()
@@ -1621,14 +1697,25 @@ def create_app():
 
         _pw_chars = string.ascii_letters + string.digits + '!@#$&'
         _temp_password = ''.join(secrets.choice(_pw_chars) for _ in range(20))
-        created = supabase.auth.admin.create_user({
-            'email': normalized_email,
-            'password': _temp_password,
-            'email_confirm': True,
-            'user_metadata': {
-                'full_name': full_name or normalized_email,
-            },
-        })
+        try:
+            created = supabase.auth.admin.create_user({
+                'email': normalized_email,
+                'password': _temp_password,
+                'email_confirm': True,
+                'user_metadata': {
+                    'full_name': full_name or normalized_email,
+                },
+            })
+        except Exception as exc:
+            err_str = str(exc).lower()
+            # Usuário já existe no Auth mas não foi encontrado pelo find_auth_user_by_email
+            if any(k in err_str for k in ('already registered', 'already exists', 'duplicate', 'user already')):
+                raise ValueError(
+                    f'O e-mail "{normalized_email}" já está cadastrado no Supabase Auth mas não '
+                    'está vinculado a nenhum colaborador no sistema. Acesse Gestão de Acessos para '
+                    'verificar o vínculo ou use um e-mail diferente.'
+                )
+            raise ValueError(f'Falha ao criar usuário no Supabase Auth: {exc}')
 
         auth_user = getattr(created, 'user', None)
         if not auth_user:
@@ -5799,9 +5886,19 @@ def create_app():
         if item_error:
             return item_error
 
-        permission_error = require_delete_permission(profile)
-        if permission_error:
-            return permission_error
+        if resource_name == 'pedidos_compra':
+            # Apenas o autor do pedido pode excluí-lo (não requer permissao_excluir)
+            row = (supabase.table('pedidos_compra').select('criado_por').eq('id', item_id).limit(1).execute().data or [{}])[0]
+            criado_por = row.get('criado_por')
+            is_admin = profile.get('is_super_admin') or any(
+                t in (profile.get('cargo') or '').lower() for t in ('admin', 'gestor', 'gerente', 'diretor')
+            )
+            if not is_admin and (criado_por is None or int(criado_por) != int(profile['id'])):
+                return jsonify({'error': 'Apenas o autor do pedido pode excluí-lo.'}), 403
+        else:
+            permission_error = require_delete_permission(profile)
+            if permission_error:
+                return permission_error
 
         try:
             # Busca filial_id antes de deletar para auditoria
@@ -6213,6 +6310,121 @@ def create_app():
             })
         except Exception as exc:
             app.logger.error('Erro ao carregar configuração de permissões: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.get('/api/permissoes/por-escopo')
+    @require_auth
+    def permissoes_por_escopo(profile):
+        """Retorna IDs dos colaboradores que possuem um determinado escopo."""
+        scope_error = require_scope_permission(profile, 'menu.permissoes')
+        if scope_error:
+            return scope_error
+        scope_name = request.args.get('scope', '').strip()
+        if not scope_name:
+            return jsonify({'error': 'Parâmetro scope é obrigatório.'}), 400
+        try:
+            rows = (
+                supabase.table('permissoes')
+                .select('colaborador_id')
+                .eq('permissao_nome', scope_name)
+                .eq('ativo', True)
+                .execute()
+                .data or []
+            )
+            collab_ids = [int(r['colaborador_id']) for r in rows if r.get('colaborador_id')]
+            return jsonify({'scope': scope_name, 'collab_ids': collab_ids})
+        except Exception as exc:
+            app.logger.error('permissoes_por_escopo: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.get('/api/colaboradores/com-escopo')
+    @require_auth
+    def colaboradores_com_escopo(profile):
+        """Retorna colaboradores ativos que possuem um determinado escopo.
+        Acessível a qualquer usuário autenticado com menu.pedidos_compra (ou admin)."""
+        scope_error = require_scope_permission(profile, 'menu.pedidos_compra')
+        if scope_error:
+            return scope_error
+        scope_name = request.args.get('scope', '').strip()
+        if not scope_name:
+            return jsonify({'error': 'Parâmetro scope é obrigatório.'}), 400
+        try:
+            perm_rows = (
+                supabase.table('permissoes')
+                .select('colaborador_id')
+                .eq('permissao_nome', scope_name)
+                .eq('ativo', True)
+                .execute()
+                .data or []
+            )
+            collab_ids = [int(r['colaborador_id']) for r in perm_rows if r.get('colaborador_id')]
+            if not collab_ids:
+                return jsonify([])
+            collab_rows = (
+                supabase.table('colaboradores')
+                .select('id, nome_completo, cargo')
+                .in_('id', collab_ids)
+                .eq('ativo', True)
+                .order('nome_completo')
+                .execute()
+                .data or []
+            )
+            return jsonify(collab_rows)
+        except Exception as exc:
+            app.logger.error('colaboradores_com_escopo: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.get('/api/filiais/disponiveis')
+    @require_auth
+    def filiais_disponiveis(profile):
+        """Retorna as filiais acessíveis ao usuário logado, sem exigir menu.filiais.
+        Usado em formulários (pedidos de compra, etc.) onde o usuário precisa selecionar a filial."""
+        try:
+            filiais = fetch_accessible_filiais(profile)
+            return jsonify([{'id': f['id'], 'cidade': f['cidade'], 'uf': f.get('uf', '')} for f in filiais])
+        except Exception as exc:
+            app.logger.error('filiais_disponiveis: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.post('/api/permissoes/toggle-escopo')
+    @require_auth
+    def toggle_escopo(profile):
+        """Ativa ou desativa um único escopo para um colaborador."""
+        scope_error = require_scope_permission(profile, 'menu.permissoes')
+        if scope_error:
+            return scope_error
+        body = request.get_json(silent=True) or {}
+        colaborador_id = body.get('colaborador_id')
+        scope_name = (body.get('scope_name') or '').strip()
+        ativo = bool(body.get('ativo', True))
+        if not colaborador_id or not scope_name:
+            return jsonify({'error': 'colaborador_id e scope_name são obrigatórios.'}), 400
+        if scope_name not in PERMISSION_SCOPE_MAP:
+            return jsonify({'error': f'Escopo inválido: {scope_name}'}), 400
+        try:
+            if ativo:
+                existing = (
+                    supabase.table('permissoes')
+                    .select('id')
+                    .eq('colaborador_id', colaborador_id)
+                    .eq('permissao_nome', scope_name)
+                    .execute()
+                    .data or []
+                )
+                if not existing:
+                    supabase.table('permissoes').insert({
+                        'colaborador_id': colaborador_id,
+                        'permissao_nome': scope_name,
+                        'ativo': True,
+                        'descricao': PERMISSION_SCOPE_MAP[scope_name].get('description', ''),
+                    }).execute()
+            else:
+                supabase.table('permissoes').delete().eq('colaborador_id', colaborador_id).eq('permissao_nome', scope_name).execute()
+            write_audit_event(profile, 'update', 'permissoes', entity_id=colaborador_id,
+                              details={'scope': scope_name, 'ativo': ativo})
+            return jsonify({'ok': True, 'colaborador_id': colaborador_id, 'scope_name': scope_name, 'ativo': ativo})
+        except Exception as exc:
+            app.logger.error('toggle_escopo: %s', exc)
             return jsonify({'error': translate_database_error(exc)}), 500
 
     @app.get('/api/permissoes/<int:collaborator_id>')
@@ -8839,21 +9051,21 @@ def create_app():
             except Exception:
                 pass
 
-            # Busca usuários do Auth para obter e-mail e datas
+            # Busca dados do Auth por colaborador (get_user_by_id é mais confiável que list_users)
             auth_users_map = {}
-            try:
-                page = 1
-                while True:
-                    users_page = supabase.auth.admin.list_users(page=page, per_page=100)
-                    if not users_page:
-                        break
-                    for u in users_page:
-                        auth_users_map[str(getattr(u, 'id', ''))] = u
-                    if len(users_page) < 100:
-                        break
-                    page += 1
-            except Exception:
-                pass
+            for _row in rows:
+                _uid = str(_row.get('user_id') or '').strip()
+                if not _uid:
+                    continue
+                if _uid in auth_users_map:
+                    continue
+                try:
+                    _res = supabase.auth.admin.get_user_by_id(_uid)
+                    _u = getattr(_res, 'user', None) or _res
+                    if _u and getattr(_u, 'id', None):
+                        auth_users_map[_uid] = _u
+                except Exception as _e:
+                    app.logger.debug('admin_listar_acessos: get_user_by_id(%s) falhou: %s', _uid, _e)
 
             result = []
             for row in rows:
@@ -8867,7 +9079,7 @@ def create_app():
                     'filial_label': f"{filial.get('cidade', '?')}/{filial.get('uf', '?')}" if filial else '—',
                     'filial_id': row.get('filial_id'),
                     'user_id': uid,
-                    'email': getattr(auth_user, 'email', None) if auth_user else None,
+                    'email': (getattr(auth_user, 'email', None) if auth_user else None) or row.get('email') or None,
                     'tipo_acesso': row.get('tipo_acesso') or '',
                     'permissao_app': bool(row.get('permissao_app')),
                     'permissao_desktop': bool(row.get('permissao_desktop')),
@@ -9353,7 +9565,38 @@ def create_app():
             except Exception as exc:
                 app.logger.warning('Erro ao listar %s: %s', res_type, exc)
                 continue
-        
+
+        # Enriquece pedidos_compra com valor_total_calculado e itens
+        pedido_results = [r for r in results if r['resource_type'] == 'pedidos_compra']
+        if pedido_results:
+            try:
+                pedido_ids = [r['id'] for r in pedido_results if r.get('id')]
+                if pedido_ids:
+                    itens_raw = (
+                        supabase.table('pedidos_compra_itens')
+                        .select('id, pedido_id, categoria, descricao, quantidade, unidade, valor_unitario, observacoes')
+                        .in_('pedido_id', pedido_ids)
+                        .eq('ativo', True)
+                        .order('id')
+                        .execute()
+                        .data or []
+                    )
+                    from collections import defaultdict
+                    val_por_pedido   = defaultdict(float)
+                    itens_por_pedido = defaultdict(list)
+                    for it in itens_raw:
+                        pid = it.get('pedido_id')
+                        if pid:
+                            val = float(it.get('quantidade') or 0) * float(it.get('valor_unitario') or 0)
+                            val_por_pedido[pid] += val
+                            itens_por_pedido[pid].append({**it, 'total_item': round(val, 2)})
+                    for r in pedido_results:
+                        pid = r['id']
+                        r['full_item']['valor_total_calculado'] = round(val_por_pedido.get(pid, 0.0), 2)
+                        r['full_item']['itens'] = itens_por_pedido.get(pid, [])
+            except Exception as _exc:
+                app.logger.warning('Enriquecimento itens/valor (approvals): %s', _exc)
+
         return jsonify({
             'total': len(results),
             'items': results,
@@ -9697,88 +9940,131 @@ def create_app():
         if scope_error:
             return scope_error
 
-        meses = request.args.get('meses', 12, type=int)
         filial_id = request.args.get('filial_id', type=int)
 
         try:
             query = (
                 supabase.table('pedidos_compra')
-                .select('id, filial_id, data_pedido, status, forma_pagamento, fornecedor, valor_total')
+                .select('id, filial_id, data_pedido, status, forma_pagamento, fornecedor')
                 .eq('ativo', True)
                 .order('data_pedido', desc=True)
-                .limit(2000)
+                .limit(3000)
             )
             query = apply_filial_scope(query, profile, RESOURCE_DEFINITIONS['pedidos_compra'])
             if filial_id and ensure_profile_can_access_filial(profile, filial_id):
                 query = query.eq('filial_id', filial_id)
             pedidos = query.execute().data or []
 
-            # Itens para gasto por categoria
-            itens_query = (
-                supabase.table('pedidos_compra_itens')
-                .select('pedido_id, categoria, quantidade, valor_unitario, ativo')
-                .eq('ativo', True)
-                .limit(5000)
-            )
-            itens = itens_query.execute().data or []
             pedido_ids_set = {p['id'] for p in pedidos if p.get('id') is not None}
-            itens = [it for it in itens if it.get('pedido_id') in pedido_ids_set]
 
+            # Itens para calcular valores reais e gasto por categoria
+            itens = []
+            if pedido_ids_set:
+                itens_query = (
+                    supabase.table('pedidos_compra_itens')
+                    .select('pedido_id, categoria, quantidade, valor_unitario')
+                    .eq('ativo', True)
+                    .limit(10000)
+                )
+                itens_raw = itens_query.execute().data or []
+                itens = [it for it in itens_raw if it.get('pedido_id') in pedido_ids_set]
+
+            # Calcula valor real por pedido a partir dos itens
             from collections import defaultdict
-            # Gasto por mês
-            por_mes = defaultdict(lambda: {'total': 0.0, 'quantidade': 0})
+            valor_por_pedido = defaultdict(float)
+            for it in itens:
+                pid = it.get('pedido_id')
+                if pid:
+                    valor_por_pedido[pid] += float(it.get('quantidade') or 0) * float(it.get('valor_unitario') or 0)
+
+            # Nomes das filiais
+            filial_ids_set = {p['filial_id'] for p in pedidos if p.get('filial_id') is not None}
+            filiais_map = {}
+            if filial_ids_set:
+                try:
+                    f_rows = (
+                        supabase.table('filiais')
+                        .select('id, cidade, uf')
+                        .in_('id', list(filial_ids_set))
+                        .execute()
+                        .data or []
+                    )
+                    filiais_map = {f['id']: f for f in f_rows}
+                except Exception:
+                    pass
+
+            # Agrega métricas
+            por_mes       = defaultdict(lambda: {'valor_total': 0.0, 'quantidade': 0})
+            por_status    = defaultdict(lambda: {'valor_total': 0.0, 'quantidade': 0})
+            por_pagamento = defaultdict(lambda: {'valor_total': 0.0, 'quantidade': 0})
+            por_fornecedor= defaultdict(lambda: {'valor_total': 0.0, 'quantidade': 0})
+            por_filial_map= defaultdict(lambda: {'valor_total': 0.0, 'quantidade': 0, 'filial_id': None})
+            por_categoria = defaultdict(lambda: {'valor_total': 0.0, 'quantidade': 0})
+
             for p in pedidos:
-                mes = (p.get('data_pedido') or '')[:7]
+                pid  = p['id']
+                val  = valor_por_pedido.get(pid, 0.0)
+                mes  = (p.get('data_pedido') or '')[:7]
+                s    = p.get('status') or 'rascunho'
+                fp   = p.get('forma_pagamento') or 'não informado'
+                fn   = (p.get('fornecedor') or '').strip() or 'Não informado'
+                fid  = p.get('filial_id')
+                f    = filiais_map.get(fid, {}) if fid else {}
+                fl   = f"{f.get('cidade','?')}/{f.get('uf','?')}" if f else (str(fid) if fid else '—')
+
                 if mes:
-                    por_mes[mes]['total'] += float(p.get('valor_total') or 0)
-                    por_mes[mes]['quantidade'] += 1
+                    por_mes[mes]['valor_total']    += val
+                    por_mes[mes]['quantidade']      += 1
+                por_status[s]['valor_total']        += val
+                por_status[s]['quantidade']         += 1
+                por_pagamento[fp]['valor_total']    += val
+                por_pagamento[fp]['quantidade']     += 1
+                por_fornecedor[fn]['valor_total']   += val
+                por_fornecedor[fn]['quantidade']    += 1
+                if fid:
+                    por_filial_map[fl]['valor_total']  += val
+                    por_filial_map[fl]['quantidade']   += 1
+                    por_filial_map[fl]['filial_id']    = fid
 
-            # Gasto por status
-            por_status = defaultdict(lambda: {'total': 0.0, 'quantidade': 0})
-            for p in pedidos:
-                s = p.get('status') or 'rascunho'
-                por_status[s]['total'] += float(p.get('valor_total') or 0)
-                por_status[s]['quantidade'] += 1
-
-            # Gasto por forma_pagamento
-            por_pagamento = defaultdict(lambda: {'total': 0.0, 'quantidade': 0})
-            for p in pedidos:
-                fp = p.get('forma_pagamento') or 'não informado'
-                por_pagamento[fp]['total'] += float(p.get('valor_total') or 0)
-                por_pagamento[fp]['quantidade'] += 1
-
-            # Top fornecedores
-            por_fornecedor = defaultdict(lambda: {'total': 0.0, 'quantidade': 0})
-            for p in pedidos:
-                fn = (p.get('fornecedor') or 'Não informado').strip() or 'Não informado'
-                por_fornecedor[fn]['total'] += float(p.get('valor_total') or 0)
-                por_fornecedor[fn]['quantidade'] += 1
-
-            # Gasto por categoria (via itens)
-            por_categoria = defaultdict(lambda: {'total': 0.0, 'quantidade': 0})
             for it in itens:
                 cat = it.get('categoria') or 'outro'
                 total_item = float(it.get('quantidade') or 0) * float(it.get('valor_unitario') or 0)
-                por_categoria[cat]['total'] += total_item
-                por_categoria[cat]['quantidade'] += 1
+                por_categoria[cat]['valor_total'] += total_item
+                por_categoria[cat]['quantidade']  += 1
 
             top_fornecedores = sorted(
                 [{'fornecedor': k, **v} for k, v in por_fornecedor.items()],
-                key=lambda x: x['total'], reverse=True
+                key=lambda x: x['valor_total'], reverse=True
             )[:10]
+
+            top_filiais = sorted(
+                [{'filial': k, **v} for k, v in por_filial_map.items()],
+                key=lambda x: x['valor_total'], reverse=True
+            )
+
+            valor_total_geral = sum(valor_por_pedido.get(p['id'], 0.0) for p in pedidos)
+            pedidos_com_valor = [p for p in pedidos if valor_por_pedido.get(p['id'], 0.0) > 0]
+
+            # Lista de filiais para o filtro no frontend
+            filiais_disponiveis = [
+                {'id': f['id'], 'label': f"{f.get('cidade','?')}/{f.get('uf','?')}"}
+                for f in filiais_map.values()
+            ]
 
             return jsonify({
                 'por_mes': [{'mes': k, **v} for k, v in sorted(por_mes.items())],
                 'por_status': [{'status': k, **v} for k, v in por_status.items()],
-                'por_pagamento': [{'forma': k, **v} for k, v in por_pagamento.items()],
-                'por_categoria': [{'categoria': k, **v} for k, v in por_categoria.items()],
-                'top_fornecedores': top_fornecedores,
-                'total_pedidos': len(pedidos),
-                'valor_total_geral': sum(float(p.get('valor_total') or 0) for p in pedidos),
-                'ticket_medio': (
-                    sum(float(p.get('valor_total') or 0) for p in pedidos) / len(pedidos)
-                    if pedidos else 0
+                'por_pagamento': [{'forma_pagamento': k, **v} for k, v in por_pagamento.items()],
+                'por_categoria': sorted(
+                    [{'categoria': k, **v} for k, v in por_categoria.items()],
+                    key=lambda x: x['valor_total'], reverse=True
                 ),
+                'top_fornecedores': top_fornecedores,
+                'top_filiais': top_filiais,
+                'filiais_disponiveis': filiais_disponiveis,
+                'total_pedidos': len(pedidos),
+                'valor_total_geral': round(valor_total_geral, 2),
+                'ticket_medio': round(valor_total_geral / len(pedidos_com_valor), 2) if pedidos_com_valor else 0,
             })
         except Exception as exc:
             app.logger.error('pedidos_compra_metricas: %s', exc)
