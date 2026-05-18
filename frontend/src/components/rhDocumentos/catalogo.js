@@ -115,7 +115,13 @@ export function calcularValidadeSugerida(tipo, dataEmissaoISO) {
 // Status visual a partir de data_validade e dias_alerta (espelha o backend).
 export function calcularStatus(doc, hoje = new Date()) {
   if (doc.status === 'nao_se_aplica') return 'nao_se_aplica'
-  if (!doc.data_validade) return doc.status || 'pendente'
+  if (!doc.data_validade) {
+    // Sem data de validade — se o tipo for "sem validade" no catálogo (RG, CPF,
+    // CTPS, contrato, termos), trata como vigente em vez de pendente.
+    const catalogo = findTipoCatalogo(doc.tipo_documento)
+    if (catalogo && catalogo.validadeMeses === null) return 'vigente_sem_validade'
+    return doc.status || 'pendente'
+  }
   const validade = new Date(`${doc.data_validade}T00:00:00`)
   if (Number.isNaN(validade.getTime())) return doc.status || 'pendente'
   const diff = Math.floor((validade - hoje) / 86400000)
@@ -132,8 +138,30 @@ export function diasParaVencer(doc, hoje = new Date()) {
   return Math.floor((validade - hoje) / 86400000)
 }
 
+// Quantos dias o documento foi emitido valendo (data_emissao -> data_validade).
+export function calcularPrazoValidadeDias(doc) {
+  if (!doc.data_emissao || !doc.data_validade) return null
+  const emi = new Date(`${doc.data_emissao}T00:00:00`)
+  const val = new Date(`${doc.data_validade}T00:00:00`)
+  if (Number.isNaN(emi.getTime()) || Number.isNaN(val.getTime())) return null
+  return Math.round((val - emi) / 86400000)
+}
+
+// Soma N dias a uma data ISO (ou hoje, se vazio). Retorna 'YYYY-MM-DD'.
+export function somarDiasIso(baseIso, dias) {
+  const base = baseIso ? new Date(`${baseIso}T00:00:00`) : new Date()
+  if (Number.isNaN(base.getTime())) return null
+  const result = new Date(base.getTime())
+  result.setDate(result.getDate() + Number(dias || 0))
+  const y = result.getFullYear()
+  const m = String(result.getMonth() + 1).padStart(2, '0')
+  const d = String(result.getDate()).padStart(2, '0')
+  return `${y}-${m}-${d}`
+}
+
 export const STATUS_LABELS = {
   vigente: 'Vigente',
+  vigente_sem_validade: 'Vigente (sem validade)',
   vence_em_breve: 'Vence em breve',
   vencido: 'Vencido',
   pendente: 'Pendente',
@@ -141,11 +169,12 @@ export const STATUS_LABELS = {
 }
 
 export const STATUS_COLORS = {
-  vigente:        { bg: '#edf8f2', border: '#98cdb0', text: '#1f5234' },
-  vence_em_breve: { bg: '#fef8e6', border: '#e0c76a', text: '#7a4f00' },
-  vencido:        { bg: '#fdf0ef', border: '#e8b4af', text: '#8a2419' },
-  pendente:       { bg: '#eef2f7', border: '#c0cad5', text: '#3a4a5a' },
-  nao_se_aplica:  { bg: '#f4f4f4', border: '#d0d0d0', text: '#6a6a6a' },
+  vigente:              { bg: '#edf8f2', border: '#98cdb0', text: '#1f5234' },
+  vigente_sem_validade: { bg: '#edf8f2', border: '#98cdb0', text: '#1f5234' },
+  vence_em_breve:       { bg: '#fef8e6', border: '#e0c76a', text: '#7a4f00' },
+  vencido:              { bg: '#fdf0ef', border: '#e8b4af', text: '#8a2419' },
+  pendente:             { bg: '#eef2f7', border: '#c0cad5', text: '#3a4a5a' },
+  nao_se_aplica:        { bg: '#f4f4f4', border: '#d0d0d0', text: '#6a6a6a' },
 }
 
 // Tipos obrigatórios mínimos para a "matriz colaborador × documento".

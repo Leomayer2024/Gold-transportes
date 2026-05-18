@@ -3209,3 +3209,78 @@ tr:last-child td {
 .rh-doc-dropzone small { font-size: 10px; max-width: 480px; }
 .rh-doc-dropzone.active { border-color: var(--primary); background: #fffceb; }
 
+/* ── Chips de filtro rápido ──────────────────────────────────────────── */
+.rh-doc-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 2px;
+}
+.rh-doc-chip {
+  font-size: 11px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-strong);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all 0.12s;
+  color: var(--ink-light);
+}
+.rh-doc-chip:hover { background: var(--surface-hover); }
+.rh-doc-chip.active {
+  background: var(--primary);
+  color: var(--primary-text);
+  border-color: var(--primary-dark);
+  font-weight: 600;
+}
+
+/* ── Status "Vigente sem validade" ───────────────────────────────────── */
+.rh-status-badge.vigente_sem_validade,
+.rh-dias-badge.vigente_sem_validade {
+  background: #edf8f2;
+  color: #1f5234;
+  border-color: #98cdb0;
+}
+.rh-doc-table tbody tr.rh-status-vigente.rh-no-validade td:first-child {
+  box-shadow: inset 4px 0 0 #4a8d6e;
+}
+
+/* ── Coluna de arquivos: principal + badge de extras ─────────────────── */
+.rh-doc-files-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.rh-doc-extras-badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: #1f4d8a;
+  color: #fff;
+  cursor: help;
+}
+
+/* ── Lista de arquivos extras dentro do modal ────────────────────────── */
+.rh-doc-extras-list {
+  list-style: none;
+  margin: 6px 0 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.rh-doc-extras-list li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-sm);
+  font-size: 11px;
+}
+.rh-doc-extras-list li a { flex: 1; text-decoration: none; color: var(--ink); }
+.rh-doc-extras-list li a:hover { text-decoration: underline; }
+.rh-doc-extras-list li small { color: var(--muted); font-size: 10px; }

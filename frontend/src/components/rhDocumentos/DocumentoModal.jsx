@@ -6,8 +6,10 @@ import {
   TIPOS_DOCUMENTOS,
   findTipoCatalogo,
   calcularValidadeSugerida,
+  calcularPrazoValidadeDias,
   diasAlertaSugerido,
   categoriaSugerida,
+  somarDiasIso,
 } from './catalogo'
 
 const STATUS_OPTIONS = [
@@ -29,10 +31,20 @@ const EMPTY = {
   data_validade: '',
   dias_alerta: 30,
   arquivo_url: '',
+  arquivos_extras: [],
   status: '',
   obrigatorio: false,
   observacoes: '',
   ativo: true,
+}
+
+function normalizeArquivosExtras(value) {
+  if (!value) return []
+  if (Array.isArray(value)) return value
+  if (typeof value === 'string') {
+    try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed : [] } catch { return [] }
+  }
+  return []
 }
 
 export default function DocumentoModal({
@@ -43,14 +55,23 @@ export default function DocumentoModal({
   onClose,
   onSaved,
 }) {
-  const [form, setForm] = useState(() => ({ ...EMPTY, ...(documento || {}) }))
+  const [form, setForm] = useState(() => ({
+    ...EMPTY,
+    ...(documento || {}),
+    arquivos_extras: normalizeArquivosExtras(documento?.arquivos_extras),
+  }))
   const [saving, setSaving] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [uploadingExtra, setUploadingExtra] = useState(false)
   const [error, setError] = useState('')
 
   useEffect(() => {
     if (documento) {
-      setForm({ ...EMPTY, ...documento })
+      setForm({
+        ...EMPTY,
+        ...documento,
+        arquivos_extras: normalizeArquivosExtras(documento?.arquivos_extras),
+      })
     } else {
       setForm({
         ...EMPTY,
@@ -61,6 +82,11 @@ export default function DocumentoModal({
       })
     }
   }, [documento, defaultColaboradorId, colaboradores])
+
+  const prazoValidadeDias = useMemo(
+    () => calcularPrazoValidadeDias({ data_emissao: form.data_emissao, data_validade: form.data_validade }),
+    [form.data_emissao, form.data_validade],
+  )
 
   const tiposPorCategoria = useMemo(() => {
     if (!form.categoria) return TIPOS_DOCUMENTOS
@@ -107,6 +133,16 @@ export default function DocumentoModal({
     update(patch)
   }
 
+  function aoMudarPrazoDias(dias) {
+    const num = Number(dias)
+    if (!Number.isFinite(num) || num < 0) return
+    const base = form.data_emissao || new Date().toISOString().slice(0, 10)
+    const validade = somarDiasIso(base, num)
+    const patch = { data_validade: validade }
+    if (!form.data_emissao) patch.data_emissao = base
+    update(patch)
+  }
+
   async function aoEscolherArquivo(event) {
     const file = event.target.files?.[0]
     if (!file) return
@@ -124,6 +160,39 @@ export default function DocumentoModal({
       setUploading(false)
       event.target.value = ''
     }
+  }
+
+  async function aoEscolherArquivoExtra(event) {
+    const files = Array.from(event.target.files || [])
+    if (files.length === 0) return
+    setUploadingExtra(true)
+    setError('')
+    try {
+      const novosExtras = []
+      for (const file of files) {
+        const result = await uploadRhDocumentFile(file, {
+          folder: 'documentos-rh',
+          entityId: form.colaborador_id || 'geral',
+        })
+        novosExtras.push({
+          url: result.url,
+          nome: file.name,
+          enviado_em: new Date().toISOString().slice(0, 10),
+        })
+      }
+      update({ arquivos_extras: [...(form.arquivos_extras || []), ...novosExtras] })
+    } catch (e) {
+      setError(e.message || 'Falha ao enviar arquivos adicionais.')
+    } finally {
+      setUploadingExtra(false)
+      event.target.value = ''
+    }
+  }
+
+  function removerArquivoExtra(index) {
+    const next = [...(form.arquivos_extras || [])]
+    next.splice(index, 1)
+    update({ arquivos_extras: next })
   }
 
   async function salvar(event) {
@@ -146,6 +215,7 @@ export default function DocumentoModal({
       data_validade: form.data_validade || null,
       dias_alerta: form.dias_alerta === '' ? null : Number(form.dias_alerta),
       arquivo_url: form.arquivo_url || null,
+      arquivos_extras: form.arquivos_extras || [],
       status: form.status || null,
       obrigatorio: Boolean(form.obrigatorio),
       observacoes: form.observacoes || null,
@@ -269,6 +339,20 @@ export default function DocumentoModal({
             </label>
 
             <label>
+              <span>
+                Prazo de validade (dias)
+                {prazoValidadeDias != null && <small style={{ marginLeft: 6, color: 'var(--muted)' }}>= {prazoValidadeDias}d</small>}
+              </span>
+              <input
+                type="number"
+                min={0}
+                placeholder="ex.: 365 (preenche a data sozinho)"
+                value={prazoValidadeDias ?? ''}
+                onChange={(e) => aoMudarPrazoDias(e.target.value)}
+              />
+            </label>
+
+            <label>
               <span>Alertar antes (dias)</span>
               <input
                 type="number"
@@ -307,7 +391,7 @@ export default function DocumentoModal({
           </div>
 
           <label className="rh-doc-form-full">
-            <span>Arquivo (PDF, foto)</span>
+            <span>Arquivo principal (PDF, foto)</span>
             <div className="rh-doc-file-row">
               <input
                 type="file"
@@ -322,6 +406,31 @@ export default function DocumentoModal({
                 </a>
               )}
             </div>
+          </label>
+
+          <label className="rh-doc-form-full">
+            <span>Arquivos adicionais (frente+verso, aditivos, anexos)</span>
+            <div className="rh-doc-file-row">
+              <input
+                type="file"
+                multiple
+                accept=".pdf,.png,.jpg,.jpeg,.webp"
+                onChange={aoEscolherArquivoExtra}
+                disabled={uploadingExtra}
+              />
+              {uploadingExtra && <small>Enviando…</small>}
+            </div>
+            {form.arquivos_extras?.length > 0 && (
+              <ul className="rh-doc-extras-list">
+                {form.arquivos_extras.map((arq, idx) => (
+                  <li key={idx}>
+                    <a href={arq.url} target="_blank" rel="noreferrer">📎 {arq.nome || `arquivo ${idx + 1}`}</a>
+                    <small>{arq.enviado_em}</small>
+                    <button type="button" className="button-link danger" onClick={() => removerArquivoExtra(idx)}>✕</button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </label>
 
           <label className="rh-doc-form-full">

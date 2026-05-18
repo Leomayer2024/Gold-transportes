@@ -10,6 +10,8 @@ import {
   TIPOS_OBRIGATORIOS_PADRAO,
   TIPOS_DOCUMENTOS,
   calcularValidadeSugerida,
+  calcularPrazoValidadeDias,
+  somarDiasIso,
   findTipoCatalogo,
 } from './rhDocumentos/catalogo'
 import { enriquecerDocumento, contarAlertas, formatarDataBr } from './rhDocumentos/helpers'
@@ -18,22 +20,38 @@ import ImportExcelModal from './rhDocumentos/ImportExcelModal'
 import BulkUploadModal from './rhDocumentos/BulkUploadModal'
 
 const STATUS_FILTROS = [
-  { value: '',               label: 'Todos os status' },
-  { value: 'vencido',        label: 'Vencidos' },
-  { value: 'vence_em_breve', label: 'Vence em breve' },
-  { value: 'vigente',        label: 'Vigentes' },
-  { value: 'pendente',       label: 'Pendentes' },
-  { value: 'nao_se_aplica',  label: 'Não se aplica' },
-  { value: 'sem_arquivo',    label: 'Sem arquivo' },
+  { value: '',                     label: 'Todos os status' },
+  { value: 'vencido',              label: 'Vencidos' },
+  { value: 'vence_em_breve',       label: 'Vence em breve' },
+  { value: 'vigente',              label: 'Vigentes' },
+  { value: 'vigente_sem_validade', label: 'Vigente sem validade' },
+  { value: 'pendente',             label: 'Pendentes' },
+  { value: 'nao_se_aplica',        label: 'Não se aplica' },
+  { value: 'sem_arquivo',          label: 'Sem arquivo' },
 ]
 
 function classeLinha(status) {
   if (status === 'vencido') return 'rh-status-vencido'
   if (status === 'vence_em_breve') return 'rh-status-alerta'
-  if (status === 'vigente') return 'rh-status-vigente'
+  if (status === 'vigente' || status === 'vigente_sem_validade') return 'rh-status-vigente'
   if (status === 'nao_se_aplica') return 'rh-status-na'
   return 'rh-status-pendente'
 }
+
+// Chips de filtro rápido — atalhos pré-configurados.
+function fimDoMesAtual() {
+  const hoje = new Date()
+  const fim = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0)
+  return Math.ceil((fim - hoje) / 86400000)
+}
+
+const QUICK_CHIPS = [
+  { id: 'vence-mes',         label: '📅 Vence este mês',     apply: { status: 'vence_em_breve', diasMax: fimDoMesAtual } },
+  { id: 'vence-7',           label: '⏰ Vence em 7 dias',     apply: { status: '',               diasMax: () => 7 } },
+  { id: 'vencidos-30',       label: '🚨 Vencidos +30 dias',   apply: { status: 'vencido',        diasMax: () => -30 } },
+  { id: 'sem-validade',      label: '∞ Sem validade',        apply: { status: 'vigente_sem_validade', diasMax: '' } },
+  { id: 'sem-arquivo',       label: '📂 Sem arquivo',         apply: { status: 'sem_arquivo',    diasMax: '' } },
+]
 
 export default function ColaboradorDocumentosPage() {
   const { profile } = useAuth()
@@ -144,6 +162,21 @@ export default function ColaboradorDocumentosPage() {
     setFiltroDiasMax('')
   }
 
+  const [chipAtivo, setChipAtivo] = useState('')
+  function aplicarChip(chip) {
+    if (chipAtivo === chip.id) {
+      // toggle off
+      setChipAtivo('')
+      setFiltroStatus('')
+      setFiltroDiasMax('')
+      return
+    }
+    setChipAtivo(chip.id)
+    setFiltroStatus(chip.apply.status)
+    const dias = typeof chip.apply.diasMax === 'function' ? chip.apply.diasMax() : chip.apply.diasMax
+    setFiltroDiasMax(dias === '' ? '' : String(dias))
+  }
+
   function alternarSelecionado(id) {
     setSelecionados((prev) => {
       const next = new Set(prev)
@@ -168,15 +201,19 @@ export default function ColaboradorDocumentosPage() {
 
   // ─── Edição inline ────────────────────────────────────────────────────────
   function iniciarEdicaoCelula(doc, campo) {
-    setEdicaoCelula({ id: doc.id, campo, valor: doc[campo] ?? '' })
+    let valor = doc[campo] ?? ''
+    // Campo virtual "prazo_dias" — calcula a partir de emissao→validade.
+    if (campo === 'prazo_dias') {
+      valor = calcularPrazoValidadeDias(doc) ?? ''
+    }
+    setEdicaoCelula({ id: doc.id, campo, valor })
   }
 
-  function aplicarEdicaoLocal(id, campo, valor) {
+  function aplicarEdicaoLocal(id, patch) {
     setDocumentos((prev) =>
       prev.map((d) => {
         if (d.id !== id) return d
-        const atualizado = { ...d, [campo]: valor }
-        return enriquecerDocumento(atualizado)
+        return enriquecerDocumento({ ...d, ...patch })
       }),
     )
   }
@@ -187,8 +224,25 @@ export default function ColaboradorDocumentosPage() {
     const original = documentos.find((d) => d.id === id)
     setEdicaoCelula(null)
     if (!original) return
+
+    // Caso especial: edição do prazo em dias.
+    if (campo === 'prazo_dias') {
+      const dias = Number(valor)
+      if (!Number.isFinite(dias) || dias < 0) return
+      const base = original.data_emissao || new Date().toISOString().slice(0, 10)
+      const novaValidade = somarDiasIso(base, dias)
+      const patch = { data_validade: novaValidade }
+      if (!original.data_emissao) patch.data_emissao = base
+      aplicarEdicaoLocal(id, patch)
+      api.update('colaborador_documentos', id, patch).catch((e) => {
+        setErro(`Falha ao salvar: ${e.message}`)
+        carregar()
+      })
+      return
+    }
+
     if (String(original[campo] ?? '') === String(valor ?? '')) return
-    aplicarEdicaoLocal(id, campo, valor)
+    aplicarEdicaoLocal(id, { [campo]: valor })
     salvarCampoRemoto(id, campo, valor)
   }
 
@@ -363,6 +417,20 @@ export default function ColaboradorDocumentosPage() {
         </button>
       </section>
 
+      {/* Chips de filtro rápido */}
+      <section className="rh-doc-chips">
+        {QUICK_CHIPS.map((chip) => (
+          <button
+            key={chip.id}
+            type="button"
+            className={`rh-doc-chip${chipAtivo === chip.id ? ' active' : ''}`}
+            onClick={() => aplicarChip(chip)}
+          >
+            {chip.label}
+          </button>
+        ))}
+      </section>
+
       {/* Filtros */}
       <section className="rh-doc-filtros">
         <input
@@ -523,15 +591,39 @@ function VisaoPlanilha({
         />
       )
     }
-    const valor = doc[campo]
-    const visual = tipo === 'date' ? formatarDataBr(valor) : (valor || '—')
+    let visual
+    if (campo === 'prazo_dias') {
+      const v = calcularPrazoValidadeDias(doc)
+      visual = v == null ? '—' : `${v}d`
+    } else {
+      const valor = doc[campo]
+      visual = tipo === 'date' ? formatarDataBr(valor) : (valor || '—')
+    }
     return (
       <span
         className="rh-doc-inline-display"
         onDoubleClick={() => iniciarEdicaoCelula(doc, campo)}
-        title="Duplo clique para editar"
+        title={campo === 'prazo_dias' ? 'Duplo clique para definir o prazo em dias' : 'Duplo clique para editar'}
       >
         {visual}
+      </span>
+    )
+  }
+
+  function renderArquivos(doc) {
+    const extras = Array.isArray(doc.arquivos_extras) ? doc.arquivos_extras : []
+    const total = (doc.arquivo_url ? 1 : 0) + extras.length
+    if (total === 0) return <span className="muted">—</span>
+    return (
+      <span className="rh-doc-files-cell">
+        {doc.arquivo_url && (
+          <a href={doc.arquivo_url} target="_blank" rel="noreferrer" className="button-link" title="Arquivo principal">📄</a>
+        )}
+        {extras.length > 0 && (
+          <span className="rh-doc-extras-badge" title={extras.map((a) => a.nome || a.url).join('\n')}>
+            +{extras.length}
+          </span>
+        )}
       </span>
     )
   }
@@ -559,6 +651,7 @@ function VisaoPlanilha({
             <th>Número</th>
             <th onClick={() => aoClicarCabecalho('data_emissao')} className="rh-doc-th-clickable">Emissão{indicadorOrdem('data_emissao')}</th>
             <th onClick={() => aoClicarCabecalho('data_validade')} className="rh-doc-th-clickable">Validade{indicadorOrdem('data_validade')}</th>
+            <th title="Quantos dias o documento vale a partir da emissão">Validade (dias)</th>
             <th onClick={() => aoClicarCabecalho('dias_para_vencer')} className="rh-doc-th-clickable">Dias p/ vencer{indicadorOrdem('dias_para_vencer')}</th>
             <th>Alerta</th>
             <th>Status</th>
@@ -587,6 +680,7 @@ function VisaoPlanilha({
                 <td>{renderCelulaEditavel(doc, 'numero_documento')}</td>
                 <td>{renderCelulaEditavel(doc, 'data_emissao', 'date')}</td>
                 <td>{renderCelulaEditavel(doc, 'data_validade', 'date')}</td>
+                <td>{renderCelulaEditavel(doc, 'prazo_dias', 'number')}</td>
                 <td className="rh-doc-dias">
                   {doc.dias_para_vencer == null ? '—' : (
                     <span className={`rh-dias-badge ${status}`}>
@@ -596,13 +690,7 @@ function VisaoPlanilha({
                 </td>
                 <td>{renderCelulaEditavel(doc, 'dias_alerta', 'number')}</td>
                 <td><span className={`rh-status-badge ${status}`}>{STATUS_LABELS[status] || status}</span></td>
-                <td>
-                  {doc.arquivo_url ? (
-                    <a href={doc.arquivo_url} target="_blank" rel="noreferrer" className="button-link">📄 ver</a>
-                  ) : (
-                    <span className="muted">—</span>
-                  )}
-                </td>
+                <td>{renderArquivos(doc)}</td>
                 <td>
                   <button type="button" className="button-link" onClick={() => aoEditar(doc)}>editar</button>
                 </td>
