@@ -97,9 +97,9 @@ export default function ImportExcelModal({ colaboradores, filiais, onClose, onIm
     setResultado(null)
     try {
       const buf = await file.arrayBuffer()
-      const wb = XLSX.read(buf, { type: 'array' })
+      const wb = XLSX.read(buf, { type: 'array', cellDates: true })
       const sheet = wb.Sheets[wb.SheetNames[0]]
-      const raw = XLSX.utils.sheet_to_json(sheet, { defval: '' })
+      const raw = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false, dateNF: 'yyyy-mm-dd' })
       const parsed = []
       const errosLocais = []
       raw.forEach((row, idx) => {
