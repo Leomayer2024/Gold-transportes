@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { api } from '../services/api'
 import { useAuth } from '../context/AuthContext'
-import { canCreateResource } from '../lib/permissions'
+import { canCreateResource, hasActionPermission } from '../lib/permissions'
 import {
   CATEGORIAS,
   CATEGORIA_LABELS,
@@ -56,6 +56,13 @@ const QUICK_CHIPS = [
 export default function ColaboradorDocumentosPage() {
   const { profile } = useAuth()
   const podeCriar = canCreateResource(profile, 'colaborador_documentos')
+  // Ações granulares (botões dentro da tela). Compat retroativa em
+  // hasActionPermission: usuário sem nenhum action.* configurado vê tudo.
+  const podeImportar = hasActionPermission(profile, 'action.documentos_rh.importar')
+  const podeExportar = hasActionPermission(profile, 'action.documentos_rh.exportar')
+  const podeRenovar  = hasActionPermission(profile, 'action.documentos_rh.renovar')
+  const podeInativar = hasActionPermission(profile, 'action.documentos_rh.inativar')
+  const podeExcluir  = hasActionPermission(profile, 'action.documentos_rh.excluir')
 
   const [colaboradores, setColaboradores] = useState([])
   const [filiais, setFiliais] = useState([])
@@ -367,17 +374,23 @@ export default function ColaboradorDocumentosPage() {
           <button type="button" className="button-secondary" onClick={() => setVisao(visao === 'planilha' ? 'matriz' : 'planilha')}>
             {visao === 'planilha' ? '📋 Ver matriz' : '📊 Ver planilha'}
           </button>
-          <button type="button" className="button-secondary" onClick={exportarSelecionados}>
-            ⬇ Exportar Excel
-          </button>
+          {podeExportar && (
+            <button type="button" className="button-secondary" onClick={exportarSelecionados}>
+              ⬇ Exportar Excel
+            </button>
+          )}
           {podeCriar && (
             <>
-              <button type="button" className="button-secondary" onClick={() => setImportExcelOpen(true)}>
-                ⬆ Importar Excel
-              </button>
-              <button type="button" className="button-secondary" onClick={() => setBulkUploadOpen(true)}>
-                📎 Upload em lote
-              </button>
+              {podeImportar && (
+                <>
+                  <button type="button" className="button-secondary" onClick={() => setImportExcelOpen(true)}>
+                    ⬆ Importar Excel
+                  </button>
+                  <button type="button" className="button-secondary" onClick={() => setBulkUploadOpen(true)}>
+                    📎 Upload em lote
+                  </button>
+                </>
+              )}
               <button type="button" className="button-primary" onClick={() => abrirNovo()}>
                 + Novo documento
               </button>
@@ -489,11 +502,21 @@ export default function ColaboradorDocumentosPage() {
       {selecionados.size > 0 && (
         <div className="rh-doc-bulk-bar">
           <strong>{selecionados.size} selecionado(s)</strong>
-          <button type="button" className="button-secondary" onClick={renovarSelecionados}>♻ Renovar</button>
-          <button type="button" className="button-secondary" onClick={() => acaoLote('na')}>Marcar n/a</button>
-          <button type="button" className="button-secondary" onClick={() => acaoLote('inativar')}>Inativar</button>
-          <button type="button" className="button-secondary" onClick={exportarSelecionados}>⬇ Exportar</button>
-          <button type="button" className="button-link danger" onClick={() => acaoLote('excluir')}>Excluir</button>
+          {podeRenovar && (
+            <button type="button" className="button-secondary" onClick={renovarSelecionados}>♻ Renovar</button>
+          )}
+          {podeInativar && (
+            <>
+              <button type="button" className="button-secondary" onClick={() => acaoLote('na')}>Marcar n/a</button>
+              <button type="button" className="button-secondary" onClick={() => acaoLote('inativar')}>Inativar</button>
+            </>
+          )}
+          {podeExportar && (
+            <button type="button" className="button-secondary" onClick={exportarSelecionados}>⬇ Exportar</button>
+          )}
+          {podeExcluir && (
+            <button type="button" className="button-link danger" onClick={() => acaoLote('excluir')}>Excluir</button>
+          )}
           <button type="button" className="button-link" onClick={() => setSelecionados(new Set())}>Limpar seleção</button>
         </div>
       )}

@@ -136,8 +136,14 @@ function ScopeItem({ item, isChecked, isShared, plataforma, onToggle, labelMap }
 // Escopos que valem para os dois aparecem nos dois lados (com badge "comum").
 // O parâmetro platformFilter ('all'|'app'|'web') ainda é aceito para zoom em
 // uma plataforma só, mas o default mostra ambas lado a lado.
-function ScopeGrid({ scopeGroups, activeScopes, onToggle, platformFilter = 'all' }) {
+function ScopeGrid({ scopeGroups, activeScopes, onToggle, platformFilter = 'all', scopeSearch = '' }) {
   const labelMap = useMemo(() => buildLabelMap(scopeGroups), [scopeGroups])
+
+  const q = scopeSearch.trim().toLowerCase()
+  const matchSearch = (item) => {
+    if (!q) return true
+    return [item.name, item.label, item.description].filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
+  }
 
   return (
     <>
@@ -145,6 +151,7 @@ function ScopeGrid({ scopeGroups, activeScopes, onToggle, platformFilter = 'all'
         const appItems = []
         const webItems = []
         for (const item of group.items) {
+          if (!matchSearch(item)) continue
           const platforms = item.platforms || ['web']
           if (platforms.includes('app')) appItems.push(item)
           if (platforms.includes('web')) webItems.push(item)
@@ -222,6 +229,108 @@ function ScopeGrid({ scopeGroups, activeScopes, onToggle, platformFilter = 'all'
   )
 }
 
+// ─── Painel de preview: "o que esse usuário vê" ──────────────────────────────
+// Agrupa os escopos ativos por categoria (menus, ações granulares, aprovações,
+// gestão) e renderiza um resumo amigável. Ajuda a confirmar antes de salvar.
+
+function PreviewPanel({ show, onToggle, activeScopes, activeFilialIds, filiais, scopeGroups }) {
+  const allItems = useMemo(
+    () => scopeGroups.flatMap((g) => (g.items || []).map((i) => ({ ...i, _group: g.title }))),
+    [scopeGroups],
+  )
+  const labelMap = useMemo(() => Object.fromEntries(allItems.map((i) => [i.name, i])), [allItems])
+
+  const buckets = useMemo(() => {
+    const out = { menus: [], acoes: [], aprovacoes: [], outros: [] }
+    for (const name of activeScopes) {
+      const item = labelMap[name]
+      if (!item) {
+        out.outros.push({ name, label: name })
+        continue
+      }
+      if (name.startsWith('menu.')) out.menus.push(item)
+      else if (name.startsWith('action.')) out.acoes.push(item)
+      else if (name.startsWith('aprovar.') || name.startsWith('analisar.')) out.aprovacoes.push(item)
+      else out.outros.push(item)
+    }
+    return out
+  }, [activeScopes, labelMap])
+
+  const filiaisAtivas = filiais.filter((f) => activeFilialIds.includes(f.id))
+
+  return (
+    <div className="permissions-block permissions-preview">
+      <button
+        type="button"
+        className="permissions-preview-toggle"
+        onClick={onToggle}
+        aria-expanded={show}
+      >
+        <span>👁️ Pré-visualização do que este usuário vê</span>
+        <small>{show ? '▲ ocultar' : '▼ expandir'}</small>
+      </button>
+
+      {show && (
+        <div className="permissions-preview-body">
+          <div className="permissions-preview-summary">
+            <span><strong>{buckets.menus.length}</strong> menus</span>
+            <span><strong>{buckets.acoes.length}</strong> ações granulares</span>
+            <span><strong>{buckets.aprovacoes.length}</strong> aprovações</span>
+            <span><strong>{filiaisAtivas.length || (filiais.length === 0 ? 0 : 'todas')}</strong> filiais</span>
+          </div>
+
+          {buckets.menus.length > 0 && (
+            <PreviewBucket title="🧭 Menus visíveis" items={buckets.menus} />
+          )}
+          {buckets.acoes.length > 0 && (
+            <PreviewBucket title="🔘 Ações granulares (botões)" items={buckets.acoes} />
+          )}
+          {buckets.aprovacoes.length > 0 && (
+            <PreviewBucket title="✅ Pode aprovar / analisar" items={buckets.aprovacoes} />
+          )}
+          {buckets.outros.length > 0 && (
+            <PreviewBucket title="📦 Outros escopos" items={buckets.outros} />
+          )}
+
+          {filiaisAtivas.length > 0 && (
+            <div className="permissions-preview-bucket">
+              <div className="permissions-preview-bucket-title">🏢 Filiais</div>
+              <div className="permissions-preview-chips">
+                {filiaisAtivas.map((f) => (
+                  <span key={f.id} className="permissions-preview-chip">{f.cidade}/{f.uf}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {activeScopes.length === 0 && (
+            <div className="permissions-preview-empty">
+              Nenhum escopo marcado. Esse usuário não vai ver nada além da tela de login.
+              <br />
+              <small>(Exceção: administradores sem escopos têm acesso livre por compatibilidade.)</small>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PreviewBucket({ title, items }) {
+  return (
+    <div className="permissions-preview-bucket">
+      <div className="permissions-preview-bucket-title">{title}</div>
+      <div className="permissions-preview-chips">
+        {items.map((it) => (
+          <span key={it.name} className="permissions-preview-chip" title={it.description || it.name}>
+            {it.label || it.name}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Aba 1: por colaborador ───────────────────────────────────────────────────
 
 function AbaColaborador({ config, scopeGroups }) {
@@ -239,6 +348,8 @@ function AbaColaborador({ config, scopeGroups }) {
   const [error, setError] = useState('')
   const [cargos, setCargos] = useState([])
   const [platformFilter, setPlatformFilter] = useState('all')
+  const [scopeSearch, setScopeSearch] = useState('')
+  const [showPreview, setShowPreview] = useState(true)
 
   const autoEnableMap = useMemo(() => buildAutoEnableMap(scopeGroups), [scopeGroups])
   const handleToggleScope = useMemo(() => makeToggleHandler(setActiveScopes, autoEnableMap), [autoEnableMap])
@@ -467,7 +578,31 @@ function AbaColaborador({ config, scopeGroups }) {
               </div>
             </div>
 
+            {/* Pré-visualização: o que este usuário vê com os escopos atuais */}
+            <PreviewPanel
+              show={showPreview}
+              onToggle={() => setShowPreview((v) => !v)}
+              activeScopes={activeScopes}
+              activeFilialIds={activeFilialIds}
+              filiais={config.filiais || []}
+              scopeGroups={scopeGroups}
+            />
+
             {/* Escopos de menu e funcionalidade */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', margin: '6px 0' }}>
+              <input
+                type="search"
+                placeholder="🔍 Buscar escopo por nome, label ou descrição..."
+                value={scopeSearch}
+                onChange={(e) => setScopeSearch(e.target.value)}
+                style={{ flex: 1, minWidth: 220, height: 28, fontSize: 12 }}
+              />
+              {scopeSearch && (
+                <button type="button" className="button-link" onClick={() => setScopeSearch('')}>
+                  ✕ limpar
+                </button>
+              )}
+            </div>
             <PlatformFilterBar platformFilter={platformFilter} onChange={setPlatformFilter} />
 
             <ScopeGrid
@@ -475,6 +610,7 @@ function AbaColaborador({ config, scopeGroups }) {
               onToggle={handleToggleScope}
               scopeGroups={scopeGroups}
               platformFilter={platformFilter}
+              scopeSearch={scopeSearch}
             />
 
             {feedback && <div className="alert-success">{feedback}</div>}

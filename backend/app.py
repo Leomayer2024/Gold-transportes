@@ -838,6 +838,24 @@ PERMISSION_SCOPE_GROUPS = [
             {'name': 'create.cargos',       'label': 'Cadastrar cargos',       'platforms': ['web'], 'auto_enable': ['menu.cargos'], 'description': 'Permite criar e editar cargos e seus modelos de permissão.'},
         ],
     },
+    # ── Ações granulares (botões específicos dentro de cada tela) ─────────────
+    # Comportamento: se o usuário NÃO tem nenhum escopo "action.*" configurado,
+    # todos os botões aparecem (compat retroativa). Quando o admin marca ao
+    # menos UM escopo de ação, apenas os marcados aparecem para esse usuário.
+    {
+        'key': 'acoes_granulares',
+        'title': 'Ações granulares (botões dentro das telas)',
+        'items': [
+            {'name': 'action.documentos_rh.importar', 'label': 'Importar documentos RH (Excel/PDF lote)', 'platforms': ['web'], 'auto_enable': ['menu.colaborador_documentos'], 'description': 'Mostra os botões "Importar Excel" e "Upload em lote" na tela Documentos RH.'},
+            {'name': 'action.documentos_rh.exportar', 'label': 'Exportar documentos RH para Excel',        'platforms': ['web'], 'auto_enable': ['menu.colaborador_documentos'], 'description': 'Mostra o botão "Exportar Excel" e ações de exportação em lote.'},
+            {'name': 'action.documentos_rh.renovar',  'label': 'Renovar documentos em lote',               'platforms': ['web'], 'auto_enable': ['menu.colaborador_documentos'], 'description': 'Mostra o botão "♻ Renovar" na barra de ações em lote (cria novo registro com validade calculada).'},
+            {'name': 'action.documentos_rh.inativar', 'label': 'Inativar / marcar n/a documentos',         'platforms': ['web'], 'auto_enable': ['menu.colaborador_documentos'], 'description': 'Mostra os botões "Inativar" e "Marcar n/a" na barra de ações em lote.'},
+            {'name': 'action.documentos_rh.excluir',  'label': 'Excluir documentos RH (definitivo)',       'platforms': ['web'], 'auto_enable': ['menu.colaborador_documentos'], 'description': 'Mostra o botão "Excluir" na barra de ações em lote. Ação destrutiva e irreversível.'},
+            {'name': 'action.pedidos_compra.editar_analise', 'label': 'Editar pedido em análise',         'platforms': ['web'], 'auto_enable': ['menu.pedidos_compra'],         'description': 'Permite alterar campos do pedido enquanto ele está no status "em análise" (antes de aprovar).'},
+            {'name': 'action.global.bulk_export',     'label': 'Exportar listas em massa (genérico)',      'platforms': ['web'], 'auto_enable': [],                              'description': 'Mostra botões "Exportar selecionados" e "Exportar tudo" em listas que suportam exportação.'},
+            {'name': 'action.global.bulk_delete',     'label': 'Excluir em massa (genérico)',              'platforms': ['web'], 'auto_enable': [],                              'description': 'Permite seleção múltipla + exclusão em lote em listas que suportam (ação destrutiva).'},
+        ],
+    },
 ]
 
 ALL_PERMISSION_SCOPES = [

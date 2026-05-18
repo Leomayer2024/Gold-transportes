@@ -122,3 +122,27 @@ export function canCreateResource(profile, resourceName, createScope) {
   const targetScope = createScope || `create.${resourceName}`
   return hasScopePermission(profile, targetScope)
 }
+
+/**
+ * Verifica se o usuário tem permissão para uma ação granular (botões dentro
+ * de telas, ex.: 'action.documentos_rh.renovar').
+ *
+ * Compat retroativa: se o usuário não tem NENHUM escopo `action.*` configurado,
+ * todas as ações ficam liberadas — assim cadastros antigos sem ações marcadas
+ * não perdem botões. Quando o admin marca ao menos uma ação, apenas as
+ * marcadas ficam visíveis.
+ */
+export function hasActionPermission(profile, actionName) {
+  if (!actionName) return true
+  if (!profile?.has_scope_permissions) return true
+  const scopes = profile.permission_scopes || []
+
+  // Se já tem o escopo explícito, libera.
+  if (scopes.includes(actionName)) return true
+
+  // Compat: usuário sem NENHUM action.* configurado -> tudo liberado.
+  const hasAnyAction = scopes.some((s) => s.startsWith('action.'))
+  if (!hasAnyAction) return true
+
+  return false
+}
