@@ -22,6 +22,9 @@ export const TIPOS_DOCUMENTOS = [
   { tipo: 'Comprovante de Residência',categoria: 'pessoal',     validadeMeses: 6,    diasAlerta: 30, obrigatorio: true  },
   { tipo: 'PIS/PASEP',                categoria: 'pessoal',     validadeMeses: null, diasAlerta: 0,  obrigatorio: true  },
   { tipo: 'Foto 3x4',                 categoria: 'pessoal',     validadeMeses: null, diasAlerta: 0,  obrigatorio: false },
+  { tipo: 'Pesquisa de Clima',        categoria: 'pessoal',     validadeMeses: null, diasAlerta: 0,  obrigatorio: false },
+  { tipo: 'Pesquisa de Satisfação',   categoria: 'pessoal',     validadeMeses: null, diasAlerta: 0,  obrigatorio: false },
+  { tipo: 'Pesquisa - Outras',        categoria: 'pessoal',     validadeMeses: null, diasAlerta: 0,  obrigatorio: false },
 
   // ── Saúde (ASO) ──────────────────────────────────────────────────────────
   { tipo: 'ASO Admissional',          categoria: 'saude',       validadeMeses: 12,   diasAlerta: 30, obrigatorio: true  },
@@ -31,6 +34,10 @@ export const TIPOS_DOCUMENTOS = [
   { tipo: 'ASO Demissional',          categoria: 'saude',       validadeMeses: null, diasAlerta: 0,  obrigatorio: false },
   { tipo: 'Atestado Médico',          categoria: 'saude',       validadeMeses: null, diasAlerta: 0,  obrigatorio: false },
   { tipo: 'Exame Audiométrico',       categoria: 'saude',       validadeMeses: 12,   diasAlerta: 30, obrigatorio: false },
+  { tipo: 'AST - Análise de Segurança do Trabalho', categoria: 'saude', validadeMeses: 12, diasAlerta: 30, obrigatorio: false },
+  { tipo: 'APR - Análise Preliminar de Risco',      categoria: 'saude', validadeMeses: 12, diasAlerta: 30, obrigatorio: false },
+  { tipo: 'PT - Permissão de Trabalho',             categoria: 'saude', validadeMeses: null, diasAlerta: 0, obrigatorio: false },
+  { tipo: 'DDS - Diálogo Diário de Segurança',      categoria: 'saude', validadeMeses: null, diasAlerta: 0, obrigatorio: false },
 
   // ── Habilitação ──────────────────────────────────────────────────────────
   { tipo: 'CNH',                      categoria: 'habilitacao', validadeMeses: 60,   diasAlerta: 60, obrigatorio: false },
@@ -61,6 +68,10 @@ export const TIPOS_DOCUMENTOS = [
   { tipo: 'Integração / Onboarding',  categoria: 'treinamento', validadeMeses: null, diasAlerta: 0,  obrigatorio: true  },
   { tipo: 'CIPA',                     categoria: 'treinamento', validadeMeses: 12,   diasAlerta: 60, obrigatorio: false },
   { tipo: 'Primeiros Socorros',       categoria: 'treinamento', validadeMeses: 24,   diasAlerta: 90, obrigatorio: false },
+  { tipo: 'Treinamento Interno',      categoria: 'treinamento', validadeMeses: 24,   diasAlerta: 60, obrigatorio: false },
+  { tipo: 'Treinamento Cliente',      categoria: 'treinamento', validadeMeses: 24,   diasAlerta: 60, obrigatorio: false },
+  { tipo: 'Treinamento Externo',      categoria: 'treinamento', validadeMeses: 24,   diasAlerta: 60, obrigatorio: false },
+  { tipo: 'Reciclagem',               categoria: 'treinamento', validadeMeses: 12,   diasAlerta: 60, obrigatorio: false },
 
   // ── Contratual ───────────────────────────────────────────────────────────
   { tipo: 'Contrato de Trabalho',     categoria: 'contratual',  validadeMeses: null, diasAlerta: 0,  obrigatorio: true  },
@@ -71,7 +82,12 @@ export const TIPOS_DOCUMENTOS = [
   { tipo: 'Acordo de Banco de Horas', categoria: 'contratual',  validadeMeses: 24,   diasAlerta: 60, obrigatorio: false },
   { tipo: 'Termo de Confidencialidade',categoria: 'contratual', validadeMeses: null, diasAlerta: 0,  obrigatorio: false },
   { tipo: 'Termo de Responsabilidade EPI', categoria: 'contratual', validadeMeses: null, diasAlerta: 0, obrigatorio: false },
+  { tipo: 'Ficha de EPI',             categoria: 'contratual',  validadeMeses: null, diasAlerta: 0,  obrigatorio: false },
+  { tipo: 'Ficha de Entrega de EPI',  categoria: 'contratual',  validadeMeses: null, diasAlerta: 0,  obrigatorio: false },
   { tipo: 'Termo de Vale Transporte', categoria: 'contratual',  validadeMeses: null, diasAlerta: 0,  obrigatorio: false },
+  { tipo: 'Inventário Anual',         categoria: 'contratual',  validadeMeses: 12,   diasAlerta: 30, obrigatorio: false },
+  { tipo: 'Inventário de Ferramentas',categoria: 'contratual',  validadeMeses: 12,   diasAlerta: 30, obrigatorio: false },
+  { tipo: 'Inventário de Uniformes',  categoria: 'contratual',  validadeMeses: 12,   diasAlerta: 30, obrigatorio: false },
   { tipo: 'Procuração',               categoria: 'contratual',  validadeMeses: 12,   diasAlerta: 30, obrigatorio: false },
 ]
 
