@@ -102,83 +102,122 @@ function makeToggleHandler(setScopes, autoEnableMap) {
   }
 }
 
+// Item visual de um escopo (linha com checkbox + descrição). Usado tanto na
+// coluna do App quanto na do Web.
+function ScopeItem({ item, isChecked, isShared, plataforma, onToggle, labelMap }) {
+  const autoLabels = (item.auto_enable || []).map((s) => labelMap[s] || s)
+  return (
+    <label
+      className={`permissions-scope-item permissions-scope-${plataforma}${isShared ? ' shared' : ''}${isChecked ? ' active' : ''}`}
+    >
+      <input
+        checked={isChecked}
+        onChange={(e) => onToggle(item.name, e.target.checked)}
+        type="checkbox"
+      />
+      <div>
+        <div className="permissions-scope-head">
+          <strong>{item.label}</strong>
+          {isShared && <span className="permissions-shared-pill">↔ comum</span>}
+        </div>
+        <span>{item.description}</span>
+        {autoLabels.length > 0 && (
+          <span className="permissions-auto-enable">
+            ↳ Ativa também: {autoLabels.join(', ')}
+          </span>
+        )}
+        <small className="permissions-scope-code">{item.name}</small>
+      </div>
+    </label>
+  )
+}
+
+// Layout em duas colunas: 📱 App (esquerda) | 💻 Web (direita).
+// Escopos que valem para os dois aparecem nos dois lados (com badge "comum").
+// O parâmetro platformFilter ('all'|'app'|'web') ainda é aceito para zoom em
+// uma plataforma só, mas o default mostra ambas lado a lado.
 function ScopeGrid({ scopeGroups, activeScopes, onToggle, platformFilter = 'all' }) {
   const labelMap = useMemo(() => buildLabelMap(scopeGroups), [scopeGroups])
 
-  const visibleGroups = useMemo(() => {
-    if (platformFilter === 'all') return scopeGroups
-    return scopeGroups
-      .map((group) => ({
-        ...group,
-        items: group.items.filter((item) => {
-          const platforms = item.platforms || ['web']
-          if (platformFilter === 'app') return platforms.includes('app')
-          if (platformFilter === 'web') return !platforms.includes('app')
-          return true
-        }),
-      }))
-      .filter((group) => group.items.length > 0)
-  }, [scopeGroups, platformFilter])
-
   return (
     <>
-      {visibleGroups.map((group) => (
-        <div className="permissions-block" key={group.key}>
-          <div className="section-title">
-            <span className="eyebrow">{group.title}</span>
-            <h2>{group.title}</h2>
-          </div>
+      {scopeGroups.map((group) => {
+        const appItems = []
+        const webItems = []
+        for (const item of group.items) {
+          const platforms = item.platforms || ['web']
+          if (platforms.includes('app')) appItems.push(item)
+          if (platforms.includes('web')) webItems.push(item)
+        }
 
-          <div className="permissions-scope-grid">
-            {group.items.map((item) => {
-              const isApp = (item.platforms || ['web']).includes('app')
-              const isWebOnly = !isApp
-              const autoLabels = (item.auto_enable || []).map((s) => labelMap[s] || s)
-              const isChecked = activeScopes.includes(item.name)
-              return (
-                <label
-                  className="permissions-scope-item"
-                  key={item.name}
-                  style={{
-                    borderLeft: isApp ? '3px solid #4caf50' : '3px solid transparent',
-                    background: isChecked ? 'rgba(26,115,232,0.04)' : '',
-                  }}
-                >
-                  <input
-                    checked={isChecked}
-                    onChange={(e) => onToggle(item.name, e.target.checked)}
-                    type="checkbox"
-                  />
-                  <div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                      <strong>{item.label}</strong>
-                      {isApp && (
-                        <span style={{
-                          fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 4,
-                          background: '#e8f5e9', color: '#2e7d32', border: '1px solid #a5d6a7',
-                        }}>📱 App</span>
-                      )}
-                      {isWebOnly && platformFilter === 'all' && (
-                        <span style={{
-                          fontSize: 10, padding: '2px 6px', borderRadius: 4,
-                          background: '#f5f5f5', color: '#888', border: '1px solid #e0e0e0',
-                        }}>💻 Web</span>
-                      )}
-                    </div>
-                    <span>{item.description}</span>
-                    {autoLabels.length > 0 && (
-                      <span style={{ fontSize: 10, color: '#1a73e8', marginTop: 2, display: 'block' }}>
-                        ↳ Ativa também: {autoLabels.join(', ')}
-                      </span>
-                    )}
-                    <small className="permissions-scope-code">{item.name}</small>
-                  </div>
-                </label>
-              )
-            })}
+        const showApp = platformFilter !== 'web' && appItems.length > 0
+        const showWeb = platformFilter !== 'app' && webItems.length > 0
+        if (!showApp && !showWeb) return null
+
+        return (
+          <div className="permissions-block" key={group.key}>
+            <div className="section-title">
+              <span className="eyebrow">{group.title}</span>
+              <h2>{group.title}</h2>
+            </div>
+
+            <div className={`permissions-two-col${showApp && showWeb ? '' : ' single'}`}>
+              {showApp && (
+                <div className="permissions-col permissions-col-app">
+                  <header className="permissions-col-head">
+                    📱 SEG App
+                    <small>{appItems.length} escopo(s)</small>
+                  </header>
+                  {appItems.length === 0 ? (
+                    <div className="permissions-col-empty">Nenhum escopo do app neste grupo.</div>
+                  ) : (
+                    appItems.map((item) => {
+                      const isShared = (item.platforms || ['web']).includes('web')
+                      return (
+                        <ScopeItem
+                          key={`app-${item.name}`}
+                          item={item}
+                          plataforma="app"
+                          isShared={isShared}
+                          isChecked={activeScopes.includes(item.name)}
+                          onToggle={onToggle}
+                          labelMap={labelMap}
+                        />
+                      )
+                    })
+                  )}
+                </div>
+              )}
+              {showWeb && (
+                <div className="permissions-col permissions-col-web">
+                  <header className="permissions-col-head">
+                    💻 SEG Web (Desktop)
+                    <small>{webItems.length} escopo(s)</small>
+                  </header>
+                  {webItems.length === 0 ? (
+                    <div className="permissions-col-empty">Nenhum escopo do web neste grupo.</div>
+                  ) : (
+                    webItems.map((item) => {
+                      const isShared = (item.platforms || ['web']).includes('app')
+                      return (
+                        <ScopeItem
+                          key={`web-${item.name}`}
+                          item={item}
+                          plataforma="web"
+                          isShared={isShared}
+                          isChecked={activeScopes.includes(item.name)}
+                          onToggle={onToggle}
+                          labelMap={labelMap}
+                        />
+                      )
+                    })
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </>
   )
 }

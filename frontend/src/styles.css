@@ -1343,6 +1343,90 @@ tr:last-child td {
   font-size: 9px;
 }
 
+/* ── Permissões: layout 2 colunas (App | Web) ─────────────────────────── */
+.permissions-two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 6px;
+}
+.permissions-two-col.single { grid-template-columns: 1fr; }
+
+.permissions-col {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 8px;
+  background: #ffffff;
+  border: 1px solid #d8e0e8;
+  border-radius: var(--radius-sm);
+  min-height: 60px;
+}
+.permissions-col-app { border-left: 3px solid #2e7d32; background: #f7fbf8; }
+.permissions-col-web { border-left: 3px solid #1a73e8; background: #f7faff; }
+
+.permissions-col-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 0 2px 5px;
+  border-bottom: 1px solid #e0e6ee;
+  color: var(--ink-light);
+}
+.permissions-col-head small { font-size: 9px; font-weight: 500; color: var(--muted); text-transform: none; letter-spacing: 0; }
+.permissions-col-app .permissions-col-head { color: #2e7d32; }
+.permissions-col-web .permissions-col-head { color: #1a73e8; }
+
+.permissions-col-empty {
+  padding: 12px 6px;
+  text-align: center;
+  font-size: 10px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+.permissions-scope-app { border-left: 2px solid #98cdb0; }
+.permissions-scope-web { border-left: 2px solid #a8c4e8; }
+.permissions-scope-item.active {
+  background: rgba(26, 115, 232, 0.06);
+  border-color: #7aa9e4;
+}
+.permissions-scope-item.shared { border-style: dashed; }
+
+.permissions-scope-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.permissions-shared-pill {
+  font-size: 8px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: #fef8e6;
+  color: #7a4f00;
+  border: 1px solid #e0c76a;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.permissions-auto-enable {
+  display: block;
+  margin-top: 2px;
+  font-size: 9px;
+  color: #1a73e8;
+}
+
+@media (max-width: 960px) {
+  .permissions-two-col { grid-template-columns: 1fr; }
+}
+
 .presence-shell {
   display: grid;
   gap: 8px;
