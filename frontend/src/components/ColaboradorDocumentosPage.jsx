@@ -1,6 +1,700 @@
-import ResourcePage from './ResourcePage'
-import { resourceConfigs } from './resourceConfigs'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import * as XLSX from 'xlsx'
+import { api } from '../services/api'
+import { useAuth } from '../context/AuthContext'
+import { canCreateResource } from '../lib/permissions'
+import {
+  CATEGORIAS,
+  CATEGORIA_LABELS,
+  STATUS_LABELS,
+  TIPOS_OBRIGATORIOS_PADRAO,
+  TIPOS_DOCUMENTOS,
+  calcularValidadeSugerida,
+  findTipoCatalogo,
+} from './rhDocumentos/catalogo'
+import { enriquecerDocumento, contarAlertas, formatarDataBr } from './rhDocumentos/helpers'
+import DocumentoModal from './rhDocumentos/DocumentoModal'
+import ImportExcelModal from './rhDocumentos/ImportExcelModal'
+import BulkUploadModal from './rhDocumentos/BulkUploadModal'
+
+const STATUS_FILTROS = [
+  { value: '',               label: 'Todos os status' },
+  { value: 'vencido',        label: 'Vencidos' },
+  { value: 'vence_em_breve', label: 'Vence em breve' },
+  { value: 'vigente',        label: 'Vigentes' },
+  { value: 'pendente',       label: 'Pendentes' },
+  { value: 'nao_se_aplica',  label: 'Não se aplica' },
+  { value: 'sem_arquivo',    label: 'Sem arquivo' },
+]
+
+function classeLinha(status) {
+  if (status === 'vencido') return 'rh-status-vencido'
+  if (status === 'vence_em_breve') return 'rh-status-alerta'
+  if (status === 'vigente') return 'rh-status-vigente'
+  if (status === 'nao_se_aplica') return 'rh-status-na'
+  return 'rh-status-pendente'
+}
 
 export default function ColaboradorDocumentosPage() {
-  return <ResourcePage config={resourceConfigs.colaborador_documentos} />
+  const { profile } = useAuth()
+  const podeCriar = canCreateResource(profile, 'colaborador_documentos')
+
+  const [colaboradores, setColaboradores] = useState([])
+  const [filiais, setFiliais] = useState([])
+  const [documentos, setDocumentos] = useState([])
+  const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState('')
+
+  // Filtros
+  const [filtroBusca, setFiltroBusca] = useState('')
+  const [filtroFilial, setFiltroFilial] = useState('')
+  const [filtroColab, setFiltroColab] = useState('')
+  const [filtroCategoria, setFiltroCategoria] = useState('')
+  const [filtroStatus, setFiltroStatus] = useState('')
+  const [filtroDiasMax, setFiltroDiasMax] = useState('')
+  const [mostrarInativos, setMostrarInativos] = useState(false)
+
+  // Visões e modais
+  const [visao, setVisao] = useState('planilha') // 'planilha' | 'matriz'
+  const [edicao, setEdicao] = useState(null)
+  const [novo, setNovo] = useState(false)
+  const [novoColab, setNovoColab] = useState('')
+  const [importExcelOpen, setImportExcelOpen] = useState(false)
+  const [bulkUploadOpen, setBulkUploadOpen] = useState(false)
+
+  const [selecionados, setSelecionados] = useState(new Set())
+  const [ordem, setOrdem] = useState({ campo: 'data_validade', dir: 'asc' })
+
+  // Edição inline
+  const [edicaoCelula, setEdicaoCelula] = useState(null) // { id, campo, valor }
+
+  const carregar = useCallback(async () => {
+    setCarregando(true)
+    setErro('')
+    try {
+      const [colab, fil, docs] = await Promise.all([
+        api.list('colaboradores', { ativo: true, limit: 1000 }),
+        api.list('filiais', { limit: 200 }),
+        api.list('colaborador_documentos', { limit: 5000 }),
+      ])
+      const colabRows = colab?.data || colab || []
+      const filialRows = fil?.data || fil || []
+      const docRows = (docs?.data || docs || []).map((d) => enriquecerDocumento(d))
+      setColaboradores(colabRows)
+      setFiliais(filialRows)
+      setDocumentos(docRows)
+      try { window.dispatchEvent(new Event('rh-docs-changed')) } catch {}
+    } catch (e) {
+      setErro(e.message || 'Falha ao carregar documentos.')
+    } finally {
+      setCarregando(false)
+    }
+  }, [])
+
+  useEffect(() => { carregar() }, [carregar])
+
+  // ─── Filtro + ordenação ───────────────────────────────────────────────────
+  const documentosFiltrados = useMemo(() => {
+    let lista = documentos
+    if (!mostrarInativos) lista = lista.filter((d) => d.ativo !== false)
+    if (filtroFilial) lista = lista.filter((d) => String(d.filial_id) === String(filtroFilial))
+    if (filtroColab) lista = lista.filter((d) => String(d.colaborador_id) === String(filtroColab))
+    if (filtroCategoria) lista = lista.filter((d) => d.categoria === filtroCategoria)
+    if (filtroStatus === 'sem_arquivo') {
+      lista = lista.filter((d) => !d.arquivo_enviado)
+    } else if (filtroStatus) {
+      lista = lista.filter((d) => d.status_calculado === filtroStatus)
+    }
+    if (filtroDiasMax !== '') {
+      const max = Number(filtroDiasMax)
+      lista = lista.filter((d) => d.dias_para_vencer != null && d.dias_para_vencer <= max)
+    }
+    if (filtroBusca.trim()) {
+      const q = filtroBusca.trim().toLowerCase()
+      lista = lista.filter((d) => {
+        const colab = colaboradores.find((c) => Number(c.id) === Number(d.colaborador_id))
+        const blob = [
+          colab?.nome_completo,
+          d.tipo_documento,
+          d.numero_documento,
+          d.orgao_emissor,
+          d.categoria,
+          d.observacoes,
+        ].filter(Boolean).join(' ').toLowerCase()
+        return blob.includes(q)
+      })
+    }
+
+    const dir = ordem.dir === 'desc' ? -1 : 1
+    return [...lista].sort((a, b) => {
+      const va = a[ordem.campo]
+      const vb = b[ordem.campo]
+      if (va == null && vb == null) return 0
+      if (va == null) return 1
+      if (vb == null) return -1
+      if (typeof va === 'number' && typeof vb === 'number') return dir * (va - vb)
+      return dir * String(va).localeCompare(String(vb), 'pt-BR')
+    })
+  }, [documentos, colaboradores, filtroBusca, filtroFilial, filtroColab, filtroCategoria, filtroStatus, filtroDiasMax, mostrarInativos, ordem])
+
+  const alertas = useMemo(() => contarAlertas(documentosFiltrados), [documentosFiltrados])
+
+  function aoClicarCard(filtro) {
+    setFiltroStatus(filtro)
+    setFiltroDiasMax('')
+  }
+
+  function alternarSelecionado(id) {
+    setSelecionados((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function alternarTodos() {
+    if (selecionados.size === documentosFiltrados.length) setSelecionados(new Set())
+    else setSelecionados(new Set(documentosFiltrados.map((d) => d.id)))
+  }
+
+  function colaboradorPorId(id) {
+    return colaboradores.find((c) => Number(c.id) === Number(id))
+  }
+
+  function filialPorId(id) {
+    return filiais.find((f) => Number(f.id) === Number(id))
+  }
+
+  // ─── Edição inline ────────────────────────────────────────────────────────
+  function iniciarEdicaoCelula(doc, campo) {
+    setEdicaoCelula({ id: doc.id, campo, valor: doc[campo] ?? '' })
+  }
+
+  function aplicarEdicaoLocal(id, campo, valor) {
+    setDocumentos((prev) =>
+      prev.map((d) => {
+        if (d.id !== id) return d
+        const atualizado = { ...d, [campo]: valor }
+        return enriquecerDocumento(atualizado)
+      }),
+    )
+  }
+
+  function commitEdicaoCelula() {
+    if (!edicaoCelula) return
+    const { id, campo, valor } = edicaoCelula
+    const original = documentos.find((d) => d.id === id)
+    setEdicaoCelula(null)
+    if (!original) return
+    if (String(original[campo] ?? '') === String(valor ?? '')) return
+    aplicarEdicaoLocal(id, campo, valor)
+    salvarCampoRemoto(id, campo, valor)
+  }
+
+  async function salvarCampoRemoto(id, campo, valor) {
+    try {
+      let normalizado = valor === '' ? null : valor
+      if (campo === 'dias_alerta') normalizado = normalizado == null ? null : Number(normalizado)
+      await api.update('colaborador_documentos', id, { [campo]: normalizado })
+    } catch (e) {
+      setErro(`Falha ao salvar: ${e.message}`)
+      carregar()
+    }
+  }
+
+  // ─── Ações em lote ────────────────────────────────────────────────────────
+  async function acaoLote(acao) {
+    if (selecionados.size === 0) return
+    const ids = Array.from(selecionados)
+    let confirmacao = ''
+    if (acao === 'inativar') confirmacao = `Inativar ${ids.length} documento(s)?`
+    if (acao === 'excluir') confirmacao = `Excluir definitivamente ${ids.length} documento(s)? Esta ação não pode ser desfeita.`
+    if (acao === 'na') confirmacao = `Marcar ${ids.length} documento(s) como "não se aplica"?`
+    if (confirmacao && !window.confirm(confirmacao)) return
+
+    for (const id of ids) {
+      try {
+        if (acao === 'inativar') await api.update('colaborador_documentos', id, { ativo: false })
+        if (acao === 'na') await api.update('colaborador_documentos', id, { status: 'nao_se_aplica' })
+        if (acao === 'excluir') await api.remove('colaborador_documentos', id)
+      } catch (e) {
+        console.error('Falha em lote', id, e)
+      }
+    }
+    setSelecionados(new Set())
+    carregar()
+  }
+
+  async function renovarSelecionados() {
+    if (selecionados.size === 0) return
+    if (!window.confirm(`Renovar ${selecionados.size} documento(s)? Será criado um novo registro com emissão = hoje e validade calculada pelo tipo.`)) return
+    const hoje = new Date().toISOString().slice(0, 10)
+    const ids = Array.from(selecionados)
+    for (const id of ids) {
+      const orig = documentos.find((d) => d.id === id)
+      if (!orig) continue
+      const validade = calcularValidadeSugerida(orig.tipo_documento, hoje) || ''
+      try {
+        await api.create('colaborador_documentos', {
+          colaborador_id: orig.colaborador_id,
+          filial_id: orig.filial_id,
+          categoria: orig.categoria,
+          tipo_documento: orig.tipo_documento,
+          numero_documento: orig.numero_documento,
+          orgao_emissor: orig.orgao_emissor,
+          data_emissao: hoje,
+          data_validade: validade || null,
+          dias_alerta: orig.dias_alerta || 30,
+          obrigatorio: orig.obrigatorio,
+          observacoes: `Renovação de #${orig.id}`,
+          ativo: true,
+        })
+        // Inativa o antigo
+        await api.update('colaborador_documentos', orig.id, { ativo: false })
+      } catch (e) {
+        console.error('Falha ao renovar', id, e)
+      }
+    }
+    setSelecionados(new Set())
+    carregar()
+  }
+
+  function exportarSelecionados() {
+    const lista = selecionados.size > 0
+      ? documentosFiltrados.filter((d) => selecionados.has(d.id))
+      : documentosFiltrados
+    const linhas = lista.map((d) => ({
+      Colaborador: colaboradorPorId(d.colaborador_id)?.nome_completo || d.colaborador_id,
+      Filial: filialPorId(d.filial_id)?.cidade || d.filial_id,
+      Categoria: CATEGORIA_LABELS[d.categoria] || d.categoria || '',
+      'Tipo do documento': d.tipo_documento || '',
+      'Número': d.numero_documento || '',
+      'Órgão emissor': d.orgao_emissor || '',
+      'Data emissão': d.data_emissao || '',
+      'Data validade': d.data_validade || '',
+      'Dias alerta': d.dias_alerta ?? 30,
+      'Dias p/ vencer': d.dias_para_vencer ?? '',
+      'Status': STATUS_LABELS[d.status_calculado] || d.status_calculado,
+      'Obrigatório': d.obrigatorio ? 'Sim' : 'Não',
+      'Arquivo': d.arquivo_url || '',
+      'Observações': d.observacoes || '',
+      'Ativo': d.ativo === false ? 'Não' : 'Sim',
+    }))
+    const ws = XLSX.utils.json_to_sheet(linhas)
+    const wb = XLSX.utils.book_new()
+    XLSX.utils.book_append_sheet(wb, ws, 'Documentos RH')
+    XLSX.writeFile(wb, `documentos_rh_${new Date().toISOString().slice(0, 10)}.xlsx`)
+  }
+
+  // ─── Render ───────────────────────────────────────────────────────────────
+  function aoClicarCabecalho(campo) {
+    setOrdem((prev) => ({
+      campo,
+      dir: prev.campo === campo && prev.dir === 'asc' ? 'desc' : 'asc',
+    }))
+  }
+
+  function abrirNovo(colaboradorId = '') {
+    setNovoColab(colaboradorId)
+    setNovo(true)
+  }
+
+  return (
+    <div className="rh-documentos-page">
+      <header className="page-header">
+        <div>
+          <h2>Documentos RH</h2>
+          <p className="muted">
+            Controle documental dos colaboradores: validades, anexos, alertas e renovação programada.
+          </p>
+        </div>
+        <div className="rh-doc-header-actions">
+          <button type="button" className="button-secondary" onClick={() => setVisao(visao === 'planilha' ? 'matriz' : 'planilha')}>
+            {visao === 'planilha' ? '📋 Ver matriz' : '📊 Ver planilha'}
+          </button>
+          <button type="button" className="button-secondary" onClick={exportarSelecionados}>
+            ⬇ Exportar Excel
+          </button>
+          {podeCriar && (
+            <>
+              <button type="button" className="button-secondary" onClick={() => setImportExcelOpen(true)}>
+                ⬆ Importar Excel
+              </button>
+              <button type="button" className="button-secondary" onClick={() => setBulkUploadOpen(true)}>
+                📎 Upload em lote
+              </button>
+              <button type="button" className="button-primary" onClick={() => abrirNovo()}>
+                + Novo documento
+              </button>
+            </>
+          )}
+        </div>
+      </header>
+
+      {erro && <div className="alert-danger">{erro}</div>}
+
+      {/* Cards de alerta */}
+      <section className="rh-doc-alert-cards">
+        <button type="button" className={`rh-doc-card vencidos${filtroStatus === 'vencido' ? ' active' : ''}`} onClick={() => aoClicarCard('vencido')}>
+          <span>Vencidos</span>
+          <strong>{alertas.vencidos}</strong>
+          <small>Regularize com urgência</small>
+        </button>
+        <button type="button" className={`rh-doc-card alerta${filtroStatus === 'vence_em_breve' ? ' active' : ''}`} onClick={() => aoClicarCard('vence_em_breve')}>
+          <span>Vencem em breve</span>
+          <strong>{alertas.venceEmBreve}</strong>
+          <small>Dentro da régua de alerta</small>
+        </button>
+        <button type="button" className={`rh-doc-card pendentes${filtroStatus === 'pendente' ? ' active' : ''}`} onClick={() => aoClicarCard('pendente')}>
+          <span>Pendentes</span>
+          <strong>{alertas.pendentes}</strong>
+          <small>Sem validade ou status final</small>
+        </button>
+        <button type="button" className={`rh-doc-card sem-arquivo${filtroStatus === 'sem_arquivo' ? ' active' : ''}`} onClick={() => aoClicarCard('sem_arquivo')}>
+          <span>Sem arquivo</span>
+          <strong>{alertas.semArquivo}</strong>
+          <small>Cadastro sem PDF ou foto</small>
+        </button>
+        <button type="button" className={`rh-doc-card vigentes${filtroStatus === 'vigente' ? ' active' : ''}`} onClick={() => aoClicarCard('vigente')}>
+          <span>Vigentes</span>
+          <strong>{alertas.total - alertas.vencidos - alertas.venceEmBreve - alertas.pendentes}</strong>
+          <small>Documentos em dia</small>
+        </button>
+      </section>
+
+      {/* Filtros */}
+      <section className="rh-doc-filtros">
+        <input
+          type="search"
+          placeholder="Buscar por colaborador, tipo, número, órgão…"
+          value={filtroBusca}
+          onChange={(e) => setFiltroBusca(e.target.value)}
+        />
+        <select value={filtroFilial} onChange={(e) => setFiltroFilial(e.target.value)}>
+          <option value="">Todas as filiais</option>
+          {filiais.map((f) => <option key={f.id} value={f.id}>{f.cidade || f.nome || `Filial ${f.id}`}</option>)}
+        </select>
+        <select value={filtroColab} onChange={(e) => setFiltroColab(e.target.value)}>
+          <option value="">Todos os colaboradores</option>
+          {colaboradores.map((c) => <option key={c.id} value={c.id}>{c.nome_completo}</option>)}
+        </select>
+        <select value={filtroCategoria} onChange={(e) => setFiltroCategoria(e.target.value)}>
+          <option value="">Todas as categorias</option>
+          {CATEGORIAS.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
+        </select>
+        <select value={filtroStatus} onChange={(e) => setFiltroStatus(e.target.value)}>
+          {STATUS_FILTROS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+        </select>
+        <input
+          type="number"
+          placeholder="Vence em até X dias"
+          value={filtroDiasMax}
+          onChange={(e) => setFiltroDiasMax(e.target.value)}
+          min={0}
+          style={{ width: 160 }}
+        />
+        <label className="rh-doc-filter-check">
+          <input type="checkbox" checked={mostrarInativos} onChange={(e) => setMostrarInativos(e.target.checked)} />
+          Mostrar inativos
+        </label>
+        {(filtroBusca || filtroFilial || filtroColab || filtroCategoria || filtroStatus || filtroDiasMax || mostrarInativos) && (
+          <button
+            type="button"
+            className="button-link"
+            onClick={() => {
+              setFiltroBusca('')
+              setFiltroFilial('')
+              setFiltroColab('')
+              setFiltroCategoria('')
+              setFiltroStatus('')
+              setFiltroDiasMax('')
+              setMostrarInativos(false)
+            }}
+          >
+            ✕ Limpar
+          </button>
+        )}
+      </section>
+
+      {/* Barra de ações em lote */}
+      {selecionados.size > 0 && (
+        <div className="rh-doc-bulk-bar">
+          <strong>{selecionados.size} selecionado(s)</strong>
+          <button type="button" className="button-secondary" onClick={renovarSelecionados}>♻ Renovar</button>
+          <button type="button" className="button-secondary" onClick={() => acaoLote('na')}>Marcar n/a</button>
+          <button type="button" className="button-secondary" onClick={() => acaoLote('inativar')}>Inativar</button>
+          <button type="button" className="button-secondary" onClick={exportarSelecionados}>⬇ Exportar</button>
+          <button type="button" className="button-link danger" onClick={() => acaoLote('excluir')}>Excluir</button>
+          <button type="button" className="button-link" onClick={() => setSelecionados(new Set())}>Limpar seleção</button>
+        </div>
+      )}
+
+      {/* Conteúdo */}
+      {carregando ? (
+        <div className="muted" style={{ padding: 16 }}>Carregando documentos…</div>
+      ) : visao === 'planilha' ? (
+        <VisaoPlanilha
+          documentos={documentosFiltrados}
+          colaboradores={colaboradores}
+          filiais={filiais}
+          selecionados={selecionados}
+          alternarSelecionado={alternarSelecionado}
+          alternarTodos={alternarTodos}
+          ordem={ordem}
+          aoClicarCabecalho={aoClicarCabecalho}
+          aoEditar={(d) => setEdicao(d)}
+          edicaoCelula={edicaoCelula}
+          iniciarEdicaoCelula={iniciarEdicaoCelula}
+          setEdicaoCelula={setEdicaoCelula}
+          commitEdicaoCelula={commitEdicaoCelula}
+        />
+      ) : (
+        <VisaoMatriz
+          documentos={documentosFiltrados}
+          colaboradores={colaboradores.filter((c) => !filtroFilial || String(c.filial_id) === String(filtroFilial))}
+          aoCriar={(colaboradorId) => abrirNovo(colaboradorId)}
+          aoEditar={(d) => setEdicao(d)}
+        />
+      )}
+
+      {/* Modais */}
+      {(novo || edicao) && (
+        <DocumentoModal
+          documento={edicao}
+          defaultColaboradorId={novoColab}
+          colaboradores={colaboradores}
+          filiais={filiais}
+          onClose={() => { setNovo(false); setEdicao(null); setNovoColab('') }}
+          onSaved={carregar}
+        />
+      )}
+
+      {importExcelOpen && (
+        <ImportExcelModal
+          colaboradores={colaboradores}
+          filiais={filiais}
+          onClose={() => setImportExcelOpen(false)}
+          onImported={carregar}
+        />
+      )}
+
+      {bulkUploadOpen && (
+        <BulkUploadModal
+          colaboradores={colaboradores}
+          filiais={filiais}
+          onClose={() => setBulkUploadOpen(false)}
+          onImported={carregar}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Visão Planilha ──────────────────────────────────────────────────────────
+function VisaoPlanilha({
+  documentos, colaboradores, filiais, selecionados, alternarSelecionado, alternarTodos,
+  ordem, aoClicarCabecalho, aoEditar,
+  edicaoCelula, iniciarEdicaoCelula, setEdicaoCelula, commitEdicaoCelula,
+}) {
+  const colaboradorPorId = (id) => colaboradores.find((c) => Number(c.id) === Number(id))
+  const filialPorId = (id) => filiais.find((f) => Number(f.id) === Number(id))
+
+  function indicadorOrdem(campo) {
+    if (ordem.campo !== campo) return null
+    return <span style={{ marginLeft: 4, opacity: 0.6 }}>{ordem.dir === 'asc' ? '▲' : '▼'}</span>
+  }
+
+  function renderCelulaEditavel(doc, campo, tipo = 'text') {
+    const editando = edicaoCelula?.id === doc.id && edicaoCelula?.campo === campo
+    if (editando) {
+      return (
+        <input
+          type={tipo}
+          autoFocus
+          value={edicaoCelula.valor ?? ''}
+          onChange={(e) => setEdicaoCelula({ ...edicaoCelula, valor: e.target.value })}
+          onBlur={commitEdicaoCelula}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') { e.preventDefault(); commitEdicaoCelula() }
+            if (e.key === 'Escape') setEdicaoCelula(null)
+          }}
+          className="rh-doc-inline-input"
+        />
+      )
+    }
+    const valor = doc[campo]
+    const visual = tipo === 'date' ? formatarDataBr(valor) : (valor || '—')
+    return (
+      <span
+        className="rh-doc-inline-display"
+        onDoubleClick={() => iniciarEdicaoCelula(doc, campo)}
+        title="Duplo clique para editar"
+      >
+        {visual}
+      </span>
+    )
+  }
+
+  if (documentos.length === 0) {
+    return <div className="muted" style={{ padding: 16 }}>Nenhum documento encontrado para os filtros atuais.</div>
+  }
+
+  return (
+    <div className="rh-doc-table-wrapper">
+      <table className="rh-doc-table">
+        <thead>
+          <tr>
+            <th style={{ width: 28 }}>
+              <input
+                type="checkbox"
+                checked={selecionados.size === documentos.length && documentos.length > 0}
+                onChange={alternarTodos}
+              />
+            </th>
+            <th onClick={() => aoClicarCabecalho('colaborador_id')} className="rh-doc-th-clickable">Colaborador{indicadorOrdem('colaborador_id')}</th>
+            <th onClick={() => aoClicarCabecalho('filial_id')} className="rh-doc-th-clickable">Filial{indicadorOrdem('filial_id')}</th>
+            <th onClick={() => aoClicarCabecalho('categoria')} className="rh-doc-th-clickable">Categoria{indicadorOrdem('categoria')}</th>
+            <th onClick={() => aoClicarCabecalho('tipo_documento')} className="rh-doc-th-clickable">Tipo{indicadorOrdem('tipo_documento')}</th>
+            <th>Número</th>
+            <th onClick={() => aoClicarCabecalho('data_emissao')} className="rh-doc-th-clickable">Emissão{indicadorOrdem('data_emissao')}</th>
+            <th onClick={() => aoClicarCabecalho('data_validade')} className="rh-doc-th-clickable">Validade{indicadorOrdem('data_validade')}</th>
+            <th onClick={() => aoClicarCabecalho('dias_para_vencer')} className="rh-doc-th-clickable">Dias p/ vencer{indicadorOrdem('dias_para_vencer')}</th>
+            <th>Alerta</th>
+            <th>Status</th>
+            <th>Arquivo</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {documentos.map((doc) => {
+            const colab = colaboradorPorId(doc.colaborador_id)
+            const filial = filialPorId(doc.filial_id)
+            const status = doc.status_calculado
+            return (
+              <tr key={doc.id} className={`${classeLinha(status)}${doc.ativo === false ? ' rh-row-inactive' : ''}`}>
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={selecionados.has(doc.id)}
+                    onChange={() => alternarSelecionado(doc.id)}
+                  />
+                </td>
+                <td>{colab?.nome_completo || `#${doc.colaborador_id}`}</td>
+                <td>{filial?.cidade || filial?.nome || `Filial ${doc.filial_id}`}</td>
+                <td>{CATEGORIA_LABELS[doc.categoria] || doc.categoria || '—'}</td>
+                <td>{doc.tipo_documento}</td>
+                <td>{renderCelulaEditavel(doc, 'numero_documento')}</td>
+                <td>{renderCelulaEditavel(doc, 'data_emissao', 'date')}</td>
+                <td>{renderCelulaEditavel(doc, 'data_validade', 'date')}</td>
+                <td className="rh-doc-dias">
+                  {doc.dias_para_vencer == null ? '—' : (
+                    <span className={`rh-dias-badge ${status}`}>
+                      {doc.dias_para_vencer >= 0 ? `${doc.dias_para_vencer}d` : `${Math.abs(doc.dias_para_vencer)}d atrás`}
+                    </span>
+                  )}
+                </td>
+                <td>{renderCelulaEditavel(doc, 'dias_alerta', 'number')}</td>
+                <td><span className={`rh-status-badge ${status}`}>{STATUS_LABELS[status] || status}</span></td>
+                <td>
+                  {doc.arquivo_url ? (
+                    <a href={doc.arquivo_url} target="_blank" rel="noreferrer" className="button-link">📄 ver</a>
+                  ) : (
+                    <span className="muted">—</span>
+                  )}
+                </td>
+                <td>
+                  <button type="button" className="button-link" onClick={() => aoEditar(doc)}>editar</button>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+// ── Visão Matriz colaborador × tipo ─────────────────────────────────────────
+function VisaoMatriz({ documentos, colaboradores, aoCriar, aoEditar }) {
+  // Tipos a mostrar = obrigatórios padrão ∪ tipos que aparecem nos documentos filtrados
+  const tiposParaMostrar = useMemo(() => {
+    const set = new Set(TIPOS_OBRIGATORIOS_PADRAO)
+    for (const d of documentos) {
+      if (d.tipo_documento) set.add(d.tipo_documento)
+    }
+    return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))
+  }, [documentos])
+
+  // index[colaborador_id][tipo] = doc mais recente
+  const indexCD = useMemo(() => {
+    const out = {}
+    for (const d of documentos) {
+      const k = `${d.colaborador_id}::${d.tipo_documento}`
+      const existing = out[k]
+      if (!existing) { out[k] = d; continue }
+      // pega o de validade mais nova
+      const va = d.data_validade || ''
+      const vb = existing.data_validade || ''
+      if (va > vb) out[k] = d
+    }
+    return out
+  }, [documentos])
+
+  if (colaboradores.length === 0) {
+    return <div className="muted" style={{ padding: 16 }}>Nenhum colaborador ativo para a filial selecionada.</div>
+  }
+
+  return (
+    <div className="rh-doc-matrix-wrapper">
+      <table className="rh-doc-matrix">
+        <thead>
+          <tr>
+            <th className="rh-doc-matrix-name">Colaborador</th>
+            {tiposParaMostrar.map((t) => (
+              <th key={t} className="rh-doc-matrix-type" title={t}>{t}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {colaboradores.map((colab) => (
+            <tr key={colab.id}>
+              <td className="rh-doc-matrix-name">{colab.nome_completo}</td>
+              {tiposParaMostrar.map((tipo) => {
+                const doc = indexCD[`${colab.id}::${tipo}`]
+                if (!doc) {
+                  const obrigatorio = findTipoCatalogo(tipo)?.obrigatorio
+                  return (
+                    <td key={tipo} className={`rh-doc-matrix-cell vazia${obrigatorio ? ' obrig' : ''}`}>
+                      <button
+                        type="button"
+                        className="rh-doc-matrix-add"
+                        title={obrigatorio ? `Falta cadastrar: ${tipo}` : `Cadastrar ${tipo}`}
+                        onClick={() => aoCriar(colab.id)}
+                      >
+                        {obrigatorio ? '!' : '+'}
+                      </button>
+                    </td>
+                  )
+                }
+                const status = doc.status_calculado
+                return (
+                  <td key={tipo} className={`rh-doc-matrix-cell ${status}`}>
+                    <button
+                      type="button"
+                      className="rh-doc-matrix-info"
+                      title={`${tipo}\nValidade: ${doc.data_validade || '—'}\nStatus: ${STATUS_LABELS[status] || status}`}
+                      onClick={() => aoEditar(doc)}
+                    >
+                      {doc.data_validade ? formatarDataBr(doc.data_validade) : '✓'}
+                    </button>
+                  </td>
+                )
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )
 }
