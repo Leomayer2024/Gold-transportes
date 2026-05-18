@@ -2,8 +2,29 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { getAllNavigation } from '../lib/permissions'
+import { api } from '../services/api'
+import { enriquecerDocumento } from './rhDocumentos/helpers'
 import logoGold from '../../assets/logo_gold.png'
 import packageInfo from '../../package.json'
+
+// Cache simples para os badges de alerta (TTL 60s). Atualizado em foco da janela
+// e quando o evento global "rh-docs-changed" é disparado pela tela de Documentos RH.
+const BADGE_TTL_MS = 60_000
+const badgeCache = { ts: 0, counts: {} }
+
+async function fetchAlertBadges() {
+  try {
+    const res = await api.list('colaborador_documentos', { limit: 5000 })
+    const rows = (res?.data || res || []).filter((d) => d.ativo !== false)
+    const enriched = rows.map((d) => enriquecerDocumento(d))
+    const urgentes = enriched.filter((d) =>
+      d.status_calculado === 'vencido' || d.status_calculado === 'vence_em_breve',
+    ).length
+    return { '/rh-documentos': urgentes }
+  } catch {
+    return {}
+  }
+}
 
 function LockIcon() {
   return (
@@ -93,6 +114,34 @@ export default function Sidebar() {
   const [groups, setGroups] = useState(() =>
     applyOrder(getAllNavigation(profile), loadNavOrder(userId)),
   )
+
+  const [badgeCounts, setBadgeCounts] = useState(badgeCache.counts)
+
+  useEffect(() => {
+    if (!profile) return
+    let cancelled = false
+    async function refresh(force = false) {
+      const now = Date.now()
+      if (!force && now - badgeCache.ts < BADGE_TTL_MS && Object.keys(badgeCache.counts).length > 0) {
+        if (!cancelled) setBadgeCounts(badgeCache.counts)
+        return
+      }
+      const counts = await fetchAlertBadges()
+      badgeCache.ts = Date.now()
+      badgeCache.counts = counts
+      if (!cancelled) setBadgeCounts(counts)
+    }
+    refresh()
+    const onFocus = () => refresh(true)
+    const onChange = () => refresh(true)
+    window.addEventListener('focus', onFocus)
+    window.addEventListener('rh-docs-changed', onChange)
+    return () => {
+      cancelled = true
+      window.removeEventListener('focus', onFocus)
+      window.removeEventListener('rh-docs-changed', onChange)
+    }
+  }, [profile])
 
   const [organizing, setOrganizing] = useState(false)
   const [drag, setDrag] = useState(null)      // { type:'group'|'item', title?:string, to?:string, fromGroup?:string }
@@ -352,7 +401,12 @@ export default function Sidebar() {
                             {organizing && (
                               <span style={{ marginRight: 6, opacity: 0.4, fontSize: 12 }}>⠿</span>
                             )}
-                            {item.label}
+                            <span style={{ flex: 1 }}>{item.label}</span>
+                            {badgeCounts[item.to] > 0 && (
+                              <span className="nav-badge" title="Documentos vencidos ou vencendo">
+                                {badgeCounts[item.to] > 99 ? '99+' : badgeCounts[item.to]}
+                              </span>
+                            )}
                           </NavLink>
                         )}
                       </div>
