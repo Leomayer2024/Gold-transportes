@@ -15,6 +15,11 @@ const STATUS_LABELS = {
 
 const STATUS_OPTS = Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label }))
 
+const BANCOS = [
+  '', 'Itaú', 'Bradesco', 'Banco do Brasil', 'Caixa Econômica', 'Santander',
+  'Nubank', 'Inter', 'BTG Pactual', 'Sicoob', 'Sicredi', 'C6 Bank', 'Safra', 'Original', 'Outro',
+]
+
 function formatBR(iso) {
   if (!iso) return ''
   const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/)
@@ -302,8 +307,8 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
     data_inicio: '',
     data_fim: '',
     rota: '',
-    status: 'pendente',
-    banco: 'Itau',
+    status: 'pendente', // sempre pendente ao criar
+    banco: '',          // vazio por padrão; usuário escolhe no dropdown
     observacoes: '',
   })
   const [itens, setItens] = useState(() => itensIniciais.length > 0 ? itensIniciais : [novoItem()])
@@ -327,17 +332,7 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
     }
   }
 
-  // Aplica valores da cidade quando ela muda
-  useEffect(() => {
-    if (!sol.cidade_destino) return
-    const c = valoresCidade.find((v) => v.cidade?.toUpperCase() === sol.cidade_destino.toUpperCase())
-    if (!c) return
-    setItens((arr) => arr.map((it) => ({
-      ...it,
-      valor_cafe: c.cafe, valor_almoco: c.almoco, valor_jantar: c.jantar, valor_pernoite: c.pernoite,
-    })))
-    if (c.uf && !sol.uf_destino) setSol((s) => ({ ...s, uf_destino: c.uf }))
-  }, [sol.cidade_destino, valoresCidade])
+  // Valores agora são digitados manualmente — nenhum auto-fill por cidade.
 
   // Auto-calcula qtds e total quando datas/checks mudam
   useEffect(() => {
@@ -379,11 +374,6 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
     setItens((arr) => [...arr, recalcItem(novoItem(), sol.data_inicio, sol.data_fim)])
   }
 
-  function escolherColaborador(idx, colabId) {
-    const colab = colaboradores.find((c) => Number(c.id) === Number(colabId))
-    updItem(idx, { colaborador_id: colab?.id || null, motorista_nome: colab?.nome_completo || '' })
-  }
-
   const valorTotal = useMemo(() => itens.reduce((acc, it) => acc + Number(it.valor_total || 0), 0), [itens])
 
   async function salvar(event) {
@@ -407,9 +397,10 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
         data_inicio: sol.data_inicio,
         data_fim: sol.data_fim,
         rota: sol.rota || null,
-        status: sol.status || 'pendente',
+        // Status sempre 'pendente' na criação. Em edição, mantém o que está.
+        status: modo === 'nova' ? 'pendente' : (sol.status || 'pendente'),
         valor_total: valorTotal,
-        banco: sol.banco || 'Itau',
+        banco: sol.banco || null,
         observacoes: sol.observacoes || null,
         criado_por: profile?.id || null,
       }
@@ -475,16 +466,13 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
             <label>
               <span>Cidade destino *</span>
               <input
-                list="diarias-cidades"
                 type="text"
                 value={sol.cidade_destino}
-                onChange={(e) => setSol({ ...sol, cidade_destino: e.target.value })}
+                onChange={(e) => setSol({ ...sol, cidade_destino: e.target.value.toUpperCase() })}
                 placeholder="Ex.: LONDRINA"
                 required
+                style={{ textTransform: 'uppercase' }}
               />
-              <datalist id="diarias-cidades">
-                {valoresCidade.map((v) => <option key={v.id} value={v.cidade}>{v.cidade}/{v.uf}</option>)}
-              </datalist>
             </label>
             <label>
               <span>UF</span>
@@ -504,12 +492,8 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
             </label>
             <label>
               <span>Banco</span>
-              <input type="text" value={sol.banco || 'Itau'} onChange={(e) => setSol({ ...sol, banco: e.target.value })} />
-            </label>
-            <label>
-              <span>Status</span>
-              <select value={sol.status} onChange={(e) => setSol({ ...sol, status: e.target.value })}>
-                {STATUS_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              <select value={sol.banco || ''} onChange={(e) => setSol({ ...sol, banco: e.target.value })}>
+                {BANCOS.map((b) => <option key={b} value={b}>{b || '— selecione —'}</option>)}
               </select>
             </label>
           </div>
@@ -539,17 +523,34 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
                 {itens.map((it, idx) => (
                   <tr key={it._key || it.id || idx}>
                     <td>
-                      <select value={it.colaborador_id || ''} onChange={(e) => escolherColaborador(idx, e.target.value)} style={{ width: 160 }}>
-                        <option value="">— digitar —</option>
-                        {colaboradores.filter((c) => c.ativo !== false).map((c) => <option key={c.id} value={c.id}>{c.nome_completo}</option>)}
-                      </select>
-                      <input type="text" value={it.motorista_nome} onChange={(e) => updItem(idx, { motorista_nome: e.target.value })} placeholder="Nome" style={{ width: 160, marginTop: 4 }} />
+                      <MotoristaCombo
+                        colaboradores={colaboradores}
+                        valor={it.motorista_nome}
+                        colaboradorId={it.colaborador_id}
+                        onSelect={(c) => updItem(idx, { colaborador_id: c?.id || null, motorista_nome: c?.nome_completo || '' })}
+                        onTextChange={(text) => updItem(idx, { motorista_nome: text, colaborador_id: null })}
+                      />
                     </td>
-                    <td><input type="text" value={it.placa || ''} onChange={(e) => updItem(idx, { placa: e.target.value.toUpperCase() })} style={{ width: 80 }} /></td>
-                    <td><input type="checkbox" checked={!!it.inclui_cafe} onChange={(e) => updItem(idx, { inclui_cafe: e.target.checked })} /> <small>{brl(it.valor_cafe)}</small></td>
-                    <td><input type="checkbox" checked={!!it.inclui_almoco} onChange={(e) => updItem(idx, { inclui_almoco: e.target.checked })} /> <small>{brl(it.valor_almoco)}</small></td>
-                    <td><input type="checkbox" checked={!!it.inclui_jantar} onChange={(e) => updItem(idx, { inclui_jantar: e.target.checked })} /> <small>{brl(it.valor_jantar)}</small></td>
-                    <td><small>{brl(it.valor_pernoite)}</small></td>
+                    <td><input type="text" value={it.placa || ''} onChange={(e) => updItem(idx, { placa: e.target.value.toUpperCase() })} style={{ width: 90 }} /></td>
+                    <td>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <input type="checkbox" checked={!!it.inclui_cafe} onChange={(e) => updItem(idx, { inclui_cafe: e.target.checked })} />
+                        <ValorInput valor={it.valor_cafe} onChange={(v) => updItem(idx, { valor_cafe: v })} />
+                      </div>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <input type="checkbox" checked={!!it.inclui_almoco} onChange={(e) => updItem(idx, { inclui_almoco: e.target.checked })} />
+                        <ValorInput valor={it.valor_almoco} onChange={(v) => updItem(idx, { valor_almoco: v })} />
+                      </div>
+                    </td>
+                    <td>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <input type="checkbox" checked={!!it.inclui_jantar} onChange={(e) => updItem(idx, { inclui_jantar: e.target.checked })} />
+                        <ValorInput valor={it.valor_jantar} onChange={(v) => updItem(idx, { valor_jantar: v })} />
+                      </div>
+                    </td>
+                    <td><ValorInput valor={it.valor_pernoite} onChange={(v) => updItem(idx, { valor_pernoite: v })} /></td>
                     <td><input type="number" min={0} value={it.qtd_diarias} onChange={(e) => updItem(idx, { qtd_diarias: Number(e.target.value) })} style={{ width: 50 }} /></td>
                     <td><input type="number" min={0} value={it.qtd_pernoites} onChange={(e) => updItem(idx, { qtd_pernoites: Number(e.target.value) })} style={{ width: 50 }} /></td>
                     <td><strong>{brl(it.valor_total)}</strong></td>
@@ -577,5 +578,105 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
         </form>
       </div>
     </div>
+  )
+}
+
+// ── Combobox de motorista (digita 3+ letras pra filtrar) ────────────────────
+function MotoristaCombo({ colaboradores, valor, colaboradorId, onSelect, onTextChange }) {
+  const [aberto, setAberto] = useState(false)
+  const [busca, setBusca] = useState(valor || '')
+
+  useEffect(() => { setBusca(valor || '') }, [valor])
+
+  const ativos = useMemo(() => colaboradores.filter((c) => c.ativo !== false), [colaboradores])
+  const filtrados = useMemo(() => {
+    const q = (busca || '').trim().toLowerCase()
+    if (q.length < 3) return ativos.slice(0, 20) // mostra alguns por default ao focar
+    const termos = q.split(/\s+/).filter(Boolean)
+    return ativos.filter((c) => {
+      const nome = (c.nome_completo || '').toLowerCase()
+      return termos.every((t) => nome.includes(t))
+    }).slice(0, 30)
+  }, [busca, ativos])
+
+  function selecionar(c) {
+    onSelect?.(c)
+    setBusca(c.nome_completo)
+    setAberto(false)
+  }
+
+  return (
+    <div style={{ position: 'relative', width: 220 }}>
+      <input
+        type="text"
+        value={busca}
+        onChange={(e) => { setBusca(e.target.value); onTextChange?.(e.target.value); setAberto(true) }}
+        onFocus={() => setAberto(true)}
+        onBlur={() => setTimeout(() => setAberto(false), 150)}
+        placeholder="Digite 3+ letras..."
+        style={{ width: '100%' }}
+      />
+      {aberto && filtrados.length > 0 && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 10,
+          background: '#fff', border: '1px solid var(--border, #ccc)', borderRadius: 4,
+          maxHeight: 200, overflowY: 'auto', boxShadow: '0 4px 10px rgba(0,0,0,0.12)',
+        }}>
+          {filtrados.map((c) => (
+            <div
+              key={c.id}
+              onMouseDown={() => selecionar(c)}
+              style={{
+                padding: '6px 8px', cursor: 'pointer', fontSize: 11,
+                background: Number(c.id) === Number(colaboradorId) ? 'var(--surface-2, #f0f4ff)' : 'transparent',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = '#f0f4ff')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = Number(c.id) === Number(colaboradorId) ? '#f0f4ff' : 'transparent')}
+            >
+              {c.nome_completo}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ── Input de valor R$ editável ──────────────────────────────────────────────
+function ValorInput({ valor, onChange }) {
+  const [texto, setTexto] = useState(() => formatarValor(valor))
+  useEffect(() => { setTexto(formatarValor(valor)) }, [valor])
+
+  function formatarValor(v) {
+    const n = Number(v || 0)
+    return n.toFixed(2).replace('.', ',')
+  }
+
+  function aoDigitar(e) {
+    const raw = e.target.value.replace(/[^\d,.-]/g, '')
+    setTexto(raw)
+  }
+
+  function aoSair() {
+    // Normaliza: aceita "15,50", "15.50", "1500" → numérico
+    let s = (texto || '').replace(/\./g, '').replace(',', '.')
+    const n = Number(s)
+    if (Number.isFinite(n)) {
+      onChange?.(n)
+      setTexto(formatarValor(n))
+    } else {
+      setTexto(formatarValor(valor))
+    }
+  }
+
+  return (
+    <input
+      type="text"
+      value={texto}
+      onChange={aoDigitar}
+      onBlur={aoSair}
+      style={{ width: 70, fontSize: 10, textAlign: 'right' }}
+      placeholder="0,00"
+    />
   )
 }
