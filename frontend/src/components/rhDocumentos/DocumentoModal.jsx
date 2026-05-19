@@ -10,8 +10,10 @@ import {
   diasAlertaSugerido,
   categoriaSugerida,
   isTipoSensivel,
+  getCriaFaseContrato,
   somarDiasIso,
 } from './catalogo'
+import { FASE_LABELS, TIPO_VINCULO_LABELS } from '../rhContratos/catalogo'
 
 const STATUS_OPTIONS = [
   { value: '',              label: '(automático pela validade)' },
@@ -65,6 +67,9 @@ export default function DocumentoModal({
   const [uploading, setUploading] = useState(false)
   const [uploadingExtra, setUploadingExtra] = useState(false)
   const [error, setError] = useState('')
+  // Quando o tipo é contratual, oferece criar/atualizar a fase do vínculo.
+  // Marca por padrão apenas em criação (não em edição de doc existente).
+  const [criarVinculo, setCriarVinculo] = useState(true)
 
   useEffect(() => {
     if (documento) {
@@ -229,6 +234,21 @@ export default function DocumentoModal({
       } else {
         await api.create('colaborador_documentos', payload)
       }
+
+      // Se for um tipo contratual e o usuário deixou marcado, cria a fase
+      // correspondente em colaborador_contratos.
+      const recipe = getCriaFaseContrato(form.tipo_documento)
+      if (recipe && criarVinculo && !documento?.id) {
+        try {
+          await criarFaseContratoVinculo(payload, recipe)
+        } catch (e) {
+          // Falha ao criar contrato não derruba o doc — só avisa.
+          setError(`Documento salvo, mas falha ao criar fase do vínculo contratual: ${e.message || e}`)
+          setSaving(false)
+          return
+        }
+      }
+
       onSaved?.()
       onClose?.()
     } catch (e) {
@@ -236,6 +256,54 @@ export default function DocumentoModal({
     } finally {
       setSaving(false)
     }
+  }
+
+  async function criarFaseContratoVinculo(docPayload, recipe) {
+    // Resolve vinculo_id: se reusaUltimoVinculo=true, busca o vínculo CLT
+    // ativo mais recente do colaborador para encadear a fase.
+    let vinculo_id = null
+    if (recipe.reusaUltimoVinculo) {
+      try {
+        const res = await api.list('colaborador_contratos', {
+          colaborador_id: docPayload.colaborador_id,
+          tipo_vinculo: recipe.tipo_vinculo,
+          limit: 50,
+        })
+        const rows = res?.data || res || []
+        const ativos = rows.filter((c) => !c.data_desligamento)
+        if (ativos.length > 0) {
+          // pega o mais recente por data_inicio
+          ativos.sort((a, b) => String(b.data_inicio || '').localeCompare(String(a.data_inicio || '')))
+          vinculo_id = ativos[0].vinculo_id
+        }
+      } catch {
+        // se falhar a busca, cria como novo vínculo
+      }
+    }
+
+    // Datas: usa emissão→validade do doc se houver; senão calcula
+    // baseado no duracaoDias da receita.
+    const inicio = docPayload.data_emissao || new Date().toISOString().slice(0, 10)
+    let fim = docPayload.data_validade || null
+    if (!fim && recipe.duracaoDias) {
+      // somarDiasIso(inicio, duracaoDias - 1) totaliza N dias contando o início
+      fim = somarDiasIso(inicio, recipe.duracaoDias - 1)
+    }
+    if (recipe.fase === 'indeterminado') fim = null
+
+    const payload = {
+      colaborador_id: docPayload.colaborador_id,
+      filial_id: docPayload.filial_id,
+      tipo_vinculo: recipe.tipo_vinculo,
+      fase: recipe.fase,
+      data_inicio: inicio,
+      data_fim: fim,
+      ativo: true,
+      observacoes: `Criado automaticamente a partir do documento "${docPayload.tipo_documento}".`,
+    }
+    if (vinculo_id) payload.vinculo_id = vinculo_id
+
+    await api.create('colaborador_contratos', payload)
   }
 
   return (
@@ -444,6 +512,31 @@ export default function DocumentoModal({
               </ul>
             )}
           </label>
+
+          {!documento?.id && getCriaFaseContrato(form.tipo_documento) && (
+            <div className="rh-doc-form-full rh-vincular-contrato">
+              <label className="rh-doc-form-checkbox">
+                <input
+                  type="checkbox"
+                  checked={criarVinculo}
+                  onChange={(e) => setCriarVinculo(e.target.checked)}
+                />
+                <span>
+                  🔗 Também criar fase do vínculo contratual: <strong>
+                    {TIPO_VINCULO_LABELS[getCriaFaseContrato(form.tipo_documento).tipo_vinculo]}
+                    {' — '}
+                    {FASE_LABELS[getCriaFaseContrato(form.tipo_documento).fase]}
+                  </strong>
+                </span>
+              </label>
+              <small style={{ marginLeft: 22, color: 'var(--muted)', fontSize: 10 }}>
+                {getCriaFaseContrato(form.tipo_documento).reusaUltimoVinculo
+                  ? 'Encadeia ao vínculo CLT já existente do colaborador (mesmo vinculo_id).'
+                  : 'Cria um novo vínculo contratual (novo vinculo_id).'}
+                {' Datas usam emissão e validade do documento.'}
+              </small>
+            </div>
+          )}
 
           <label className="rh-doc-form-full">
             <span>Observações</span>

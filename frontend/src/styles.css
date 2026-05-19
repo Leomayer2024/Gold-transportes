@@ -3734,6 +3734,16 @@ tr:last-child td {
   padding: 4px 10px;
 }
 
+/* Bloco "vincular ao contrato" no DocumentoModal */
+.rh-vincular-contrato {
+  border: 1px dashed #1f4d8a;
+  border-radius: var(--radius-sm, 6px);
+  background: #eef4fb;
+  padding: 8px 10px;
+  margin-top: 6px;
+}
+.rh-vincular-contrato label { cursor: pointer; }
+
 /* Toggle de visão (Planilha / Matriz / Contratos) */
 .rh-doc-view-toggle {
   display: inline-flex;

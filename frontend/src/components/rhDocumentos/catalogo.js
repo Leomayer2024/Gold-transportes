@@ -75,9 +75,16 @@ export const TIPOS_DOCUMENTOS = [
   { tipo: 'Reciclagem',               categoria: 'treinamento', validadeMeses: 12,   diasAlerta: 60, obrigatorio: false },
 
   // ── Contratual ───────────────────────────────────────────────────────────
-  { tipo: 'Contrato de Trabalho',     categoria: 'contratual',  validadeMeses: null, diasAlerta: 0,  obrigatorio: true  },
-  { tipo: 'Contrato de Experiência',  categoria: 'contratual',  validadeMeses: 3,    diasAlerta: 15, obrigatorio: false },
-  { tipo: 'Aditivo Contratual',       categoria: 'contratual',  validadeMeses: null, diasAlerta: 0,  obrigatorio: false },
+  // Tipos com `criaFaseContrato` disparam, opcionalmente, a criação de uma
+  // fase em colaborador_contratos ao salvar o documento.
+  //   reusaUltimoVinculo=true  → usa o vinculo_id do CLT ativo mais recente
+  //   reusaUltimoVinculo=false → gera um vinculo_id novo (banco usa DEFAULT)
+  { tipo: 'Contrato de Trabalho',     categoria: 'contratual',  validadeMeses: null, diasAlerta: 0,  obrigatorio: true,
+    criaFaseContrato: { tipo_vinculo: 'clt', fase: 'indeterminado', reusaUltimoVinculo: true,  duracaoDias: null } },
+  { tipo: 'Contrato de Experiência',  categoria: 'contratual',  validadeMeses: null, diasAlerta: 15, obrigatorio: false,
+    criaFaseContrato: { tipo_vinculo: 'clt', fase: 'experiencia',   reusaUltimoVinculo: false, duracaoDias: 45 } },
+  { tipo: 'Aditivo Contratual',       categoria: 'contratual',  validadeMeses: null, diasAlerta: 0,  obrigatorio: false,
+    criaFaseContrato: { tipo_vinculo: 'clt', fase: 'prorrogacao',   reusaUltimoVinculo: true,  duracaoDias: 45 } },
   { tipo: 'Acordo de Horas Extras',   categoria: 'contratual',  validadeMeses: 12,   diasAlerta: 30, obrigatorio: false },
   { tipo: 'Acordo de Compensação',    categoria: 'contratual',  validadeMeses: 12,   diasAlerta: 30, obrigatorio: false },
   { tipo: 'Acordo de Banco de Horas', categoria: 'contratual',  validadeMeses: 24,   diasAlerta: 60, obrigatorio: false },
@@ -119,6 +126,12 @@ export function categoriaSugerida(tipo) {
 // LGPD: campos com dado pessoal sensível são exibidos com blur por padrão.
 export function isTipoSensivel(tipo) {
   return Boolean(findTipoCatalogo(tipo)?.sensivel)
+}
+
+// Tipos documentais que também devem criar fase em colaborador_contratos
+// (ex.: "Contrato de Experiência" cria fase CLT 'experiencia').
+export function getCriaFaseContrato(tipo) {
+  return findTipoCatalogo(tipo)?.criaFaseContrato || null
 }
 
 // Dado uma data de emissão (ou hoje), devolve a data de validade típica.
