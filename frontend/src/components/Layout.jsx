@@ -1,6 +1,7 @@
 import { Link, Outlet } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import Sidebar from './Sidebar'
+import NotificationBell from './NotificationBell'
 
 function TrialBanner() {
   const { assinaturaStatus, assinaturaDiasTrial } = useAuth()
@@ -24,6 +25,7 @@ export default function Layout() {
       <Sidebar />
       <main className="content-shell">
         <TrialBanner />
+        <NotificationBell />
         <Outlet />
       </main>
     </div>

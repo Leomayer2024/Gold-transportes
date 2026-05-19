@@ -224,6 +224,31 @@ RESOURCE_DEFINITIONS = {
         'create_scope': 'create.colaborador_documentos',
         'filial_scope_field': 'filial_id',
     },
+    'colaborador_contratos': {
+        'table': 'colaborador_contratos',
+        'order': 'data_inicio',
+        'required_fields': ['colaborador_id', 'tipo_vinculo', 'data_inicio'],
+        'allowed_fields': [
+            'colaborador_id',
+            'filial_id',
+            'vinculo_id',
+            'tipo_vinculo',
+            'fase',
+            'data_inicio',
+            'data_fim',
+            'data_desligamento',
+            'motivo_desligamento',
+            'cargo',
+            'salario',
+            'observacoes',
+            'ativo',
+        ],
+        'partial_match_fields': ['tipo_vinculo', 'fase', 'cargo'],
+        'nullable_fields': ['filial_id', 'fase', 'data_fim', 'data_desligamento', 'motivo_desligamento', 'cargo', 'salario', 'observacoes'],
+        'view_scope': 'menu.colaborador_contratos',
+        'create_scope': 'create.colaborador_contratos',
+        'filial_scope_field': 'filial_id',
+    },
     'eventos_rh': {
         'table': 'eventos_rh',
         'order': 'data_inicio',
@@ -351,7 +376,7 @@ RESOURCE_DEFINITIONS = {
             'filial_id', 'numero_pedido', 'data_pedido', 'data_necessidade',
             'status', 'fornecedor', 'forma_pagamento', 'prazo_pagamento',
             'centro_custo', 'criado_por', 'observacoes', 'valor_total', 'ativo',
-            'tipo_reembolso', 'chave_pix', 'dados_bancarios',
+            'tipo_reembolso', 'chave_pix', 'dados_bancarios', 'favorecido',
             'aprovado_por', 'aprovado_em', 'em_analise_por', 'em_analise_em',
             'motivo_reprovacao', 'reprovado_por', 'reprovado_em',
             'numero_solicitacao', 'contas_pagar_id', 'data_vencimento',
@@ -360,7 +385,7 @@ RESOURCE_DEFINITIONS = {
         'nullable_fields': [
             'numero_pedido', 'data_necessidade', 'fornecedor', 'forma_pagamento',
             'prazo_pagamento', 'centro_custo', 'criado_por', 'observacoes',
-            'tipo_reembolso', 'chave_pix', 'dados_bancarios',
+            'tipo_reembolso', 'chave_pix', 'dados_bancarios', 'favorecido',
             'aprovado_por', 'aprovado_em', 'em_analise_por', 'em_analise_em',
             'motivo_reprovacao', 'reprovado_por', 'reprovado_em',
             'numero_solicitacao', 'contas_pagar_id', 'data_vencimento',
@@ -734,6 +759,8 @@ PERMISSION_SCOPE_GROUPS = [
             {'name': 'create.contratos_operacionais','label': 'Cadastrar contratos operacionais',    'platforms': ['web'],        'auto_enable': ['menu.contratos_operacionais'], 'description': 'Permite criar e manter contratos por base para análise de acuracidade e custos.'},
             {'name': 'menu.colaborador_documentos',  'label': 'Ver documentos RH',                   'platforms': ['web'],        'auto_enable': [],                          'description': 'Mostra o controle documental de colaboradores, como CNH, ASO e certificados.'},
             {'name': 'create.colaborador_documentos','label': 'Cadastrar documentos RH',             'platforms': ['web'],        'auto_enable': ['menu.colaborador_documentos'], 'description': 'Permite manter vencimentos, arquivos e dados documentais dos colaboradores.'},
+            {'name': 'menu.colaborador_contratos',   'label': 'Ver contratos de colaboradores',      'platforms': ['web'],        'auto_enable': [],                          'description': 'Mostra os vínculos contratuais (CLT, estágio, PJ, temporário, aprendiz) e o histórico 45+45→indeterminado.'},
+            {'name': 'create.colaborador_contratos', 'label': 'Cadastrar contratos de colaboradores','platforms': ['web'],        'auto_enable': ['menu.colaborador_contratos'], 'description': 'Permite registrar e prorrogar vínculos contratuais e desligamentos.'},
             {'name': 'menu.eventos_rh',              'label': 'Ver planejamento RH',                 'platforms': ['web'],        'auto_enable': [],                          'description': 'Mostra férias, afastamentos, licenças e demais eventos planejados do RH.'},
             {'name': 'create.eventos_rh',            'label': 'Cadastrar eventos RH',                'platforms': ['web'],        'auto_enable': ['menu.eventos_rh'],          'description': 'Permite planejar férias, afastamentos, licenças e folgas programadas.'},
             {'name': 'menu.horas_extras',            'label': 'Ver horas extras',                    'platforms': ['web', 'app'], 'auto_enable': [],                          'description': 'Mostra o registro e aprovação de horas extras por colaborador e filial.'},
@@ -1220,8 +1247,8 @@ def create_app():
             codigo = codigo.strip().upper()
 
         normalized_row['codigo'] = codigo or suggest_filial_code(
-            normalized_row.get('parceira'),
             normalized_row.get('cidade'),
+            normalized_row.get('parceira'),
         )
         return normalized_row
 
@@ -1292,7 +1319,14 @@ def create_app():
             return 'Já existe um registro com esses dados únicos.'
         if 'foreign key' in message.lower():
             return 'O registro informado referencia um vínculo inexistente.'
-        if 'does not exist' in message.lower() or 'relation' in message.lower():
+        if 'violates check constraint' in message.lower() or 'check constraint' in message.lower():
+            import re as _re
+            m = _re.search(r'check constraint "([^"]+)"', message)
+            constraint = m.group(1) if m else 'desconhecida'
+            if 'categoria' in constraint.lower():
+                return 'Categoria inválida. Use um destes valores: pessoal, saude, habilitacao, treinamento, contratual.'
+            return f'Valor inválido para a coluna (constraint: {constraint}). Confira os campos.'
+        if 'does not exist' in message.lower():
             return 'Estrutura de banco ausente para este módulo. Rode a migration correspondente.'
         if 'jwt' in message.lower() or 'token' in message.lower():
             return 'Sua sessão expirou ou o token é inválido. Faça login novamente.'
@@ -1300,7 +1334,7 @@ def create_app():
 
     def is_missing_relation_error(exc):
         message = str(exc).lower()
-        return 'does not exist' in message or 'relation' in message
+        return 'does not exist' in message
 
     def parse_iso_date(value):
         try:
@@ -1537,10 +1571,14 @@ def create_app():
 
     def is_transient_disconnect_error(exc):
         message = str(exc).lower()
+        # Errno 11 = EAGAIN (non-blocking socket would block) — transient on Linux
+        if getattr(exc, 'errno', None) == 11:
+            return True
         return any(kw in message for kw in (
             'server disconnected', 'connection reset', 'remoteprotocolerror',
             'getaddrinfo failed', 'name or service not known', 'temporary failure',
             'connection refused', 'timed out', 'connection aborted',
+            'resource temporarily unavailable', 'eagain',
         ))
 
     def supabase_retry(fn, attempts=3, base_delay=0.5):
@@ -10020,6 +10058,9 @@ def create_app():
             por_filial_map= defaultdict(lambda: {'valor_total': 0.0, 'quantidade': 0, 'filial_id': None})
             por_categoria = defaultdict(lambda: {'valor_total': 0.0, 'quantidade': 0})
 
+            STATUS_EXCLUIDOS = {'cancelado', 'reprovado', 'reprovada'}
+
+            pedidos_ativos_ids = set()
             for p in pedidos:
                 pid  = p['id']
                 val  = valor_por_pedido.get(pid, 0.0)
@@ -10031,11 +10072,18 @@ def create_app():
                 f    = filiais_map.get(fid, {}) if fid else {}
                 fl   = f"{f.get('cidade','?')}/{f.get('uf','?')}" if f else (str(fid) if fid else '—')
 
+                # por_status conta todos, inclusive cancelados/reprovados
+                por_status[s]['valor_total']        += val
+                por_status[s]['quantidade']         += 1
+
+                # demais agregações excluem cancelados e reprovados
+                if s in STATUS_EXCLUIDOS:
+                    continue
+
+                pedidos_ativos_ids.add(pid)
                 if mes:
                     por_mes[mes]['valor_total']    += val
                     por_mes[mes]['quantidade']      += 1
-                por_status[s]['valor_total']        += val
-                por_status[s]['quantidade']         += 1
                 por_pagamento[fp]['valor_total']    += val
                 por_pagamento[fp]['quantidade']     += 1
                 por_fornecedor[fn]['valor_total']   += val
@@ -10046,6 +10094,8 @@ def create_app():
                     por_filial_map[fl]['filial_id']    = fid
 
             for it in itens:
+                if it.get('pedido_id') not in pedidos_ativos_ids:
+                    continue
                 cat = it.get('categoria') or 'outro'
                 total_item = float(it.get('quantidade') or 0) * float(it.get('valor_unitario') or 0)
                 por_categoria[cat]['valor_total'] += total_item
@@ -10061,8 +10111,9 @@ def create_app():
                 key=lambda x: x['valor_total'], reverse=True
             )
 
-            valor_total_geral = sum(valor_por_pedido.get(p['id'], 0.0) for p in pedidos)
-            pedidos_com_valor = [p for p in pedidos if valor_por_pedido.get(p['id'], 0.0) > 0]
+            pedidos_validos = [p for p in pedidos if (p.get('status') or 'rascunho') not in STATUS_EXCLUIDOS]
+            valor_total_geral = sum(valor_por_pedido.get(p['id'], 0.0) for p in pedidos_validos)
+            pedidos_com_valor = [p for p in pedidos_validos if valor_por_pedido.get(p['id'], 0.0) > 0]
 
             # Lista de filiais para o filtro no frontend
             filiais_disponiveis = [
@@ -10081,7 +10132,7 @@ def create_app():
                 'top_fornecedores': top_fornecedores,
                 'top_filiais': top_filiais,
                 'filiais_disponiveis': filiais_disponiveis,
-                'total_pedidos': len(pedidos),
+                'total_pedidos': len(pedidos_validos),
                 'valor_total_geral': round(valor_total_geral, 2),
                 'ticket_medio': round(valor_total_geral / len(pedidos_com_valor), 2) if pedidos_com_valor else 0,
             })

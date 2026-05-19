@@ -13,11 +13,22 @@ import {
   calcularPrazoValidadeDias,
   somarDiasIso,
   findTipoCatalogo,
+  isTipoSensivel,
 } from './rhDocumentos/catalogo'
 import { enriquecerDocumento, contarAlertas, formatarDataBr } from './rhDocumentos/helpers'
 import DocumentoModal from './rhDocumentos/DocumentoModal'
 import ImportExcelModal from './rhDocumentos/ImportExcelModal'
 import BulkUploadModal from './rhDocumentos/BulkUploadModal'
+import SensitiveField from './rhDocumentos/SensitiveField'
+import FichaColaboradorDrawer from './rhDocumentos/FichaColaboradorDrawer'
+import {
+  TIPOS_VINCULO,
+  TIPO_VINCULO_LABELS,
+  FASE_LABELS,
+  calcularStatusContrato,
+  STATUS_CONTRATO_LABELS,
+} from './rhContratos/catalogo'
+import ContratoModal from './rhContratos/ContratoModal'
 
 const STATUS_FILTROS = [
   { value: '',                     label: 'Todos os status' },
@@ -67,6 +78,7 @@ export default function ColaboradorDocumentosPage() {
   const [colaboradores, setColaboradores] = useState([])
   const [filiais, setFiliais] = useState([])
   const [documentos, setDocumentos] = useState([])
+  const [contratos, setContratos] = useState([])
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
 
@@ -80,12 +92,14 @@ export default function ColaboradorDocumentosPage() {
   const [mostrarInativos, setMostrarInativos] = useState(false)
 
   // Visões e modais
-  const [visao, setVisao] = useState('planilha') // 'planilha' | 'matriz'
+  const [visao, setVisao] = useState('planilha') // 'planilha' | 'matriz' | 'contratos'
   const [edicao, setEdicao] = useState(null)
   const [novo, setNovo] = useState(false)
   const [novoColab, setNovoColab] = useState('')
   const [importExcelOpen, setImportExcelOpen] = useState(false)
   const [bulkUploadOpen, setBulkUploadOpen] = useState(false)
+  const [fichaColabId, setFichaColabId] = useState(null) // drawer da ficha
+  const [contratoModal, setContratoModal] = useState(null) // null | 'novo' | {...}
 
   const [selecionados, setSelecionados] = useState(new Set())
   const [ordem, setOrdem] = useState({ campo: 'data_validade', dir: 'asc' })
@@ -97,17 +111,20 @@ export default function ColaboradorDocumentosPage() {
     setCarregando(true)
     setErro('')
     try {
-      const [colab, fil, docs] = await Promise.all([
+      const [colab, fil, docs, conts] = await Promise.all([
         api.list('colaboradores', { ativo: true, limit: 1000 }),
         api.list('filiais', { limit: 200 }),
         api.list('colaborador_documentos', { limit: 5000 }),
+        api.list('colaborador_contratos', { limit: 2000 }).catch(() => ({ data: [] })),
       ])
       const colabRows = colab?.data || colab || []
       const filialRows = fil?.data || fil || []
       const docRows = (docs?.data || docs || []).map((d) => enriquecerDocumento(d))
+      const contRows = conts?.data || conts || []
       setColaboradores(colabRows)
       setFiliais(filialRows)
       setDocumentos(docRows)
+      setContratos(contRows)
       try { window.dispatchEvent(new Event('rh-docs-changed')) } catch {}
     } catch (e) {
       setErro(e.message || 'Falha ao carregar documentos.')
@@ -163,6 +180,58 @@ export default function ColaboradorDocumentosPage() {
   }, [documentos, colaboradores, filtroBusca, filtroFilial, filtroColab, filtroCategoria, filtroStatus, filtroDiasMax, mostrarInativos, ordem])
 
   const alertas = useMemo(() => contarAlertas(documentosFiltrados), [documentosFiltrados])
+
+  // ─── Lógica para visão "Contratos" ────────────────────────────────────────
+  // Agrupa por vinculo_id e mostra apenas o termo mais recente.
+  const contratosUltimaFase = useMemo(() => {
+    const m = new Map()
+    for (const c of contratos) {
+      const key = c.vinculo_id || `solo-${c.id}`
+      const existing = m.get(key)
+      if (!existing || (c.data_inicio || '') > (existing.data_inicio || '')) {
+        m.set(key, c)
+      }
+    }
+    return Array.from(m.values())
+  }, [contratos])
+
+  const contratosFiltrados = useMemo(() => {
+    let lista = contratosUltimaFase
+    if (!mostrarInativos) lista = lista.filter((c) => !c.data_desligamento)
+    if (filtroFilial) lista = lista.filter((c) => String(c.filial_id) === String(filtroFilial))
+    if (filtroColab) lista = lista.filter((c) => String(c.colaborador_id) === String(filtroColab))
+    if (filtroStatus) {
+      lista = lista.filter((c) => calcularStatusContrato(c) === filtroStatus)
+    }
+    if (filtroBusca.trim()) {
+      const q = filtroBusca.trim().toLowerCase()
+      lista = lista.filter((c) => {
+        const colab = colaboradores.find((x) => Number(x.id) === Number(c.colaborador_id))
+        const blob = [colab?.nome_completo, c.cargo, c.tipo_vinculo, c.observacoes, c.motivo_desligamento]
+          .filter(Boolean).join(' ').toLowerCase()
+        return blob.includes(q)
+      })
+    }
+    const rank = { vencido: 0, vence_em_breve: 1, vigente: 2, sem_inicio: 3, encerrado: 4 }
+    return [...lista].sort((a, b) => {
+      const ra = rank[calcularStatusContrato(a)] ?? 9
+      const rb = rank[calcularStatusContrato(b)] ?? 9
+      if (ra !== rb) return ra - rb
+      return String(a.data_fim || '').localeCompare(String(b.data_fim || ''))
+    })
+  }, [contratosUltimaFase, mostrarInativos, filtroFilial, filtroColab, filtroStatus, filtroBusca, colaboradores])
+
+  const alertasContratos = useMemo(() => {
+    let vigentes = 0, alerta = 0, vencidos = 0, encerrados = 0
+    for (const c of contratosUltimaFase) {
+      const s = calcularStatusContrato(c)
+      if (s === 'vigente') vigentes++
+      else if (s === 'vence_em_breve') alerta++
+      else if (s === 'vencido') vencidos++
+      else if (s === 'encerrado') encerrados++
+    }
+    return { vigentes, alerta, vencidos, encerrados, total: contratosUltimaFase.length }
+  }, [contratosUltimaFase])
 
   function aoClicarCard(filtro) {
     setFiltroStatus(filtro)
@@ -371,15 +440,32 @@ export default function ColaboradorDocumentosPage() {
           </p>
         </div>
         <div className="rh-doc-header-actions">
-          <button type="button" className="button-secondary" onClick={() => setVisao(visao === 'planilha' ? 'matriz' : 'planilha')}>
-            {visao === 'planilha' ? '📋 Ver matriz' : '📊 Ver planilha'}
-          </button>
-          {podeExportar && (
+          <div className="rh-doc-view-toggle">
+            <button
+              type="button"
+              className={`button-secondary${visao === 'planilha' ? ' active' : ''}`}
+              onClick={() => setVisao('planilha')}
+              title="Lista de documentos com validade"
+            >📊 Planilha</button>
+            <button
+              type="button"
+              className={`button-secondary${visao === 'matriz' ? ' active' : ''}`}
+              onClick={() => setVisao('matriz')}
+              title="Matriz colaborador × tipo de documento"
+            >📋 Matriz</button>
+            <button
+              type="button"
+              className={`button-secondary${visao === 'contratos' ? ' active' : ''}`}
+              onClick={() => { setVisao('contratos'); setFiltroStatus('') }}
+              title="Vínculos contratuais (CLT, estágio, PJ, temporário, aprendiz)"
+            >📑 Contratos</button>
+          </div>
+          {visao !== 'contratos' && podeExportar && (
             <button type="button" className="button-secondary" onClick={exportarSelecionados}>
               ⬇ Exportar Excel
             </button>
           )}
-          {podeCriar && (
+          {podeCriar && visao !== 'contratos' && (
             <>
               {podeImportar && (
                 <>
@@ -396,53 +482,85 @@ export default function ColaboradorDocumentosPage() {
               </button>
             </>
           )}
+          {visao === 'contratos' && podeCriar && (
+            <button type="button" className="button-primary" onClick={() => setContratoModal('novo')}>
+              + Novo vínculo
+            </button>
+          )}
         </div>
       </header>
 
       {erro && <div className="alert-danger">{erro}</div>}
 
       {/* Cards de alerta */}
-      <section className="rh-doc-alert-cards">
-        <button type="button" className={`rh-doc-card vencidos${filtroStatus === 'vencido' ? ' active' : ''}`} onClick={() => aoClicarCard('vencido')}>
-          <span>Vencidos</span>
-          <strong>{alertas.vencidos}</strong>
-          <small>Regularize com urgência</small>
-        </button>
-        <button type="button" className={`rh-doc-card alerta${filtroStatus === 'vence_em_breve' ? ' active' : ''}`} onClick={() => aoClicarCard('vence_em_breve')}>
-          <span>Vencem em breve</span>
-          <strong>{alertas.venceEmBreve}</strong>
-          <small>Dentro da régua de alerta</small>
-        </button>
-        <button type="button" className={`rh-doc-card pendentes${filtroStatus === 'pendente' ? ' active' : ''}`} onClick={() => aoClicarCard('pendente')}>
-          <span>Pendentes</span>
-          <strong>{alertas.pendentes}</strong>
-          <small>Sem validade ou status final</small>
-        </button>
-        <button type="button" className={`rh-doc-card sem-arquivo${filtroStatus === 'sem_arquivo' ? ' active' : ''}`} onClick={() => aoClicarCard('sem_arquivo')}>
-          <span>Sem arquivo</span>
-          <strong>{alertas.semArquivo}</strong>
-          <small>Cadastro sem PDF ou foto</small>
-        </button>
-        <button type="button" className={`rh-doc-card vigentes${filtroStatus === 'vigente' ? ' active' : ''}`} onClick={() => aoClicarCard('vigente')}>
-          <span>Vigentes</span>
-          <strong>{alertas.total - alertas.vencidos - alertas.venceEmBreve - alertas.pendentes}</strong>
-          <small>Documentos em dia</small>
-        </button>
-      </section>
-
-      {/* Chips de filtro rápido */}
-      <section className="rh-doc-chips">
-        {QUICK_CHIPS.map((chip) => (
-          <button
-            key={chip.id}
-            type="button"
-            className={`rh-doc-chip${chipAtivo === chip.id ? ' active' : ''}`}
-            onClick={() => aplicarChip(chip)}
-          >
-            {chip.label}
+      {visao === 'contratos' ? (
+        <section className="rh-doc-alert-cards">
+          <button type="button" className={`rh-doc-card vencidos${filtroStatus === 'vencido' ? ' active' : ''}`} onClick={() => aoClicarCard('vencido')}>
+            <span>Vencidos</span>
+            <strong>{alertasContratos.vencidos}</strong>
+            <small>Definir prorrogação ou desligamento</small>
           </button>
-        ))}
-      </section>
+          <button type="button" className={`rh-doc-card alerta${filtroStatus === 'vence_em_breve' ? ' active' : ''}`} onClick={() => aoClicarCard('vence_em_breve')}>
+            <span>Vencem em breve</span>
+            <strong>{alertasContratos.alerta}</strong>
+            <small>Próximos 15 dias</small>
+          </button>
+          <button type="button" className={`rh-doc-card vigentes${filtroStatus === 'vigente' ? ' active' : ''}`} onClick={() => aoClicarCard('vigente')}>
+            <span>Vigentes</span>
+            <strong>{alertasContratos.vigentes}</strong>
+            <small>Contratos ativos</small>
+          </button>
+          <button type="button" className={`rh-doc-card pendentes${filtroStatus === 'encerrado' ? ' active' : ''}`} onClick={() => { setFiltroStatus(filtroStatus === 'encerrado' ? '' : 'encerrado'); setMostrarInativos(true) }}>
+            <span>Encerrados</span>
+            <strong>{alertasContratos.encerrados}</strong>
+            <small>Histórico de desligamentos</small>
+          </button>
+        </section>
+      ) : (
+        <section className="rh-doc-alert-cards">
+          <button type="button" className={`rh-doc-card vencidos${filtroStatus === 'vencido' ? ' active' : ''}`} onClick={() => aoClicarCard('vencido')}>
+            <span>Vencidos</span>
+            <strong>{alertas.vencidos}</strong>
+            <small>Regularize com urgência</small>
+          </button>
+          <button type="button" className={`rh-doc-card alerta${filtroStatus === 'vence_em_breve' ? ' active' : ''}`} onClick={() => aoClicarCard('vence_em_breve')}>
+            <span>Vencem em breve</span>
+            <strong>{alertas.venceEmBreve}</strong>
+            <small>Dentro da régua de alerta</small>
+          </button>
+          <button type="button" className={`rh-doc-card pendentes${filtroStatus === 'pendente' ? ' active' : ''}`} onClick={() => aoClicarCard('pendente')}>
+            <span>Pendentes</span>
+            <strong>{alertas.pendentes}</strong>
+            <small>Sem validade ou status final</small>
+          </button>
+          <button type="button" className={`rh-doc-card sem-arquivo${filtroStatus === 'sem_arquivo' ? ' active' : ''}`} onClick={() => aoClicarCard('sem_arquivo')}>
+            <span>Sem arquivo</span>
+            <strong>{alertas.semArquivo}</strong>
+            <small>Cadastro sem PDF ou foto</small>
+          </button>
+          <button type="button" className={`rh-doc-card vigentes${filtroStatus === 'vigente' ? ' active' : ''}`} onClick={() => aoClicarCard('vigente')}>
+            <span>Vigentes</span>
+            <strong>{alertas.total - alertas.vencidos - alertas.venceEmBreve - alertas.pendentes}</strong>
+            <small>Documentos em dia</small>
+          </button>
+        </section>
+      )}
+
+      {/* Chips de filtro rápido (só faz sentido nas visões de documentos) */}
+      {visao !== 'contratos' && (
+        <section className="rh-doc-chips">
+          {QUICK_CHIPS.map((chip) => (
+            <button
+              key={chip.id}
+              type="button"
+              className={`rh-doc-chip${chipAtivo === chip.id ? ' active' : ''}`}
+              onClick={() => aplicarChip(chip)}
+            >
+              {chip.label}
+            </button>
+          ))}
+        </section>
+      )}
 
       {/* Filtros */}
       <section className="rh-doc-filtros">
@@ -535,17 +653,27 @@ export default function ColaboradorDocumentosPage() {
           ordem={ordem}
           aoClicarCabecalho={aoClicarCabecalho}
           aoEditar={(d) => setEdicao(d)}
+          aoAbrirFicha={(colabId) => setFichaColabId(colabId)}
           edicaoCelula={edicaoCelula}
           iniciarEdicaoCelula={iniciarEdicaoCelula}
           setEdicaoCelula={setEdicaoCelula}
           commitEdicaoCelula={commitEdicaoCelula}
         />
-      ) : (
+      ) : visao === 'matriz' ? (
         <VisaoMatriz
           documentos={documentosFiltrados}
           colaboradores={colaboradores.filter((c) => !filtroFilial || String(c.filial_id) === String(filtroFilial))}
           aoCriar={(colaboradorId) => abrirNovo(colaboradorId)}
           aoEditar={(d) => setEdicao(d)}
+          aoAbrirFicha={(colabId) => setFichaColabId(colabId)}
+        />
+      ) : (
+        <VisaoContratos
+          contratos={contratosFiltrados}
+          colaboradores={colaboradores}
+          filiais={filiais}
+          aoEditar={(c) => setContratoModal(c)}
+          aoAbrirFicha={(colabId) => setFichaColabId(colabId)}
         />
       )}
 
@@ -578,6 +706,28 @@ export default function ColaboradorDocumentosPage() {
           onImported={carregar}
         />
       )}
+
+      {fichaColabId && (
+        <FichaColaboradorDrawer
+          colaboradorId={fichaColabId}
+          colaboradores={colaboradores}
+          filiais={filiais}
+          documentos={documentos}
+          onClose={() => setFichaColabId(null)}
+          onEditarDoc={(d) => { setFichaColabId(null); setEdicao(d) }}
+          onNovoDoc={(colabId) => { setFichaColabId(null); abrirNovo(colabId) }}
+        />
+      )}
+
+      {contratoModal && (
+        <ContratoModal
+          contrato={contratoModal === 'novo' ? null : contratoModal}
+          colaboradores={colaboradores}
+          filiais={filiais}
+          onClose={() => setContratoModal(null)}
+          onSaved={() => { setContratoModal(null); carregar() }}
+        />
+      )}
     </div>
   )
 }
@@ -585,7 +735,7 @@ export default function ColaboradorDocumentosPage() {
 // ── Visão Planilha ──────────────────────────────────────────────────────────
 function VisaoPlanilha({
   documentos, colaboradores, filiais, selecionados, alternarSelecionado, alternarTodos,
-  ordem, aoClicarCabecalho, aoEditar,
+  ordem, aoClicarCabecalho, aoEditar, aoAbrirFicha,
   edicaoCelula, iniciarEdicaoCelula, setEdicaoCelula, commitEdicaoCelula,
 }) {
   const colaboradorPorId = (id) => colaboradores.find((c) => Number(c.id) === Number(id))
@@ -696,11 +846,30 @@ function VisaoPlanilha({
                     onChange={() => alternarSelecionado(doc.id)}
                   />
                 </td>
-                <td>{colab?.nome_completo || `#${doc.colaborador_id}`}</td>
+                <td>
+                  <button
+                    type="button"
+                    className="button-link"
+                    title="Ver ficha completa do colaborador"
+                    onClick={() => aoAbrirFicha?.(doc.colaborador_id)}
+                  >
+                    {colab?.nome_completo || `#${doc.colaborador_id}`}
+                  </button>
+                </td>
                 <td>{filial?.cidade || filial?.nome || `Filial ${doc.filial_id}`}</td>
                 <td>{CATEGORIA_LABELS[doc.categoria] || doc.categoria || '—'}</td>
                 <td>{doc.tipo_documento}</td>
-                <td>{renderCelulaEditavel(doc, 'numero_documento')}</td>
+                <td>
+                  {isTipoSensivel(doc.tipo_documento) ? (
+                    <SensitiveField
+                      value={doc.numero_documento}
+                      docId={doc.id}
+                      campo="numero_documento"
+                    />
+                  ) : (
+                    renderCelulaEditavel(doc, 'numero_documento')
+                  )}
+                </td>
                 <td>{renderCelulaEditavel(doc, 'data_emissao', 'date')}</td>
                 <td>{renderCelulaEditavel(doc, 'data_validade', 'date')}</td>
                 <td>{renderCelulaEditavel(doc, 'prazo_dias', 'number')}</td>
@@ -726,8 +895,73 @@ function VisaoPlanilha({
   )
 }
 
+// ── Visão Contratos (vínculos contratuais) ──────────────────────────────────
+function VisaoContratos({ contratos, colaboradores, filiais, aoEditar, aoAbrirFicha }) {
+  const colabPorId = (id) => colaboradores.find((c) => Number(c.id) === Number(id))
+  const filialPorId = (id) => filiais.find((f) => Number(f.id) === Number(id))
+
+  if (contratos.length === 0) {
+    return (
+      <div className="muted" style={{ padding: 16 }}>
+        Nenhum vínculo contratual encontrado para os filtros atuais.
+      </div>
+    )
+  }
+
+  return (
+    <div className="rh-doc-table-wrapper">
+      <table className="rh-doc-table">
+        <thead>
+          <tr>
+            <th>Colaborador</th>
+            <th>Filial</th>
+            <th>Tipo</th>
+            <th>Fase / Termo</th>
+            <th>Início</th>
+            <th>Fim</th>
+            <th>Status</th>
+            <th>Cargo</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody>
+          {contratos.map((c) => {
+            const colab = colabPorId(c.colaborador_id)
+            const filial = filialPorId(c.filial_id)
+            const status = calcularStatusContrato(c)
+            return (
+              <tr key={c.id}>
+                <td>
+                  <button
+                    type="button"
+                    className="button-link"
+                    title="Ver ficha completa do colaborador"
+                    onClick={() => aoAbrirFicha?.(c.colaborador_id)}
+                  >
+                    {colab?.nome_completo || `#${c.colaborador_id}`}
+                  </button>
+                </td>
+                <td>{filial?.cidade || filial?.nome || (c.filial_id ? `Filial ${c.filial_id}` : '—')}</td>
+                <td>{TIPO_VINCULO_LABELS[c.tipo_vinculo] || c.tipo_vinculo}</td>
+                <td>{FASE_LABELS[c.fase] || c.fase || '—'}</td>
+                <td>{formatarDataBr(c.data_inicio) || '—'}</td>
+                <td>{formatarDataBr(c.data_fim) || (c.fase === 'indeterminado' ? '∞' : '—')}</td>
+                <td><span className={`rh-vinculo-status ${status}`}>{STATUS_CONTRATO_LABELS[status]}</span></td>
+                <td>{c.cargo || '—'}</td>
+                <td>
+                  <button type="button" className="button-link" onClick={() => aoEditar?.(c)}>editar</button>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
 // ── Visão Matriz colaborador × tipo ─────────────────────────────────────────
-function VisaoMatriz({ documentos, colaboradores, aoCriar, aoEditar }) {
+function VisaoMatriz({ documentos, colaboradores, aoCriar, aoEditar, aoAbrirFicha }) {
   // Tipos a mostrar = obrigatórios padrão ∪ tipos que aparecem nos documentos filtrados
   const tiposParaMostrar = useMemo(() => {
     const set = new Set(TIPOS_OBRIGATORIOS_PADRAO)
@@ -770,7 +1004,16 @@ function VisaoMatriz({ documentos, colaboradores, aoCriar, aoEditar }) {
         <tbody>
           {colaboradores.map((colab) => (
             <tr key={colab.id}>
-              <td className="rh-doc-matrix-name">{colab.nome_completo}</td>
+              <td className="rh-doc-matrix-name">
+                <button
+                  type="button"
+                  className="button-link"
+                  title="Ver ficha completa do colaborador"
+                  onClick={() => aoAbrirFicha?.(colab.id)}
+                >
+                  {colab.nome_completo}
+                </button>
+              </td>
               {tiposParaMostrar.map((tipo) => {
                 const doc = indexCD[`${colab.id}::${tipo}`]
                 if (!doc) {

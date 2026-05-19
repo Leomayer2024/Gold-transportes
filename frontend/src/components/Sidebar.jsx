@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { getAllNavigation } from '../lib/permissions'
 import { api } from '../services/api'
 import { enriquecerDocumento } from './rhDocumentos/helpers'
+import { calcularStatusContrato } from './rhContratos/catalogo'
 import logoGold from '../../assets/logo_gold.png'
 import packageInfo from '../../package.json'
 
@@ -14,13 +15,30 @@ const badgeCache = { ts: 0, counts: {} }
 
 async function fetchAlertBadges() {
   try {
-    const res = await api.list('colaborador_documentos', { limit: 5000 })
-    const rows = (res?.data || res || []).filter((d) => d.ativo !== false)
+    const [docsRes, contratosRes] = await Promise.all([
+      api.list('colaborador_documentos', { limit: 5000 }),
+      api.list('colaborador_contratos', { limit: 2000 }).catch(() => ({ data: [] })),
+    ])
+    const rows = (docsRes?.data || docsRes || []).filter((d) => d.ativo !== false)
     const enriched = rows.map((d) => enriquecerDocumento(d))
-    const urgentes = enriched.filter((d) =>
+    const urgentesDocs = enriched.filter((d) =>
       d.status_calculado === 'vencido' || d.status_calculado === 'vence_em_breve',
     ).length
-    return { '/rh-documentos': urgentes }
+
+    // Contratos: pega o último termo de cada vinculo_id e conta vencidos / vence em breve
+    const contratos = (contratosRes?.data || contratosRes || []).filter((c) => !c.data_desligamento)
+    const ultimoPorVinculo = new Map()
+    for (const c of contratos) {
+      const k = c.vinculo_id || `solo-${c.id}`
+      const ex = ultimoPorVinculo.get(k)
+      if (!ex || (c.data_inicio || '') > (ex.data_inicio || '')) ultimoPorVinculo.set(k, c)
+    }
+    const urgentesContratos = Array.from(ultimoPorVinculo.values()).filter((c) => {
+      const s = calcularStatusContrato(c)
+      return s === 'vencido' || s === 'vence_em_breve'
+    }).length
+
+    return { '/rh-documentos': urgentesDocs + urgentesContratos }
   } catch {
     return {}
   }

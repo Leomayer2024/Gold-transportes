@@ -9,6 +9,7 @@ import {
   calcularPrazoValidadeDias,
   diasAlertaSugerido,
   categoriaSugerida,
+  isTipoSensivel,
   somarDiasIso,
 } from './catalogo'
 
@@ -303,12 +304,23 @@ export default function DocumentoModal({
             </label>
 
             <label>
-              <span>Número / identificação</span>
+              <span>
+                Número / identificação
+                {isTipoSensivel(form.tipo_documento) && (
+                  <small style={{ marginLeft: 6, color: 'var(--muted)' }}>🔒 sensível (LGPD)</small>
+                )}
+              </span>
               <input
-                type="text"
+                type={isTipoSensivel(form.tipo_documento) ? 'password' : 'text'}
                 value={form.numero_documento || ''}
                 onChange={(e) => update({ numero_documento: e.target.value })}
+                autoComplete="off"
               />
+              {findTipoCatalogo(form.tipo_documento)?.dica && (
+                <small style={{ marginTop: 4, color: 'var(--muted)', fontSize: 10 }}>
+                  💡 {findTipoCatalogo(form.tipo_documento).dica}
+                </small>
+              )}
             </label>
 
             <label>

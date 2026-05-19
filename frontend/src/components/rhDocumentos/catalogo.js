@@ -14,26 +14,27 @@ export const CATEGORIA_LABELS = Object.fromEntries(CATEGORIAS.map((c) => [c.valu
 
 export const TIPOS_DOCUMENTOS = [
   // ── Pessoal ──────────────────────────────────────────────────────────────
-  { tipo: 'RG',                       categoria: 'pessoal',     validadeMeses: null, diasAlerta: 0,  obrigatorio: true  },
-  { tipo: 'CPF',                      categoria: 'pessoal',     validadeMeses: null, diasAlerta: 0,  obrigatorio: true  },
-  { tipo: 'CTPS',                     categoria: 'pessoal',     validadeMeses: null, diasAlerta: 0,  obrigatorio: true  },
-  { tipo: 'Título de Eleitor',        categoria: 'pessoal',     validadeMeses: null, diasAlerta: 0,  obrigatorio: false },
-  { tipo: 'Certificado Reservista',   categoria: 'pessoal',     validadeMeses: null, diasAlerta: 0,  obrigatorio: false },
-  { tipo: 'Comprovante de Residência',categoria: 'pessoal',     validadeMeses: 6,    diasAlerta: 30, obrigatorio: true  },
-  { tipo: 'PIS/PASEP',                categoria: 'pessoal',     validadeMeses: null, diasAlerta: 0,  obrigatorio: true  },
+  // `sensivel: true` faz o número aparecer borrado por padrão (LGPD)
+  { tipo: 'RG',                       categoria: 'pessoal',     validadeMeses: null, diasAlerta: 0,  obrigatorio: true,  sensivel: true },
+  { tipo: 'CPF',                      categoria: 'pessoal',     validadeMeses: null, diasAlerta: 0,  obrigatorio: true,  sensivel: true },
+  { tipo: 'CTPS',                     categoria: 'pessoal',     validadeMeses: null, diasAlerta: 0,  obrigatorio: true,  sensivel: true, dica: 'O PIS/PASEP é registrado dentro da CTPS — pode entrar como arquivo adicional aqui mesmo.' },
+  { tipo: 'Título de Eleitor',        categoria: 'pessoal',     validadeMeses: null, diasAlerta: 0,  obrigatorio: false, sensivel: true },
+  { tipo: 'Certificado Reservista',   categoria: 'pessoal',     validadeMeses: null, diasAlerta: 0,  obrigatorio: false, sensivel: true },
+  { tipo: 'Comprovante de Residência',categoria: 'pessoal',     validadeMeses: 6,    diasAlerta: 30, obrigatorio: true,  sensivel: true },
   { tipo: 'Foto 3x4',                 categoria: 'pessoal',     validadeMeses: null, diasAlerta: 0,  obrigatorio: false },
   { tipo: 'Pesquisa de Clima',        categoria: 'pessoal',     validadeMeses: null, diasAlerta: 0,  obrigatorio: false },
   { tipo: 'Pesquisa de Satisfação',   categoria: 'pessoal',     validadeMeses: null, diasAlerta: 0,  obrigatorio: false },
   { tipo: 'Pesquisa - Outras',        categoria: 'pessoal',     validadeMeses: null, diasAlerta: 0,  obrigatorio: false },
 
-  // ── Saúde (ASO) ──────────────────────────────────────────────────────────
-  { tipo: 'ASO Admissional',          categoria: 'saude',       validadeMeses: 12,   diasAlerta: 30, obrigatorio: true  },
-  { tipo: 'ASO Periódico',            categoria: 'saude',       validadeMeses: 12,   diasAlerta: 30, obrigatorio: true  },
-  { tipo: 'ASO Mudança de Função',    categoria: 'saude',       validadeMeses: 12,   diasAlerta: 30, obrigatorio: false },
-  { tipo: 'ASO Retorno ao Trabalho',  categoria: 'saude',       validadeMeses: 12,   diasAlerta: 30, obrigatorio: false },
-  { tipo: 'ASO Demissional',          categoria: 'saude',       validadeMeses: null, diasAlerta: 0,  obrigatorio: false },
-  { tipo: 'Atestado Médico',          categoria: 'saude',       validadeMeses: null, diasAlerta: 0,  obrigatorio: false },
-  { tipo: 'Exame Audiométrico',       categoria: 'saude',       validadeMeses: 12,   diasAlerta: 30, obrigatorio: false },
+  // ── Saúde e Segurança (SST) ─────────────────────────────────────────────
+  // Documentos médicos são "dados pessoais sensíveis" pela LGPD → sensivel: true
+  { tipo: 'ASO Admissional',          categoria: 'saude',       validadeMeses: 12,   diasAlerta: 30, obrigatorio: true,  sensivel: true },
+  { tipo: 'ASO Periódico',            categoria: 'saude',       validadeMeses: 12,   diasAlerta: 30, obrigatorio: true,  sensivel: true },
+  { tipo: 'ASO Mudança de Função',    categoria: 'saude',       validadeMeses: 12,   diasAlerta: 30, obrigatorio: false, sensivel: true },
+  { tipo: 'ASO Retorno ao Trabalho',  categoria: 'saude',       validadeMeses: 12,   diasAlerta: 30, obrigatorio: false, sensivel: true },
+  { tipo: 'ASO Demissional',          categoria: 'saude',       validadeMeses: null, diasAlerta: 0,  obrigatorio: false, sensivel: true },
+  { tipo: 'Atestado Médico',          categoria: 'saude',       validadeMeses: null, diasAlerta: 0,  obrigatorio: false, sensivel: true },
+  { tipo: 'Exame Audiométrico',       categoria: 'saude',       validadeMeses: 12,   diasAlerta: 30, obrigatorio: false, sensivel: true },
   { tipo: 'AST - Análise de Segurança do Trabalho', categoria: 'saude', validadeMeses: 12, diasAlerta: 30, obrigatorio: false },
   { tipo: 'APR - Análise Preliminar de Risco',      categoria: 'saude', validadeMeses: 12, diasAlerta: 30, obrigatorio: false },
   { tipo: 'PT - Permissão de Trabalho',             categoria: 'saude', validadeMeses: null, diasAlerta: 0, obrigatorio: false },
@@ -113,6 +114,11 @@ export function diasAlertaSugerido(tipo, fallback = 30) {
 
 export function categoriaSugerida(tipo) {
   return findTipoCatalogo(tipo)?.categoria || ''
+}
+
+// LGPD: campos com dado pessoal sensível são exibidos com blur por padrão.
+export function isTipoSensivel(tipo) {
+  return Boolean(findTipoCatalogo(tipo)?.sensivel)
 }
 
 // Dado uma data de emissão (ou hoje), devolve a data de validade típica.
