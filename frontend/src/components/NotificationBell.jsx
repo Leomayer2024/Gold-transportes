@@ -14,7 +14,8 @@ async function fetchPendencias() {
   try {
     const [docsRes, colabsRes, contratosRes] = await Promise.all([
       api.list('colaborador_documentos', { limit: 5000 }),
-      api.list('colaboradores', { ativo: true, limit: 1000 }),
+      // Sem filtro 'ativo' — pra resolver o nome de colaboradores desligados também
+      api.list('colaboradores', { limit: 1000 }),
       api.list('colaborador_contratos', { limit: 2000 }).catch(() => ({ data: [] })),
     ])
     const docs = (docsRes?.data || docsRes || []).filter((d) => d.ativo !== false)

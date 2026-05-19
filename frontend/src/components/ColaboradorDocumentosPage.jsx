@@ -111,8 +111,10 @@ export default function ColaboradorDocumentosPage() {
     setCarregando(true)
     setErro('')
     try {
+      // Carrega TODOS os colaboradores (incluindo desligados) para que docs
+      // e contratos antigos continuem mostrando o nome em vez do id.
       const [colab, fil, docs, conts] = await Promise.all([
-        api.list('colaboradores', { ativo: true, limit: 1000 }),
+        api.list('colaboradores', { limit: 1000 }),
         api.list('filiais', { limit: 200 }),
         api.list('colaborador_documentos', { limit: 5000 }),
         api.list('colaborador_contratos', { limit: 2000 }).catch(() => ({ data: [] })),

@@ -324,9 +324,13 @@ export default function DocumentoModal({
                 required
               >
                 <option value="">Selecione</option>
-                {colaboradores.map((c) => (
-                  <option key={c.id} value={c.id}>{c.nome_completo}</option>
-                ))}
+                {colaboradores
+                  .filter((c) => c.ativo !== false || Number(c.id) === Number(form.colaborador_id))
+                  .map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.nome_completo}{c.ativo === false ? ' (desligado)' : ''}
+                    </option>
+                  ))}
               </select>
             </label>
 
