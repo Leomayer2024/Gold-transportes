@@ -122,6 +122,7 @@ function emptyForm() {
     status: 'pendente',
     observacoes: '',
     tipo_reembolso: '',
+    favorecido: '',
     chave_pix: '',
     dados_bancarios: '',
   }
@@ -358,193 +359,95 @@ function CatalogoModal({ filialId, onAdd, onClose }) {
   )
 }
 
-// ─── PDF via impressão do browser ────────────────────────────────────────────
+// ─── Gerar PDF direto (sem pré-visualização) ─────────────────────────────────
 
-function PrintablePedido({ data, onClose }) {
+function printPedido(data) {
   const { pedido, filial, criado_por_nome, criado_por_cargo, itens, valor_total } = data
-  const printRef = useRef(null)
+  const e = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const fc = (v) => v != null ? Number(v).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '-'
+  const fd = (s) => s ? new Date(s + 'T00:00').toLocaleDateString('pt-BR') : '-'
 
-  function handlePrint() {
-    const html = printRef.current?.innerHTML
-    if (!html) return
-    const w = window.open('', '_blank', 'width=900,height=700')
-    w.document.write(
-      '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/>' +
-      '<title>Pedido ' + (pedido.numero_pedido || '') + '</title>' +
-      '<style>' +
-      '*{box-sizing:border-box;margin:0;padding:0}' +
-      'body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#111;padding:24px}' +
-      '.hdr{display:flex;justify-content:space-between;border-bottom:2px solid #111;padding-bottom:12px;margin-bottom:16px}' +
-      '.sec{font-size:9px;font-weight:700;text-transform:uppercase;color:#555;border-bottom:1px solid #ddd;padding-bottom:3px;margin:12px 0 8px}' +
-      '.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 16px;margin-bottom:16px}' +
-      '.gi label{display:block;font-size:9px;text-transform:uppercase;color:#777}' +
-      '.gi span{font-size:11px;font-weight:600}' +
-      'table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:16px}' +
-      'th{background:#111;color:#fff;text-align:left;padding:5px 8px}' +
-      'td{padding:5px 8px;border-bottom:1px solid #eee;vertical-align:top}' +
-      'tr:nth-child(even) td{background:#f9f9f9}' +
-      '.tf td{font-weight:700;font-size:12px;background:#f0f0f0!important;border-top:2px solid #111}' +
-      '.r{text-align:right}' +
-      '.assin{margin-top:40px;display:flex;justify-content:space-around;font-size:10px}' +
-      '.al{text-align:center}.al-linha{border-top:1px solid #999;width:200px;margin:0 auto 4px}' +
-      '.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;background:#eee}' +
-      '.rod{margin-top:24px;font-size:9px;color:#aaa;text-align:center}' +
-      '@media print{body{padding:12px}}' +
-      '</style></head><body>' + html +
-      '<script>window.onload=function(){window.print()}<\/script></body></html>'
-    )
-    w.document.close()
-  }
+  const itensRows = (itens || []).map((item, idx) => `
+    <tr>
+      <td>${idx + 1}</td>
+      <td>${e(CATEGORIA_LABELS[item.categoria] || item.categoria)}</td>
+      <td>${e(item.descricao)}${item.observacoes ? `<div style="font-size:9px;color:#777">${e(item.observacoes)}</div>` : ''}</td>
+      <td class="r">${Number(item.quantidade).toLocaleString('pt-BR')}</td>
+      <td>${e(item.unidade)}</td>
+      <td class="r">${fc(item.valor_unitario)}</td>
+      <td class="r"><strong>${fc(item.valor_total != null ? item.valor_total : itemTotal(item))}</strong></td>
+    </tr>`).join('')
 
-  return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal-content"
-        style={{ maxWidth: 820, maxHeight: '90vh', overflow: 'auto' }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="modal-header">
-          <div>
-            <span className="eyebrow">Pré-visualização</span>
-            <h2>{pedido.numero_pedido || 'Pedido de compra'}</h2>
-          </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="button-primary" onClick={handlePrint} type="button">Imprimir / Salvar PDF</button>
-            <button className="button-secondary" onClick={onClose} type="button">Fechar</button>
-          </div>
-        </div>
+  const reembolsoSection = pedido.tipo_reembolso ? `
+    <div class="sec">Dados de reembolso</div>
+    <div class="grid">
+      <div class="gi"><label>Tipo de reembolso</label><span>${e(REEMBOLSO_LABELS[pedido.tipo_reembolso] || pedido.tipo_reembolso)}</span></div>
+      ${pedido.favorecido ? `<div class="gi"><label>Favorecido</label><span>${e(pedido.favorecido)}</span></div>` : ''}
+      ${pedido.chave_pix ? `<div class="gi"><label>Chave PIX</label><span>${e(pedido.chave_pix)}</span></div>` : ''}
+      ${pedido.dados_bancarios ? `<div class="gi" style="grid-column:1/-1"><label>Dados bancários</label><span style="white-space:pre-wrap">${e(pedido.dados_bancarios)}</span></div>` : ''}
+    </div>` : ''
 
-        <div ref={printRef}>
-          <div className="hdr" style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '2px solid #111', paddingBottom: 12, marginBottom: 16 }}>
-            <div>
-              <div style={{ fontSize: 20, fontWeight: 700 }}>PEDIDO DE COMPRA</div>
-              <div style={{ fontSize: 11, color: '#555', marginTop: 2 }}>
-                {(filial || {}).parceira || 'Gold Transportes'} — {(filial || {}).cidade || ''}/{(filial || {}).uf || ''}
-              </div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <strong style={{ fontSize: 16 }}>{pedido.numero_pedido || '-'}</strong>
-              {pedido.numero_solicitacao && (
-                <div style={{ fontSize: 11, color: '#444', marginTop: 2 }}>Solicitação: {pedido.numero_solicitacao}</div>
-              )}
-              <div style={{ fontSize: 11, color: '#444', marginTop: 4 }}>Data: {formatDate(pedido.data_pedido)}</div>
-              {pedido.data_necessidade && (
-                <div style={{ fontSize: 11, color: '#c00' }}>Necessário até: {formatDate(pedido.data_necessidade)}</div>
-              )}
-              <div style={{ marginTop: 4 }}>
-                <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 10, fontSize: 9, fontWeight: 700, background: '#eee' }}>
-                  {STATUS_LABELS[pedido.status] || pedido.status}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: '#555', borderBottom: '1px solid #ddd', paddingBottom: 3, marginBottom: 8 }}>
-            Informações do pedido
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '8px 16px', marginBottom: 16 }}>
-            {[
-              { l: 'Fornecedor', v: pedido.fornecedor || '-' },
-              { l: 'Forma de pagamento', v: PAGAMENTO_LABELS[pedido.forma_pagamento] || pedido.forma_pagamento || '-' },
-              { l: 'Prazo de pagamento', v: pedido.prazo_pagamento || '-' },
-              { l: 'Centro de custo', v: pedido.centro_custo || '-' },
-              { l: 'Solicitado por', v: criado_por_nome || '-' },
-              { l: 'Cargo', v: criado_por_cargo || '-' },
-            ].map(({ l, v }) => (
-              <div key={l}>
-                <div style={{ fontSize: 9, textTransform: 'uppercase', color: '#777' }}>{l}</div>
-                <div style={{ fontSize: 11, fontWeight: 600 }}>{v}</div>
-              </div>
-            ))}
-          </div>
-
-          {pedido.tipo_reembolso && (
-            <>
-              <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: '#555', borderBottom: '1px solid #ddd', paddingBottom: 3, marginBottom: 8 }}>
-                Dados de reembolso
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: '8px 16px', marginBottom: 16 }}>
-                <div>
-                  <div style={{ fontSize: 9, textTransform: 'uppercase', color: '#777' }}>Tipo de reembolso</div>
-                  <div style={{ fontSize: 11, fontWeight: 600 }}>{REEMBOLSO_LABELS[pedido.tipo_reembolso] || pedido.tipo_reembolso}</div>
-                </div>
-                {pedido.chave_pix && (
-                  <div>
-                    <div style={{ fontSize: 9, textTransform: 'uppercase', color: '#777' }}>Chave PIX</div>
-                    <div style={{ fontSize: 11, fontWeight: 600 }}>{pedido.chave_pix}</div>
-                  </div>
-                )}
-                {pedido.dados_bancarios && (
-                  <div style={{ gridColumn: '1 / -1' }}>
-                    <div style={{ fontSize: 9, textTransform: 'uppercase', color: '#777' }}>Dados bancários</div>
-                    <div style={{ fontSize: 11, fontWeight: 600, whiteSpace: 'pre-wrap' }}>{pedido.dados_bancarios}</div>
-                  </div>
-                )}
-              </div>
-            </>
-          )}
-
-          <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: '#555', borderBottom: '1px solid #ddd', paddingBottom: 3, marginBottom: 8 }}>
-            Itens do pedido
-          </div>
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 10, marginBottom: 16 }}>
-            <thead>
-              <tr style={{ background: '#111', color: '#fff' }}>
-                {['#', 'Categoria', 'Descrição', 'Qtd', 'Un.', 'Valor unit.', 'Total'].map((h) => (
-                  <th key={h} style={{ padding: '5px 8px', textAlign: ['Total', 'Qtd', 'Valor unit.'].includes(h) ? 'right' : 'left' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {(itens || []).map((item, idx) => (
-                <tr key={item.id || idx} style={{ background: idx % 2 === 0 ? '#fff' : '#f9f9f9' }}>
-                  <td style={{ padding: '5px 8px', borderBottom: '1px solid #eee' }}>{idx + 1}</td>
-                  <td style={{ padding: '5px 8px', borderBottom: '1px solid #eee' }}>{CATEGORIA_LABELS[item.categoria] || item.categoria}</td>
-                  <td style={{ padding: '5px 8px', borderBottom: '1px solid #eee' }}>
-                    {item.descricao}
-                    {item.observacoes && <div style={{ fontSize: 9, color: '#777' }}>{item.observacoes}</div>}
-                  </td>
-                  <td style={{ padding: '5px 8px', borderBottom: '1px solid #eee', textAlign: 'right' }}>{Number(item.quantidade).toLocaleString('pt-BR')}</td>
-                  <td style={{ padding: '5px 8px', borderBottom: '1px solid #eee' }}>{item.unidade}</td>
-                  <td style={{ padding: '5px 8px', borderBottom: '1px solid #eee', textAlign: 'right' }}>{formatCurrency(item.valor_unitario)}</td>
-                  <td style={{ padding: '5px 8px', borderBottom: '1px solid #eee', textAlign: 'right', fontWeight: 600 }}>{formatCurrency(item.valor_total != null ? item.valor_total : itemTotal(item))}</td>
-                </tr>
-              ))}
-              <tr style={{ fontWeight: 700, background: '#f0f0f0' }}>
-                <td colSpan={6} style={{ padding: '6px 8px', borderTop: '2px solid #111', fontSize: 11 }}>TOTAL GERAL</td>
-                <td style={{ padding: '6px 8px', borderTop: '2px solid #111', textAlign: 'right', fontSize: 13 }}>{formatCurrency(valor_total)}</td>
-              </tr>
-            </tbody>
-          </table>
-
-          {pedido.observacoes && (
-            <div style={{ marginBottom: 16, fontSize: 10 }}>
-              <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', color: '#777', marginBottom: 3 }}>Observações</div>
-              {pedido.observacoes}
-            </div>
-          )}
-
-          <div style={{ marginTop: 48, display: 'flex', justifyContent: 'space-around', fontSize: 10 }}>
-            {[
-              { label: 'Solicitante', name: criado_por_nome, cargo: criado_por_cargo },
-              { label: 'Aprovação', name: '', cargo: '' },
-              { label: 'Financeiro', name: '', cargo: '' },
-            ].map(({ label, name, cargo }) => (
-              <div key={label} style={{ textAlign: 'center' }}>
-                <div style={{ borderTop: '1px solid #999', width: 180, margin: '0 auto 4px' }} />
-                <div style={{ fontWeight: 700 }}>{label}</div>
-                {name && <div style={{ color: '#555' }}>{name}</div>}
-                {cargo && <div style={{ color: '#777', fontSize: 9 }}>{cargo}</div>}
-              </div>
-            ))}
-          </div>
-          <div style={{ marginTop: 24, fontSize: 9, color: '#aaa', textAlign: 'center' }}>
-            Documento gerado em {new Date().toLocaleDateString('pt-BR')} — Sistema SEG Gold Transportes
-          </div>
-        </div>
+  const html = `
+    <div class="hdr">
+      <div>
+        <div style="font-size:20px;font-weight:700">PEDIDO DE COMPRA</div>
+        <div style="font-size:11px;color:#555;margin-top:2px">${e((filial || {}).parceira || 'Gold Transportes')} — ${e((filial || {}).cidade || '')}/${e((filial || {}).uf || '')}</div>
+      </div>
+      <div style="text-align:right">
+        <strong style="font-size:16px">${e(pedido.numero_pedido || '-')}</strong>
+        ${pedido.numero_solicitacao ? `<div style="font-size:11px;color:#444;margin-top:2px">Solicitação: ${e(pedido.numero_solicitacao)}</div>` : ''}
+        <div style="font-size:11px;color:#444;margin-top:4px">Data: ${fd(pedido.data_pedido)}</div>
+        ${pedido.data_necessidade ? `<div style="font-size:11px;color:#c00">Necessário até: ${fd(pedido.data_necessidade)}</div>` : ''}
+        ${pedido.data_vencimento ? `<div style="font-size:11px;color:#555">Vencimento: ${fd(pedido.data_vencimento)}</div>` : ''}
+        <div style="margin-top:4px"><span class="badge">${e(STATUS_LABELS[pedido.status] || pedido.status)}</span></div>
       </div>
     </div>
+
+    <div class="sec">Informações do pedido</div>
+    <div class="grid">
+      ${(filial || {}).parceira ? `<div class="gi"><label>Empresa / Parceira</label><span>${e((filial || {}).parceira)}</span></div>` : ''}
+      <div class="gi"><label>Filial</label><span>${e([(filial || {}).cidade, (filial || {}).uf].filter(Boolean).join('/') || '-')}</span></div>
+      <div class="gi"><label>Fornecedor</label><span>${e(pedido.fornecedor || '-')}</span></div>
+      <div class="gi"><label>Forma de pagamento</label><span>${e(PAGAMENTO_LABELS[pedido.forma_pagamento] || pedido.forma_pagamento || '-')}</span></div>
+      <div class="gi"><label>Prazo de pagamento</label><span>${e(pedido.prazo_pagamento || '-')}</span></div>
+      <div class="gi"><label>Centro de custo</label><span>${e(pedido.centro_custo || '-')}</span></div>
+      <div class="gi"><label>Solicitado por</label><span>${e(criado_por_nome || '-')}</span></div>
+      <div class="gi"><label>Cargo</label><span>${e(criado_por_cargo || '-')}</span></div>
+    </div>
+
+    ${reembolsoSection}
+
+    <div class="sec">Itens do pedido</div>
+    <table>
+      <thead><tr>
+        <th>#</th><th>Categoria</th><th>Descrição</th>
+        <th class="r">Qtd</th><th>Un.</th><th class="r">Valor unit.</th><th class="r">Total</th>
+      </tr></thead>
+      <tbody>
+        ${itensRows}
+        <tr class="tf">
+          <td colspan="6">TOTAL GERAL</td>
+          <td class="r">${fc(valor_total)}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    ${pedido.observacoes ? `<div style="margin-bottom:16px;font-size:10px"><div style="font-size:9px;font-weight:700;text-transform:uppercase;color:#777;margin-bottom:3px">Observações</div>${e(pedido.observacoes)}</div>` : ''}
+
+    <div class="assin">
+      <div class="al"><div class="al-linha"></div><div style="font-weight:700">Solicitante</div>${criado_por_nome ? `<div style="color:#555">${e(criado_por_nome)}</div>` : ''}</div>
+      <div class="al"><div class="al-linha"></div><div style="font-weight:700">Aprovação</div></div>
+      <div class="al"><div class="al-linha"></div><div style="font-weight:700">Financeiro</div></div>
+    </div>
+    <div class="rod">Documento gerado em ${new Date().toLocaleDateString('pt-BR')} — Sistema SEG Gold Transportes</div>`
+
+  const css = `*{box-sizing:border-box;margin:0;padding:0}body{font-family:Arial,Helvetica,sans-serif;font-size:11px;color:#111;padding:24px}.hdr{display:flex;justify-content:space-between;border-bottom:2px solid #111;padding-bottom:12px;margin-bottom:16px}.sec{font-size:9px;font-weight:700;text-transform:uppercase;color:#555;border-bottom:1px solid #ddd;padding-bottom:3px;margin:12px 0 8px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px 16px;margin-bottom:16px}.gi label{display:block;font-size:9px;text-transform:uppercase;color:#777}.gi span{font-size:11px;font-weight:600}table{width:100%;border-collapse:collapse;font-size:10px;margin-bottom:16px}th{background:#111;color:#fff;text-align:left;padding:5px 8px}td{padding:5px 8px;border-bottom:1px solid #eee;vertical-align:top}tr:nth-child(even) td{background:#f9f9f9}.tf td{font-weight:700;font-size:12px;background:#f0f0f0!important;border-top:2px solid #111}.r{text-align:right}.assin{margin-top:40px;display:flex;justify-content:space-around;font-size:10px}.al{text-align:center}.al-linha{border-top:1px solid #999;width:200px;margin:0 auto 4px}.badge{display:inline-block;padding:2px 8px;border-radius:10px;font-size:9px;font-weight:700;background:#eee}.rod{margin-top:24px;font-size:9px;color:#aaa;text-align:center}@media print{body{padding:12px}}`
+
+  const w = window.open('', '_blank', 'width=900,height=700')
+  w.document.write(
+    `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"/><title>Pedido ${e(pedido.numero_pedido || '')}</title><style>${css}</style></head><body>${html}<script>window.onload=function(){window.print()}<\/script></body></html>`
   )
+  w.document.close()
 }
 
 // ─── Linha de item (tabela inline) ───────────────────────────────────────────
@@ -914,6 +817,7 @@ function FormularioPedido({ pedidoInicial, itensIniciais, onSaved, onCancel }) {
         status: form.status || 'rascunho',
         observacoes: form.observacoes || null,
         tipo_reembolso: form.tipo_reembolso || null,
+        favorecido: form.tipo_reembolso ? (form.favorecido || null) : null,
         chave_pix: form.tipo_reembolso === 'pix' ? (form.chave_pix || null) : null,
         dados_bancarios: form.tipo_reembolso === 'transferencia' ? (form.dados_bancarios || null) : null,
         ativo: true,
@@ -1106,6 +1010,25 @@ function FormularioPedido({ pedidoInicial, itensIniciais, onSaved, onCancel }) {
               </select>
             </label>
 
+            {form.tipo_reembolso && (
+              <label className="field">
+                <span>Favorecido</span>
+                <input
+                  type="text"
+                  list="dl-favorecido"
+                  placeholder="Nome de quem vai receber o reembolso"
+                  value={form.favorecido}
+                  onChange={(e) => setField('favorecido', e.target.value)}
+                  autoComplete="off"
+                />
+                <datalist id="dl-favorecido">
+                  {colaboradores.map((c) => (
+                    <option key={c.id} value={c.nome_completo} />
+                  ))}
+                </datalist>
+              </label>
+            )}
+
             {form.tipo_reembolso === 'pix' && (
               <label className="field">
                 <span>Chave PIX</span>
@@ -1222,7 +1145,7 @@ function FormularioPedido({ pedidoInicial, itensIniciais, onSaved, onCancel }) {
 
 // ─── Painel de itens expandido na lista ──────────────────────────────────────
 
-function PedidoExpandido({ pedidoId, onShowPdf, isSuperAdmin }) {
+function PedidoExpandido({ pedidoId, isSuperAdmin }) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
 
@@ -1310,6 +1233,7 @@ function PedidoExpandido({ pedidoId, onShowPdf, isSuperAdmin }) {
         <div style={{ marginBottom: 8, padding: '8px 12px', background: 'var(--surface-2, #f7f7f7)', borderRadius: 6, fontSize: 12 }}>
           <strong style={{ fontSize: 11, textTransform: 'uppercase', color: '#666', letterSpacing: '0.04em' }}>Reembolso:</strong>{' '}
           {REEMBOLSO_LABELS[pedido.tipo_reembolso] || pedido.tipo_reembolso}
+          {pedido.favorecido && <span style={{ marginLeft: 8 }}>— Favorecido: <strong>{pedido.favorecido}</strong></span>}
           {pedido.chave_pix && <span style={{ marginLeft: 8 }}>— PIX: <strong>{pedido.chave_pix}</strong></span>}
           {pedido.dados_bancarios && (
             <div style={{ marginTop: 4, whiteSpace: 'pre-wrap', color: '#555' }}>{pedido.dados_bancarios}</div>
@@ -1388,8 +1312,8 @@ function PedidoExpandido({ pedidoId, onShowPdf, isSuperAdmin }) {
         </div>
       )}
 
-      <button className="button-secondary" style={{ fontSize: 12 }} onClick={() => onShowPdf(data)} type="button">
-        Gerar PDF
+      <button className="button-secondary" style={{ fontSize: 12 }} onClick={() => printPedido(data)} type="button">
+        Imprimir / PDF
       </button>
     </div>
   )
@@ -1455,7 +1379,6 @@ export default function PedidosCompraPage() {
   const [refreshKey, setRefreshKey] = useState(0)
   const _loaded = useRef(false)
   const [expandedId, setExpandedId] = useState(null)
-  const [pdfData, setPdfData] = useState(null)
 
   // Filtros
   const [fFilial, setFFilial] = useState('')
@@ -1465,10 +1388,24 @@ export default function PedidosCompraPage() {
   const [fDataAte, setFDataAte] = useState('')
   const [fFornecedor, setFFornecedor] = useState('')
   const [fCategoria, setFCategoria] = useState('')
+  // Por padrão, mostra só os pedidos do colaborador logado.
+  // Pode ser trocado/limpado livremente.
+  const [fCriadoPor, setFCriadoPor] = useState('')
+  const [criadoPorPreSet, setCriadoPorPreSet] = useState(false)
+  const [colaboradoresFiltro, setColaboradoresFiltro] = useState([])
 
   useEffect(() => {
     api.filiaisDisponiveis().then(setFiliais).catch(() => {})
+    api.colaboradoresComEscopo('menu.pedidos_compra').then(setColaboradoresFiltro).catch(() => {})
   }, [])
+
+  // Pré-seleciona o colaborador logado uma única vez quando o profile carrega
+  useEffect(() => {
+    if (!criadoPorPreSet && profile?.id) {
+      setFCriadoPor(String(profile.id))
+      setCriadoPorPreSet(true)
+    }
+  }, [profile, criadoPorPreSet])
 
   useEffect(() => {
     if (filiais?.length === 1 && !fFilial) {
@@ -1503,6 +1440,7 @@ export default function PedidosCompraPage() {
 
   const filtrados = useMemo(() => {
     let list = pedidosOrdenados
+    if (fCriadoPor)  list = list.filter((p) => Number(p.criado_por) === Number(fCriadoPor))
     if (fDataDe)     list = list.filter((p) => (p.data_pedido || '') >= fDataDe)
     if (fDataAte)    list = list.filter((p) => (p.data_pedido || '') <= fDataAte)
     if (fFornecedor) list = list.filter((p) => (p.fornecedor || '').toLowerCase().includes(fFornecedor.trim().toLowerCase()))
@@ -1514,7 +1452,7 @@ export default function PedidosCompraPage() {
         .some((v) => String(v).toLowerCase().includes(q))
     )
     return list
-  }, [pedidosOrdenados, fDataDe, fDataAte, fFornecedor, fCategoria, fBusca])
+  }, [pedidosOrdenados, fCriadoPor, fDataDe, fDataAte, fFornecedor, fCategoria, fBusca])
 
   function openNew() { setEditTarget(null); setMode('form') }
 
@@ -1628,6 +1566,20 @@ export default function PedidosCompraPage() {
               onChange={(e) => setFFornecedor(e.target.value)}
             />
           </label>
+          <label className="field filter-field">
+            <span>
+              Criado por
+              {fCriadoPor && Number(fCriadoPor) === Number(profile?.id) && (
+                <small style={{ marginLeft: 4, color: 'var(--text-muted)' }}>(você)</small>
+              )}
+            </span>
+            <select value={fCriadoPor} onChange={(e) => setFCriadoPor(e.target.value)}>
+              <option value="">Todos</option>
+              {colaboradoresFiltro.map((c) => (
+                <option key={c.id} value={c.id}>{c.nome_completo}</option>
+              ))}
+            </select>
+          </label>
           <label className="field filter-field" style={{ gridColumn: 'span 2' }}>
             <span>Buscar</span>
             <input
@@ -1638,13 +1590,13 @@ export default function PedidosCompraPage() {
             />
           </label>
         </div>
-        {(fDataDe || fDataAte || fFornecedor || fCategoria || fStatus) && (
+        {(fDataDe || fDataAte || fFornecedor || fCategoria || fStatus || fCriadoPor) && (
           <div style={{ marginTop: 8 }}>
             <button
               type="button"
               className="button-secondary"
               style={{ fontSize: 12, padding: '3px 10px' }}
-              onClick={() => { setFDataDe(''); setFDataAte(''); setFFornecedor(''); setFCategoria(''); setFStatus(''); setFBusca('') }}
+              onClick={() => { setFDataDe(''); setFDataAte(''); setFFornecedor(''); setFCategoria(''); setFStatus(''); setFBusca(''); setFCriadoPor('') }}
             >
               ✕ Limpar filtros
             </button>
@@ -1746,7 +1698,7 @@ export default function PedidosCompraPage() {
                     {expandedId === pedido.id && (
                       <tr key={'exp-' + pedido.id} className="pedido-expand-row">
                         <td colSpan={12} style={{ padding: 0 }}>
-                          <PedidoExpandido pedidoId={pedido.id} onShowPdf={setPdfData} isSuperAdmin={profile?.is_super_admin} />
+                          <PedidoExpandido pedidoId={pedido.id} isSuperAdmin={profile?.is_super_admin} />
                         </td>
                       </tr>
                     )}
@@ -1758,9 +1710,6 @@ export default function PedidosCompraPage() {
         )}
       </div>
 
-      {pdfData && (
-        <PrintablePedido data={pdfData} onClose={() => setPdfData(null)} />
-      )}
     </section>
   )
 }
