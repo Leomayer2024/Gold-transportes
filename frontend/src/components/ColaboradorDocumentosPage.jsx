@@ -296,6 +296,26 @@ export default function ColaboradorDocumentosPage() {
     )
   }
 
+  // Inserção otimista de um doc recém criado (ex.: prorrogação). Já passa
+  // pelo enriquecimento para entrar coerente nas contagens e na matriz.
+  function adicionarDocumentoLocal(doc) {
+    if (!doc || doc.id == null) return
+    setDocumentos((prev) => {
+      // dedup defensivo caso o backend ecoe o mesmo doc duas vezes
+      if (prev.some((d) => d.id === doc.id)) return prev
+      return [...prev, enriquecerDocumento(doc)]
+    })
+    try { window.dispatchEvent(new Event('rh-docs-changed')) } catch {}
+  }
+
+  function adicionarContratoLocal(contrato) {
+    if (!contrato || contrato.id == null) return
+    setContratos((prev) => {
+      if (prev.some((c) => c.id === contrato.id)) return prev
+      return [...prev, contrato]
+    })
+  }
+
   function commitEdicaoCelula() {
     if (!edicaoCelula) return
     const { id, campo, valor } = edicaoCelula
@@ -718,6 +738,9 @@ export default function ColaboradorDocumentosPage() {
           onClose={() => setFichaColabId(null)}
           onEditarDoc={(d) => { setFichaColabId(null); setEdicao(d) }}
           onNovoDoc={(colabId) => { setFichaColabId(null); abrirNovo(colabId) }}
+          onDocumentoCriado={adicionarDocumentoLocal}
+          onDocumentoAtualizado={aplicarEdicaoLocal}
+          onSyncCompleto={carregar}
         />
       )}
 

@@ -14,13 +14,16 @@ import VinculoColaboradorSection from '../rhContratos/VinculoColaboradorSection'
 // por categoria, com chips de status e acesso rápido aos arquivos.
 //
 // Props:
-//   colaboradorId   — id do colaborador a exibir
-//   colaboradores   — lista carregada (para resolver nome/filial)
-//   filiais         — lista de filiais
-//   documentos      — lista enriquecida (com status_calculado/dias_para_vencer)
-//   onClose         — fecha o drawer
-//   onEditarDoc(d)  — clique em um doc abre o modal de edição
-//   onNovoDoc(id)   — botão "+ Adicionar documento"
+//   colaboradorId         — id do colaborador a exibir
+//   colaboradores         — lista carregada (para resolver nome/filial)
+//   filiais               — lista de filiais
+//   documentos            — lista enriquecida (com status_calculado/dias_para_vencer)
+//   onClose               — fecha o drawer
+//   onEditarDoc(d)        — clique em um doc abre o modal de edição
+//   onNovoDoc(id)         — botão "+ Adicionar documento"
+//   onDocumentoCriado(d)        — repassado ao section: novo doc gerado por prorrogação
+//   onDocumentoAtualizado(id,p) — repassado ao section: patch incremental em doc
+//   onSyncCompleto              — fallback de refetch (desligamento, etc.)
 export default function FichaColaboradorDrawer({
   colaboradorId,
   colaboradores,
@@ -29,6 +32,9 @@ export default function FichaColaboradorDrawer({
   onClose,
   onEditarDoc,
   onNovoDoc,
+  onDocumentoCriado,
+  onDocumentoAtualizado,
+  onSyncCompleto,
 }) {
   const colab = useMemo(
     () => colaboradores.find((c) => Number(c.id) === Number(colaboradorId)),
@@ -144,9 +150,19 @@ export default function FichaColaboradorDrawer({
           <VinculoColaboradorSection
             colaboradorId={colaboradorId}
             contratos={contratos}
+            documentosColaborador={docsDoColab}
             colaboradores={colaboradores}
             filiais={filiais}
-            onAtualizar={carregarContratos}
+            onContratoCriado={(c) => setContratos((prev) => [...prev, c])}
+            onContratosAtualizados={(patches) => {
+              setContratos((prev) => prev.map((c) => {
+                const found = patches.find((p) => p.id === c.id)
+                return found ? { ...c, ...found.patch } : c
+              }))
+            }}
+            onDocumentoCriado={onDocumentoCriado}
+            onDocumentoAtualizado={onDocumentoAtualizado}
+            onAtualizar={() => { carregarContratos(); onSyncCompleto?.() }}
           />
 
           {resumo.total === 0 && (

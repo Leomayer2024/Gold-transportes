@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useRef } from 'react'
 import { api } from '../../services/api'
 import {
   TIPO_VINCULO_LABELS,
@@ -18,21 +18,41 @@ import ContratoModal from './ContratoModal'
 //   - Editar / criar contrato
 //
 // Props:
-//   colaboradorId   — id do colaborador
-//   contratos       — lista pré-carregada de colaborador_contratos do colab
-//   colaboradores   — para passar ao modal
-//   filiais         — para passar ao modal
-//   onAtualizar     — callback após alterações (para recarregar)
+//   colaboradorId          — id do colaborador
+//   contratos              — lista pré-carregada de colaborador_contratos do colab
+//   documentosColaborador  — docs do colab (para inativar contratual antigo)
+//   colaboradores          — para passar ao modal
+//   filiais                — para passar ao modal
+//   onContratoCriado(c)         — notifica criação local (sem refetch)
+//   onContratosAtualizados(ps)  — patches em massa de contratos
+//   onDocumentoCriado(d)        — notifica novo doc na planilha
+//   onDocumentoAtualizado(id,p) — patch incremental de um doc
+//   onAtualizar            — fallback legacy (refetch). Só usado se nenhum
+//                            callback granular for fornecido.
 export default function VinculoColaboradorSection({
   colaboradorId,
   contratos,
+  documentosColaborador = [],
   colaboradores,
   filiais,
+  onContratoCriado,
+  onContratosAtualizados,
+  onDocumentoCriado,
+  onDocumentoAtualizado,
   onAtualizar,
 }) {
+  // Estratégia de notificação:
+  //  - Quando a mudança é 100% conhecida localmente (prorrogação), só os
+  //    callbacks granulares são disparados — o pai aplica patches no estado.
+  //  - Quando o backend cascateia (desligamento → docs viram 'nao_se_aplica'),
+  //    `onAtualizar` ainda é chamado como fallback para sincronizar a UI.
   const [modalContrato, setModalContrato] = useState(null) // null | 'novo' | {...}
   const [acaoEmAndamento, setAcaoEmAndamento] = useState(false)
   const [erro, setErro] = useState('')
+  // Guard síncrono: `acaoEmAndamento` é state (assíncrono) — entre dois
+  // cliques rápidos no botão, o setState ainda não propagou e o `disabled`
+  // não está aplicado. O ref bloqueia reentrada na hora.
+  const inFlightRef = useRef(false)
 
   // Agrupa por vinculo_id. Pega o vínculo mais recente para mostrar como "atual".
   const grupos = useMemo(() => {
@@ -60,19 +80,37 @@ export default function VinculoColaboradorSection({
     || null
 
   async function prorrogarClt() {
+    if (inFlightRef.current || acaoEmAndamento) return
     if (!contratoAtivo) return
     const proxima = calcularProximaFaseClt(contratoAtivo)
     if (!proxima) return
+
+    // Dedup: se já existe uma fase com mesmo vinculo_id + fase + data_inicio,
+    // não cria duplicata. Protege contra dois cliques que escapem do guard
+    // (ex.: enter + click) e contra re-render que reabra a tela com props
+    // antigas.
+    const jaExiste = contratos.some((c) => (
+      c.vinculo_id === contratoAtivo.vinculo_id &&
+      c.fase === proxima.fase &&
+      (c.data_inicio || '') === (proxima.data_inicio || '')
+    ))
+    if (jaExiste) {
+      setErro(`Já existe uma fase ${proxima.fase} iniciando em ${proxima.data_inicio} para este vínculo. Recarregue a página se ainda não aparece.`)
+      return
+    }
+
     const label = proxima.fase === 'indeterminado'
       ? 'Tornar prazo indeterminado'
       : 'Prorrogar por mais 45 dias'
     // Tipo do documento correspondente que vai entrar na planilha de Documentos RH
     const tipoDoc = proxima.fase === 'indeterminado' ? 'Contrato de Trabalho' : 'Aditivo Contratual'
-    if (!window.confirm(`${label}?\n\nSerá criada uma nova fase do contrato e também o registro "${tipoDoc}" na planilha de Documentos RH (sem PDF — você sobe depois).`)) return
+    if (!window.confirm(`${label}?\n\nSerá criada uma nova fase do contrato e também o registro "${tipoDoc}" na planilha de Documentos RH (sem PDF — você sobe depois).\n\nOs registros contratuais anteriores do colaborador ficarão arquivados (status "não se aplica") para não contar como vencidos na planilha.`)) return
+    inFlightRef.current = true
     setAcaoEmAndamento(true)
     setErro('')
     try {
-      await api.create('colaborador_contratos', {
+      // 1) Cria nova fase no histórico de contratos.
+      const novoContratoRaw = await api.create('colaborador_contratos', {
         colaborador_id: contratoAtivo.colaborador_id,
         filial_id: contratoAtivo.filial_id,
         vinculo_id: contratoAtivo.vinculo_id, // mesma sequência
@@ -85,10 +123,13 @@ export default function VinculoColaboradorSection({
         observacoes: `Prorrogação de #${contratoAtivo.id}`,
         ativo: true,
       })
-      // Cria também o documento correspondente na planilha de Documentos RH.
-      // Falha aqui não derruba a prorrogação — só avisa.
+      const novoContrato = novoContratoRaw?.data || novoContratoRaw
+      if (novoContrato && onContratoCriado) onContratoCriado(novoContrato)
+
+      // 2) Cria o documento espelho na planilha de Documentos RH.
+      let novoDocId = null
       try {
-        await api.create('colaborador_documentos', {
+        const novoDocRaw = await api.create('colaborador_documentos', {
           colaborador_id: contratoAtivo.colaborador_id,
           filial_id: contratoAtivo.filial_id,
           categoria: 'contratual',
@@ -100,19 +141,60 @@ export default function VinculoColaboradorSection({
           observacoes: `Gerado automaticamente pela ${label.toLowerCase()}. Sobe o PDF assinado depois.`,
           ativo: true,
         })
+        const novoDoc = novoDocRaw?.data || novoDocRaw
+        if (novoDoc?.id) novoDocId = novoDoc.id
+        if (novoDoc && onDocumentoCriado) onDocumentoCriado(novoDoc)
       } catch (docErr) {
         // Mostra aviso, mas não trava — a fase foi criada com sucesso.
         setErro(`Fase do contrato criada, mas falhou ao gerar o doc na planilha: ${docErr.message || docErr}. Cadastre manualmente se necessário.`)
       }
-      onAtualizar?.()
+
+      // 3) Inativa docs contratuais anteriores DO MESMO COLABORADOR que
+      //    ficaram vencidos pela prorrogação. Critério conservador:
+      //      categoria === 'contratual'
+      //      ativo !== false
+      //      id !== novoDocId (não pisa no recém-criado)
+      //      data_validade < proxima.data_inicio  (era do termo anterior)
+      //
+      //    Mantemos os indeterminados (sem data_validade) como estavam — não
+      //    se aplica inativar um contrato vigente quando se cria outro do
+      //    mesmo tipo (caso de re-emissão por correção, por exemplo).
+      const docsParaInativar = documentosColaborador.filter((d) => (
+        d.categoria === 'contratual' &&
+        d.ativo !== false &&
+        d.id !== novoDocId &&
+        d.data_validade &&
+        d.data_validade < proxima.data_inicio
+      ))
+      if (docsParaInativar.length > 0) {
+        const patches = []
+        for (const d of docsParaInativar) {
+          try {
+            await api.update('colaborador_documentos', d.id, { ativo: false })
+            patches.push({ id: d.id, patch: { ativo: false } })
+          } catch (e) {
+            console.error('Falha ao inativar doc contratual anterior', d.id, e)
+          }
+        }
+        if (onDocumentoAtualizado) {
+          for (const { id, patch } of patches) onDocumentoAtualizado(id, patch)
+        }
+      }
+
+      // Prorrogação: nada cascateia no backend. Só chamamos refetch se o
+      // caller não forneceu callbacks granulares (modo legacy).
+      const usouGranular = onContratoCriado || onDocumentoCriado || onDocumentoAtualizado
+      if (!usouGranular && onAtualizar) onAtualizar()
     } catch (e) {
       setErro(e.message || 'Falha ao prorrogar.')
     } finally {
+      inFlightRef.current = false
       setAcaoEmAndamento(false)
     }
   }
 
   async function registrarDesligamento() {
+    if (inFlightRef.current || acaoEmAndamento) return
     if (!contratoAtivo) return
     const hoje = new Date().toISOString().slice(0, 10)
     const data = window.prompt(`Data de desligamento (AAAA-MM-DD)?\n\nIsso também vai preencher a data de desligamento no cadastro do colaborador e arquivar os documentos RH dele.`, hoje)
@@ -122,16 +204,21 @@ export default function VinculoColaboradorSection({
       return
     }
     const motivo = window.prompt('Motivo (ex.: pedido de demissão, justa causa, fim de contrato)?') || ''
+    inFlightRef.current = true
     setAcaoEmAndamento(true)
     setErro('')
     try {
       // Marca TODAS as fases do mesmo vinculo_id como desligadas
       const fases = vinculoAtual.filter((c) => !c.data_desligamento)
-      await Promise.all(fases.map((c) => api.update('colaborador_contratos', c.id, {
+      const patchContrato = {
         data_desligamento: data,
         motivo_desligamento: motivo || null,
         ativo: false,
-      })))
+      }
+      await Promise.all(fases.map((c) => api.update('colaborador_contratos', c.id, patchContrato)))
+      if (onContratosAtualizados) {
+        onContratosAtualizados(fases.map((c) => ({ id: c.id, patch: patchContrato })))
+      }
 
       // Reflete no cadastro do colaborador. O backend cascateia automaticamente
       // os documentos para status 'nao_se_aplica' (não precisamos repetir aqui).
@@ -145,10 +232,13 @@ export default function VinculoColaboradorSection({
         setErro(`Contrato encerrado, mas falhou ao atualizar o cadastro do colaborador: ${colErr.message || colErr}. Verifique manualmente.`)
       }
 
+      // Desligamento cascateia documentos server-side. Mantemos o refetch
+      // como fonte da verdade — granulares são apenas otimização paralela.
       onAtualizar?.()
     } catch (e) {
       setErro(e.message || 'Falha ao registrar desligamento.')
     } finally {
+      inFlightRef.current = false
       setAcaoEmAndamento(false)
     }
   }
