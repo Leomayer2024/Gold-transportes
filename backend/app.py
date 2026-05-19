@@ -5027,6 +5027,254 @@ def create_app():
     def health():
         return jsonify({'status': 'ok'})
 
+    # ─── Recuperação de senha (público) ───────────────────────────────────────
+    # Fluxo OTP de 6 dígitos enviado por SMTP para o Gmail informado na hora.
+    # Usamos isso porque o e-mail registrado em auth.users pode ser fictício
+    # (apenas para entrada no sistema) e não chega na caixa real do colaborador.
+    #
+    # Endpoints:
+    #   POST /api/recuperar-senha/enviar-codigo  { email_login, email_destino }
+    #   POST /api/recuperar-senha/validar-codigo { email_login, codigo }     → reset_token
+    #   POST /api/recuperar-senha/redefinir      { reset_token, nova_senha }
+
+    import smtplib as _smtplib
+    from email.mime.text import MIMEText as _MIMEText
+    from email.mime.multipart import MIMEMultipart as _MIMEMultipart
+    import secrets as _secrets
+    import uuid as _uuid
+
+    def _smtp_config():
+        host = os.getenv('SMTP_HOST', 'smtp.gmail.com')
+        port = int(os.getenv('SMTP_PORT', '587'))
+        user = os.getenv('SMTP_USER', '')
+        password = os.getenv('SMTP_PASS', '')
+        from_addr = os.getenv('SMTP_FROM', user)
+        from_name = os.getenv('SMTP_FROM_NAME', 'SEG - Gold Transportes')
+        return host, port, user, password, from_addr, from_name
+
+    def _send_email_otp(destination, codigo, nome_remetente='Gold Transportes'):
+        host, port, user, password, from_addr, from_name = _smtp_config()
+        if not user or not password or not from_addr:
+            raise RuntimeError('SMTP não configurado no servidor. Defina SMTP_HOST/PORT/USER/PASS/FROM no .env do backend.')
+        msg = _MIMEMultipart('alternative')
+        msg['Subject'] = f'Código de recuperação de senha: {codigo}'
+        msg['From'] = f'{from_name} <{from_addr}>'
+        msg['To'] = destination
+        text = (
+            f'Olá,\n\n'
+            f'Seu código de recuperação de senha no SEG é:\n\n'
+            f'    {codigo}\n\n'
+            f'Este código vale por 15 minutos. Se você não solicitou, ignore este e-mail.\n\n'
+            f'— {nome_remetente}'
+        )
+        html = f"""
+        <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;padding:20px;color:#1a1a1a">
+          <h2 style="color:#c49512;margin:0 0 12px">Recuperação de senha</h2>
+          <p>Olá,</p>
+          <p>Seu código de recuperação no SEG é:</p>
+          <div style="font-size:28px;letter-spacing:6px;font-weight:700;background:#f6f2e6;border:1px solid #e3d8b5;padding:12px 20px;border-radius:6px;display:inline-block;font-family:'Courier New',monospace;margin:8px 0">
+            {codigo}
+          </div>
+          <p style="color:#666;font-size:13px">Vale por <strong>15 minutos</strong>. Se você não solicitou, ignore.</p>
+          <hr style="border:none;border-top:1px solid #ddd;margin:20px 0"/>
+          <p style="color:#999;font-size:11px">{nome_remetente} — SEG (Sistema de Gestão)</p>
+        </div>
+        """
+        msg.attach(_MIMEText(text, 'plain', 'utf-8'))
+        msg.attach(_MIMEText(html, 'html', 'utf-8'))
+
+        with _smtplib.SMTP(host, port, timeout=15) as smtp:
+            smtp.ehlo()
+            smtp.starttls()
+            smtp.login(user, password)
+            smtp.sendmail(from_addr, [destination], msg.as_string())
+
+    def _find_auth_user_by_email(email):
+        """Busca um usuário no auth.users pelo e-mail. Retorna o objeto ou None."""
+        email_norm = (email or '').strip().lower()
+        if not email_norm:
+            return None
+        try:
+            page = 1
+            while page <= 50:  # limita varredura (até 5000 usuários)
+                resp = supabase.auth.admin.list_users(page=page, per_page=100)
+                users = resp if isinstance(resp, list) else getattr(resp, 'users', None) or resp
+                if not users:
+                    break
+                for u in users:
+                    u_email = (getattr(u, 'email', None) or (u.get('email') if isinstance(u, dict) else None) or '').lower()
+                    if u_email == email_norm:
+                        return u
+                if len(users) < 100:
+                    break
+                page += 1
+        except Exception as exc:
+            app.logger.warning('Falha ao buscar usuário auth por e-mail: %s', exc)
+        return None
+
+    def _ip_origem():
+        return (request.headers.get('X-Forwarded-For', '') or request.remote_addr or '').split(',')[0].strip()
+
+    @app.post('/api/recuperar-senha/enviar-codigo')
+    def recuperar_senha_enviar_codigo():
+        data = request.get_json(silent=True) or {}
+        email_login = (data.get('email_login') or '').strip().lower()
+        email_destino = (data.get('email_destino') or '').strip()
+        if not email_login or '@' not in email_login:
+            return jsonify({'error': 'Informe o e-mail de login válido.'}), 400
+        if not email_destino or '@' not in email_destino:
+            return jsonify({'error': 'Informe um Gmail válido para receber o código.'}), 400
+
+        # Rate limit por email_login (máx 3 pedidos em 1h) e por IP (máx 10 em 1h)
+        try:
+            uma_hora_atras = (datetime.utcnow() - timedelta(hours=1)).isoformat()
+            ip = _ip_origem()
+            recents_login = supabase.table('password_reset_codes').select('id', count='exact').eq('email_login', email_login).gte('criado_em', uma_hora_atras).execute()
+            if (recents_login.count or 0) >= 3:
+                return jsonify({'error': 'Limite de 3 pedidos por hora atingido para este login. Aguarde antes de tentar de novo.'}), 429
+            if ip:
+                recents_ip = supabase.table('password_reset_codes').select('id', count='exact').eq('ip_origem', ip).gte('criado_em', uma_hora_atras).execute()
+                if (recents_ip.count or 0) >= 10:
+                    return jsonify({'error': 'Muitos pedidos vindos do seu IP. Aguarde alguns minutos.'}), 429
+        except Exception as exc:
+            app.logger.warning('Falha no rate limit de password reset: %s', exc)
+
+        # Confere se o login existe — mas não revela o resultado pro chamador
+        # (anti-enumeração de e-mails). Sempre responde sucesso.
+        user = _find_auth_user_by_email(email_login)
+        if not user:
+            app.logger.info('Pedido de reset para e-mail não cadastrado: %s', email_login)
+            return jsonify({'ok': True, 'message': 'Se o e-mail estiver cadastrado, um código será enviado.'})
+
+        codigo = ''.join([_secrets.choice('0123456789') for _ in range(6)])
+        expira_em = (datetime.utcnow() + timedelta(minutes=15)).isoformat()
+        try:
+            supabase.table('password_reset_codes').insert({
+                'email_login': email_login,
+                'email_destino': email_destino,
+                'codigo': codigo,
+                'ip_origem': _ip_origem() or None,
+                'expira_em': expira_em,
+            }).execute()
+        except Exception as exc:
+            app.logger.error('Falha ao gravar password_reset_codes: %s', exc)
+            return jsonify({'error': 'Falha temporária. Tente novamente em alguns minutos.'}), 500
+
+        # Envia o e-mail. Se SMTP falhar, retorna erro com diagnóstico.
+        try:
+            _send_email_otp(email_destino, codigo)
+        except Exception as exc:
+            app.logger.error('Falha ao enviar e-mail OTP para %s: %s', email_destino, exc)
+            return jsonify({'error': 'Não conseguimos enviar o e-mail agora. Verifique o endereço e tente novamente.'}), 500
+
+        return jsonify({'ok': True, 'message': 'Código enviado.'})
+
+    @app.post('/api/recuperar-senha/validar-codigo')
+    def recuperar_senha_validar_codigo():
+        data = request.get_json(silent=True) or {}
+        email_login = (data.get('email_login') or '').strip().lower()
+        codigo = (data.get('codigo') or '').strip()
+        if not email_login or not codigo:
+            return jsonify({'error': 'Informe o e-mail e o código.'}), 400
+        if not codigo.isdigit() or len(codigo) != 6:
+            return jsonify({'error': 'Código inválido.'}), 400
+
+        try:
+            agora = datetime.utcnow().isoformat()
+            rows = (supabase.table('password_reset_codes')
+                    .select('id, codigo, tentativas, expira_em, usado')
+                    .eq('email_login', email_login)
+                    .eq('usado', False)
+                    .gte('expira_em', agora)
+                    .order('criado_em', desc=True)
+                    .limit(1)
+                    .execute()).data or []
+        except Exception as exc:
+            app.logger.error('Falha ao consultar password_reset_codes: %s', exc)
+            return jsonify({'error': 'Falha temporária. Tente novamente.'}), 500
+
+        if not rows:
+            return jsonify({'error': 'Código inválido ou expirado. Solicite um novo.'}), 400
+
+        row = rows[0]
+        if (row.get('tentativas') or 0) >= 5:
+            try:
+                supabase.table('password_reset_codes').update({'usado': True, 'usado_em': agora}).eq('id', row['id']).execute()
+            except Exception:
+                pass
+            return jsonify({'error': 'Muitas tentativas erradas. Solicite um novo código.'}), 429
+
+        if str(row.get('codigo')) != codigo:
+            try:
+                supabase.table('password_reset_codes').update({'tentativas': (row.get('tentativas') or 0) + 1}).eq('id', row['id']).execute()
+            except Exception:
+                pass
+            return jsonify({'error': 'Código não confere.'}), 400
+
+        # Código OK: gera reset_token (10 min) e marca como usado
+        reset_token = _uuid.uuid4().hex
+        expira_token = (datetime.utcnow() + timedelta(minutes=10)).isoformat()
+        try:
+            supabase.table('password_reset_codes').update({
+                'usado': True,
+                'usado_em': agora,
+                'reset_token': reset_token,
+                'expira_em': expira_token,  # reusa o campo: agora marca expiração do token
+            }).eq('id', row['id']).execute()
+        except Exception as exc:
+            app.logger.error('Falha ao gerar reset_token: %s', exc)
+            return jsonify({'error': 'Falha temporária.'}), 500
+
+        return jsonify({'ok': True, 'reset_token': reset_token})
+
+    @app.post('/api/recuperar-senha/redefinir')
+    def recuperar_senha_redefinir():
+        data = request.get_json(silent=True) or {}
+        reset_token = (data.get('reset_token') or '').strip()
+        nova_senha = data.get('nova_senha') or ''
+        if not reset_token:
+            return jsonify({'error': 'Sessão inválida. Recomece o processo.'}), 400
+        if not isinstance(nova_senha, str) or len(nova_senha) < 6:
+            return jsonify({'error': 'A senha precisa ter pelo menos 6 caracteres.'}), 400
+
+        try:
+            agora = datetime.utcnow().isoformat()
+            rows = (supabase.table('password_reset_codes')
+                    .select('id, email_login, expira_em, reset_token')
+                    .eq('reset_token', reset_token)
+                    .gte('expira_em', agora)
+                    .limit(1)
+                    .execute()).data or []
+        except Exception as exc:
+            app.logger.error('Falha ao consultar reset_token: %s', exc)
+            return jsonify({'error': 'Falha temporária.'}), 500
+
+        if not rows:
+            return jsonify({'error': 'Sessão de redefinição expirou. Recomece o processo.'}), 400
+
+        row = rows[0]
+        email_login = row.get('email_login')
+        user = _find_auth_user_by_email(email_login)
+        if not user:
+            return jsonify({'error': 'Usuário não encontrado.'}), 404
+
+        user_id = getattr(user, 'id', None) or (user.get('id') if isinstance(user, dict) else None)
+        try:
+            supabase.auth.admin.update_user_by_id(str(user_id), {'password': nova_senha})
+        except Exception as exc:
+            app.logger.error('Falha ao atualizar senha do user %s: %s', user_id, exc)
+            return jsonify({'error': 'Não foi possível atualizar a senha. Tente novamente.'}), 500
+
+        # Invalida o token consumindo o registro
+        try:
+            supabase.table('password_reset_codes').update({
+                'reset_token': None,
+            }).eq('id', row['id']).execute()
+        except Exception:
+            pass
+
+        return jsonify({'ok': True})
+
     # ─── Assinatura SaaS ──────────────────────────────────────────────────────
 
     _assinatura_cache = {'data': None, 'expires_at': 0.0}

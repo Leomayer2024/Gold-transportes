@@ -1,22 +1,27 @@
 import { useState } from 'react'
 import { Link, useNavigate, Navigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { api } from '../services/api'
 import fotoLogin from '../../assets/foto_login.png'
 import gLogo from '../../assets/g_logo.png'
 import logoGold from '../../assets/logo_gold.png'
 
-// Recuperação de senha em 3 etapas usando OTP nativo do Supabase:
-//   1) Usuário informa o e-mail   → Supabase envia código de 6 dígitos
-//   2) Usuário digita o código    → Supabase valida e abre sessão de recovery
-//   3) Usuário define nova senha  → updateUser({ password })
+// Recuperação de senha em 3 etapas usando código OTP enviado por SMTP
+// do nosso backend (não usa Supabase Auth recovery, porque o e-mail do
+// auth.users é fictício e a pessoa não tem acesso a ele).
+//
+//   Etapa 1 — usuário informa o e-mail do login + Gmail pra receber
+//   Etapa 2 — usuário digita o código de 6 dígitos
+//   Etapa 3 — usuário define a nova senha
 export default function RecuperarSenhaPage() {
   const { isAuthenticated, initializing } = useAuth()
   const navigate = useNavigate()
 
-  const [etapa, setEtapa] = useState(1) // 1 | 2 | 3 | 'sucesso'
-  const [email, setEmail] = useState('')
+  const [etapa, setEtapa] = useState(1)
+  const [emailLogin, setEmailLogin] = useState('')
+  const [emailDestino, setEmailDestino] = useState('')
   const [codigo, setCodigo] = useState('')
+  const [resetToken, setResetToken] = useState('')
   const [novaSenha, setNovaSenha] = useState('')
   const [confirmacao, setConfirmacao] = useState('')
 
@@ -24,31 +29,32 @@ export default function RecuperarSenhaPage() {
   const [erro, setErro] = useState('')
   const [aviso, setAviso] = useState('')
 
-  // Se já está logado, manda pra dashboard
   if (!initializing && isAuthenticated && etapa !== 'sucesso') {
     return <Navigate to="/dashboard" replace />
   }
 
   async function enviarCodigo(event) {
     event.preventDefault()
-    if (!email.trim()) {
-      setErro('Informe seu e-mail.')
+    if (!emailLogin.trim() || !emailLogin.includes('@')) {
+      setErro('Informe seu e-mail de login válido.')
+      return
+    }
+    if (!emailDestino.trim() || !emailDestino.includes('@')) {
+      setErro('Informe um Gmail válido para receber o código.')
       return
     }
     setAguardando(true)
     setErro('')
     setAviso('')
     try {
-      // resetPasswordForEmail envia um e-mail com OTP de 6 dígitos
-      // (o Supabase usa o template de "recovery" por padrão).
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        // redirectTo é opcional — não usamos link, só o código
+      await api.post('/recuperar-senha/enviar-codigo', {
+        email_login: emailLogin.trim().toLowerCase(),
+        email_destino: emailDestino.trim(),
       })
-      if (error) throw error
-      setAviso(`Código enviado para ${email}. Cheque sua caixa de entrada (e o spam).`)
+      setAviso(`Código enviado para ${emailDestino}. Cheque sua caixa (e o spam).`)
       setEtapa(2)
     } catch (e) {
-      setErro(traduzirErro(e))
+      setErro(e.message || 'Falha ao enviar código.')
     } finally {
       setAguardando(false)
     }
@@ -56,10 +62,6 @@ export default function RecuperarSenhaPage() {
 
   async function validarCodigo(event) {
     event.preventDefault()
-    if (!codigo.trim()) {
-      setErro('Informe o código recebido por e-mail.')
-      return
-    }
     if (!/^\d{6}$/.test(codigo.trim())) {
       setErro('O código tem 6 dígitos numéricos.')
       return
@@ -67,17 +69,15 @@ export default function RecuperarSenhaPage() {
     setAguardando(true)
     setErro('')
     try {
-      // verifyOtp com type='recovery' abre uma sessão temporária que permite
-      // chamar updateUser({ password }) em seguida.
-      const { error } = await supabase.auth.verifyOtp({
-        email: email.trim(),
-        token: codigo.trim(),
-        type: 'recovery',
+      const res = await api.post('/recuperar-senha/validar-codigo', {
+        email_login: emailLogin.trim().toLowerCase(),
+        codigo: codigo.trim(),
       })
-      if (error) throw error
+      if (!res?.reset_token) throw new Error('Resposta inválida do servidor.')
+      setResetToken(res.reset_token)
       setEtapa(3)
     } catch (e) {
-      setErro(traduzirErro(e))
+      setErro(e.message || 'Código inválido.')
     } finally {
       setAguardando(false)
     }
@@ -96,13 +96,13 @@ export default function RecuperarSenhaPage() {
     setAguardando(true)
     setErro('')
     try {
-      const { error } = await supabase.auth.updateUser({ password: novaSenha })
-      if (error) throw error
-      // Encerra a sessão de recovery — usuário precisa logar com a nova senha
-      try { await supabase.auth.signOut() } catch {}
+      await api.post('/recuperar-senha/redefinir', {
+        reset_token: resetToken,
+        nova_senha: novaSenha,
+      })
       setEtapa('sucesso')
     } catch (e) {
-      setErro(traduzirErro(e))
+      setErro(e.message || 'Falha ao redefinir.')
     } finally {
       setAguardando(false)
     }
@@ -114,11 +114,13 @@ export default function RecuperarSenhaPage() {
     setAviso('')
     setAguardando(true)
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email.trim())
-      if (error) throw error
-      setAviso(`Novo código enviado para ${email}.`)
+      await api.post('/recuperar-senha/enviar-codigo', {
+        email_login: emailLogin.trim().toLowerCase(),
+        email_destino: emailDestino.trim(),
+      })
+      setAviso(`Novo código enviado para ${emailDestino}.`)
     } catch (e) {
-      setErro(traduzirErro(e))
+      setErro(e.message || 'Falha ao reenviar.')
     } finally {
       setAguardando(false)
     }
@@ -126,14 +128,17 @@ export default function RecuperarSenhaPage() {
 
   return (
     <div className="login-page">
-      <section className="login-showcase" style={{ backgroundImage: `linear-gradient(135deg, rgba(12, 16, 21, 0.8), rgba(64, 44, 6, 0.52)), url(${fotoLogin})` }}>
+      <section
+        className="login-showcase"
+        style={{ backgroundImage: `linear-gradient(135deg, rgba(12, 16, 21, 0.8), rgba(64, 44, 6, 0.52)), url(${fotoLogin})` }}
+      >
         <div className="login-showcase-logo-wrap">
           <img alt="Gold Transportes" className="login-showcase-logo" src={logoGold} />
         </div>
         <div className="login-showcase-copy">
           <span className="eyebrow login-showcase-eyebrow">SEG</span>
           <h1>Recuperar acesso</h1>
-          <p>Esqueceu sua senha? A gente envia um código pro seu e-mail e você redefine em segundos.</p>
+          <p>Esqueceu sua senha? A gente envia um código pro seu Gmail pra você redefinir em segundos.</p>
         </div>
       </section>
 
@@ -151,24 +156,38 @@ export default function RecuperarSenhaPage() {
             <PassoIndicador etapa={etapa} />
           </div>
 
-          {/* ── Etapa 1: e-mail ── */}
           {etapa === 1 && (
             <form onSubmit={enviarCodigo}>
               <label className="field">
-                <span>E-mail cadastrado</span>
+                <span>E-mail de login (o que você usa pra entrar)</span>
                 <input
-                  autoComplete="email"
+                  autoComplete="username"
                   autoFocus
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => setEmailLogin(e.target.value)}
                   placeholder="usuario@empresa.com"
                   type="email"
-                  value={email}
+                  value={emailLogin}
+                />
+              </label>
+              <label className="field">
+                <span>Gmail pessoal (onde quer receber o código)</span>
+                <input
+                  autoComplete="email"
+                  onChange={(e) => setEmailDestino(e.target.value)}
+                  placeholder="seunome@gmail.com"
+                  type="email"
+                  value={emailDestino}
                 />
               </label>
               {erro && <div className="alert-error">{erro}</div>}
               {aviso && <div className="alert-success">{aviso}</div>}
-              <button className="button-primary" disabled={aguardando} type="submit" style={{ width: '100%', marginTop: 8 }}>
-                {aguardando ? 'Enviando código…' : 'Enviar código por e-mail'}
+              <button
+                className="button-primary"
+                disabled={aguardando}
+                type="submit"
+                style={{ width: '100%', marginTop: 8 }}
+              >
+                {aguardando ? 'Enviando código…' : 'Enviar código'}
               </button>
               <div style={{ marginTop: 12, textAlign: 'center' }}>
                 <Link to="/login" style={{ fontSize: 12 }}>← Voltar pro login</Link>
@@ -176,12 +195,11 @@ export default function RecuperarSenhaPage() {
             </form>
           )}
 
-          {/* ── Etapa 2: código ── */}
           {etapa === 2 && (
             <form onSubmit={validarCodigo}>
               <p style={{ fontSize: 12, color: 'var(--text-muted, #666)', marginBottom: 10 }}>
-                Enviamos um código de 6 dígitos para <strong>{email}</strong>.
-                Cheque sua caixa de entrada e a pasta de spam.
+                Enviamos um código de 6 dígitos para <strong>{emailDestino}</strong>.
+                Cheque a caixa de entrada e a pasta de spam.
               </p>
               <label className="field">
                 <span>Código (6 dígitos)</span>
@@ -199,21 +217,34 @@ export default function RecuperarSenhaPage() {
               </label>
               {erro && <div className="alert-error">{erro}</div>}
               {aviso && <div className="alert-success">{aviso}</div>}
-              <button className="button-primary" disabled={aguardando || codigo.length !== 6} type="submit" style={{ width: '100%', marginTop: 8 }}>
+              <button
+                className="button-primary"
+                disabled={aguardando || codigo.length !== 6}
+                type="submit"
+                style={{ width: '100%', marginTop: 8 }}
+              >
                 {aguardando ? 'Validando…' : 'Validar código'}
               </button>
               <div style={{ marginTop: 10, display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-                <button type="button" className="button-link" onClick={() => { setEtapa(1); setCodigo(''); setErro(''); setAviso('') }}>
-                  ← Trocar e-mail
+                <button
+                  type="button"
+                  className="button-link"
+                  onClick={() => { setEtapa(1); setCodigo(''); setErro(''); setAviso('') }}
+                >
+                  ← Trocar dados
                 </button>
-                <button type="button" className="button-link" onClick={reenviarCodigo} disabled={aguardando}>
+                <button
+                  type="button"
+                  className="button-link"
+                  onClick={reenviarCodigo}
+                  disabled={aguardando}
+                >
                   Reenviar código
                 </button>
               </div>
             </form>
           )}
 
-          {/* ── Etapa 3: nova senha ── */}
           {etapa === 3 && (
             <form onSubmit={redefinirSenha}>
               <p style={{ fontSize: 12, color: 'var(--text-muted, #666)', marginBottom: 10 }}>
@@ -243,19 +274,22 @@ export default function RecuperarSenhaPage() {
                 />
               </label>
               {erro && <div className="alert-error">{erro}</div>}
-              <button className="button-primary" disabled={aguardando} type="submit" style={{ width: '100%', marginTop: 8 }}>
+              <button
+                className="button-primary"
+                disabled={aguardando}
+                type="submit"
+                style={{ width: '100%', marginTop: 8 }}
+              >
                 {aguardando ? 'Salvando…' : 'Redefinir senha'}
               </button>
             </form>
           )}
 
-          {/* ── Sucesso ── */}
           {etapa === 'sucesso' && (
             <div style={{ textAlign: 'center', padding: '20px 0' }}>
               <div style={{ fontSize: 48, marginBottom: 12 }}>✅</div>
               <p style={{ fontSize: 14, marginBottom: 16 }}>
-                Senha redefinida com sucesso!<br />
-                Faça login com a sua nova senha.
+                Senha redefinida com sucesso!<br />Faça login com a nova senha.
               </p>
               <button
                 type="button"
@@ -291,25 +325,4 @@ function PassoIndicador({ etapa }) {
       ))}
     </div>
   )
-}
-
-// Mensagens do Supabase em inglês → português amigável
-function traduzirErro(e) {
-  const msg = String(e?.message || e || '').toLowerCase()
-  if (msg.includes('rate limit') || msg.includes('too many')) {
-    return 'Muitas tentativas. Aguarde alguns minutos antes de tentar de novo.'
-  }
-  if (msg.includes('invalid otp') || msg.includes('token is invalid') || msg.includes('expired')) {
-    return 'Código inválido ou expirado. Solicite um novo e tente novamente.'
-  }
-  if (msg.includes('user not found') || msg.includes('no user')) {
-    return 'Não encontramos um usuário com esse e-mail.'
-  }
-  if (msg.includes('password should be') || msg.includes('password is too short')) {
-    return 'A senha precisa ter pelo menos 6 caracteres.'
-  }
-  if (msg.includes('email rate limit') || msg.includes('email send')) {
-    return 'Limite de envio de e-mail atingido. Tente novamente em alguns minutos.'
-  }
-  return e?.message || 'Falha inesperada. Tente novamente.'
 }
