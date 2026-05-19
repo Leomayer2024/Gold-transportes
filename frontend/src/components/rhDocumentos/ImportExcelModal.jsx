@@ -7,6 +7,7 @@ import {
   diasAlertaSugerido,
   calcularValidadeSugerida,
   CATEGORIA_LABELS,
+  CATEGORIAS,
 } from './catalogo'
 import { dataBrParaIso, normalizarNome } from './helpers'
 
@@ -37,6 +38,33 @@ function getCell(row, header) {
 function asBool(v) {
   const s = normalizarNome(v)
   return ['sim', 's', 'true', '1', 'x', 'yes'].includes(s)
+}
+
+const VALID_CATEGORIAS = new Set(CATEGORIAS.map((c) => c.value))
+const CATEGORIA_ALIASES = {
+  'saúde': 'saude',
+  'segurança': 'saude',
+  'seguranca': 'saude',
+  'saúde e segurança': 'saude',
+  'saude e seguranca': 'saude',
+  'saúde e segurança (sst)': 'saude',
+  'saude e seguranca (sst)': 'saude',
+  'sst': 'saude',
+  'habilitação': 'habilitacao',
+  'treinamentos': 'treinamento',
+  'contrato': 'contratual',
+  'contratuais': 'contratual',
+}
+
+function normalizarCategoria(raw, tipo) {
+  const s = String(raw || '').toLowerCase().trim()
+  if (!s) return categoriaSugerida(tipo) || null
+  if (VALID_CATEGORIAS.has(s)) return s
+  const semAcento = s.normalize('NFD').replace(/[̀-ͯ]/g, '')
+  if (VALID_CATEGORIAS.has(semAcento)) return semAcento
+  if (CATEGORIA_ALIASES[s]) return CATEGORIA_ALIASES[s]
+  if (CATEGORIA_ALIASES[semAcento]) return CATEGORIA_ALIASES[semAcento]
+  return categoriaSugerida(tipo) || null
 }
 
 export default function ImportExcelModal({ colaboradores, filiais, onClose, onImported }) {
@@ -128,8 +156,7 @@ export default function ImportExcelModal({ colaboradores, filiais, onClose, onIm
         if (!dataValidade && dataEmissao) {
           dataValidade = calcularValidadeSugerida(tipo, dataEmissao) || ''
         }
-        const categoriaCelula = String(getCell(row, 'Categoria') || '').toLowerCase().trim()
-        const categoria = categoriaCelula || categoriaSugerida(tipo) || ''
+        const categoria = normalizarCategoria(getCell(row, 'Categoria'), tipo)
         const diasAlertaCel = getCell(row, 'Dias alerta')
         const diasAlerta = diasAlertaCel === '' ? diasAlertaSugerido(tipo, 30) : Number(diasAlertaCel) || 30
         const obrigatorioRaw = getCell(row, 'Obrigatório')
