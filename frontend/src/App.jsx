@@ -13,6 +13,7 @@ import AccessRoute from './components/AccessRoute'
 import EventosRhPage from './components/EventosRhPage'
 import Layout from './components/Layout'
 import LoginPage from './components/LoginPage'
+import RecuperarSenhaPage from './components/RecuperarSenhaPage'
 import MotivosParadaPage from './components/MotivosParadaPage'
 import PermissionsPage from './components/PermissionsPage'
 import PresencePage from './components/PresencePage'
@@ -70,6 +71,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/recuperar-senha" element={<RecuperarSenhaPage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<Layout />}>
           <Route index element={<Navigate to="/dashboard" replace />} />

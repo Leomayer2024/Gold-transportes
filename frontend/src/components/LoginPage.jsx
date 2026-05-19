@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Navigate, useLocation } from 'react-router-dom'
+import { Link, Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import fotoLogin from '../../assets/foto_login.png'
 import gLogo from '../../assets/g_logo.png'
@@ -102,6 +102,12 @@ export default function LoginPage() {
           <button className="button-primary" disabled={submitting} type="submit">
             {submitting ? 'Entrando...' : 'Entrar'}
           </button>
+
+          <div style={{ marginTop: 10, textAlign: 'center' }}>
+            <Link to="/recuperar-senha" style={{ fontSize: 12 }}>
+              Esqueci minha senha
+            </Link>
+          </div>
         </form>
       </section>
     </div>
