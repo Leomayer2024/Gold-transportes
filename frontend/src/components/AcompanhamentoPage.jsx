@@ -11,6 +11,7 @@ const TIPOS = {
   horas_extras:   'Hora Extra',
   abastecimentos: 'Abastecimento',
   pneus:          'Pneu',
+  diarias_solicitacoes: 'Diárias / Hotelaria',
 }
 
 const REEMBOLSO_LABEL = {
@@ -114,6 +115,17 @@ const CAMPOS_MODAL = {
     { k: 'data_instalacao',l: 'Data instalação', date: true },
     { k: 'km_instalacao',  l: 'KM instalação' },
     { k: 'observacoes',    l: 'Observações', full: true },
+  ],
+  diarias_solicitacoes: [
+    { k: 'numero_solicitacao', l: 'N° Solicitação' },
+    { k: 'cidade_destino',     l: 'Cidade destino' },
+    { k: 'uf_destino',         l: 'UF' },
+    { k: 'data_inicio',        l: 'Início', date: true },
+    { k: 'data_fim',           l: 'Fim', date: true },
+    { k: 'rota',               l: 'Rota' },
+    { k: 'banco',              l: 'Banco' },
+    { k: 'valor_total',        l: 'Valor total', moeda: true },
+    { k: 'observacoes',        l: 'Observações', full: true },
   ],
 }
 
@@ -347,7 +359,26 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
           )}
 
           {/* Ações */}
-          {STATUS_PENDENTE.includes(solicitacao.status) && (() => {
+          {/* Diárias: atender exige preencher valores → leva pra DiariasPage */}
+          {tipo === 'diarias_solicitacoes' && STATUS_PENDENTE.includes(solicitacao.status) && podeAprovar && (
+            <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+              <a
+                className="button-primary"
+                href={`/diarias?atender=${solicitacao.id}`}
+                style={{ textDecoration: 'none' }}
+              >
+                Atender (preencher valores) →
+              </a>
+              <button
+                type="button"
+                className="button-secondary"
+                onClick={() => setAcao('rejeitar')}
+              >
+                Rejeitar
+              </button>
+            </div>
+          )}
+          {tipo !== 'diarias_solicitacoes' && STATUS_PENDENTE.includes(solicitacao.status) && (() => {
             let podeFazerAlgo = false
             let acaoPrimaria  = null
             let labelPrimaria = ''

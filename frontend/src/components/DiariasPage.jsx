@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { api } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { canCreateResource, hasActionPermission } from '../lib/permissions'
@@ -83,6 +84,20 @@ export default function DiariasPage() {
   }, [])
 
   useEffect(() => { carregar() }, [carregar])
+
+  // ?atender=ID → abre modal em modo 'atender' automaticamente (vem do Acompanhamento)
+  const [searchParams, setSearchParams] = useSearchParams()
+  useEffect(() => {
+    const atenderId = searchParams.get('atender')
+    if (!atenderId || solicitacoes.length === 0) return
+    const sol = solicitacoes.find((s) => String(s.id) === String(atenderId))
+    if (sol) {
+      setModalSol({ sol, itens: itensPorSol[sol.id] || [], modo: 'atender' })
+      // limpa query
+      searchParams.delete('atender')
+      setSearchParams(searchParams, { replace: true })
+    }
+  }, [searchParams, solicitacoes, itensPorSol, setSearchParams])
 
   const filtradas = useMemo(() => {
     let list = solicitacoes
@@ -224,12 +239,12 @@ export default function DiariasPage() {
                       <td>{brl(s.valor_total)}</td>
                       <td><span className={`rh-status-badge ${s.status}`}>{STATUS_LABELS[s.status] || s.status}</span></td>
                       <td style={{ whiteSpace: 'nowrap' }}>
+                        {podeAprovar && s.status === 'pendente' && (
+                          <button type="button" className="button-link" style={{ fontWeight: 600 }} onClick={() => setModalSol({ sol: s, itens, modo: 'atender' })}>atender</button>
+                        )}
                         <button type="button" className="button-link" onClick={() => setModalSol({ sol: s, itens })}>editar</button>
                         {podeAprovar && (s.status === 'pendente' || s.status === 'em_analise') && (
-                          <>
-                            <button type="button" className="button-link" onClick={() => aprovar(s)}>aprovar</button>
-                            <button type="button" className="button-link danger" onClick={() => reprovar(s)}>reprovar</button>
-                          </>
+                          <button type="button" className="button-link danger" onClick={() => reprovar(s)}>reprovar</button>
                         )}
                         {podeAprovar && s.status === 'aprovado' && (
                           <button type="button" className="button-link" onClick={() => marcarPago(s)}>marcar pago</button>
@@ -251,7 +266,7 @@ export default function DiariasPage() {
 
       {modalSol && (
         <DiariasModal
-          modo={modalSol === 'nova' ? 'nova' : 'edicao'}
+          modo={modalSol === 'nova' ? 'nova' : (modalSol.modo || 'edicao')}
           solicitacao={modalSol === 'nova' ? null : modalSol.sol}
           itensIniciais={modalSol === 'nova' ? [] : modalSol.itens}
           valoresCidade={valoresCidade}
@@ -397,8 +412,10 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
         data_inicio: sol.data_inicio,
         data_fim: sol.data_fim,
         rota: sol.rota || null,
-        // Status sempre 'pendente' na criação. Em edição, mantém o que está.
-        status: modo === 'nova' ? 'pendente' : (sol.status || 'pendente'),
+        // Status: nova→pendente, atender→aprovado, edicao→preserva
+        status: modo === 'nova'     ? 'pendente' :
+                modo === 'atender' ? 'aprovado'  :
+                                     (sol.status || 'pendente'),
         valor_total: valorTotal,
         banco: sol.banco || null,
         observacoes: sol.observacoes || null,
@@ -451,7 +468,11 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose?.()}>
       <div className="modal-card rh-doc-modal-lg">
         <header className="modal-header">
-          <h3>{modo === 'nova' ? 'Nova solicitação de diárias' : `Editar solicitação #${solicitacao?.numero_solicitacao || solicitacao?.id}`}</h3>
+          <h3>{
+            modo === 'nova'    ? 'Nova solicitação de diárias' :
+            modo === 'atender' ? `Atender solicitação #${solicitacao?.numero_solicitacao || solicitacao?.id}` :
+                                 `Editar solicitação #${solicitacao?.numero_solicitacao || solicitacao?.id}`
+          }</h3>
           <button className="button-link" onClick={onClose} type="button">✕</button>
         </header>
         <form onSubmit={salvar} className="rh-doc-form">
@@ -503,19 +524,27 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
             <button type="button" className="button-secondary" onClick={adicionarItem} style={{ fontSize: 11, padding: '3px 10px' }}>+ Adicionar motorista</button>
           </div>
 
+          {modo === 'nova' && (
+            <small style={{ color: 'var(--text-muted, #666)', display: 'block', marginBottom: 6 }}>
+              Valores (café/almoço/jantar/pernoite/qtd) serão preenchidos no atendimento desta solicitação.
+            </small>
+          )}
+
           <div style={{ overflowX: 'auto' }}>
             <table className="rh-doc-table" style={{ fontSize: 11 }}>
               <thead>
                 <tr>
                   <th>Motorista</th>
                   <th>Placa</th>
-                  <th>Café</th>
-                  <th>Almoço</th>
-                  <th>Jantar</th>
-                  <th>Pernoite</th>
-                  <th>Diárias</th>
-                  <th>Pernoites</th>
-                  <th>Total</th>
+                  {modo !== 'nova' && <>
+                    <th>Café</th>
+                    <th>Almoço</th>
+                    <th>Jantar</th>
+                    <th>Pernoite</th>
+                    <th>Diárias</th>
+                    <th>Pernoites</th>
+                    <th>Total</th>
+                  </>}
                   <th></th>
                 </tr>
               </thead>
@@ -532,34 +561,38 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
                       />
                     </td>
                     <td><input type="text" value={it.placa || ''} onChange={(e) => updItem(idx, { placa: e.target.value.toUpperCase() })} style={{ width: 90 }} /></td>
-                    <td>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <input type="checkbox" checked={!!it.inclui_cafe} onChange={(e) => updItem(idx, { inclui_cafe: e.target.checked })} />
-                        <ValorInput valor={it.valor_cafe} onChange={(v) => updItem(idx, { valor_cafe: v })} />
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <input type="checkbox" checked={!!it.inclui_almoco} onChange={(e) => updItem(idx, { inclui_almoco: e.target.checked })} />
-                        <ValorInput valor={it.valor_almoco} onChange={(v) => updItem(idx, { valor_almoco: v })} />
-                      </div>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <input type="checkbox" checked={!!it.inclui_jantar} onChange={(e) => updItem(idx, { inclui_jantar: e.target.checked })} />
-                        <ValorInput valor={it.valor_jantar} onChange={(v) => updItem(idx, { valor_jantar: v })} />
-                      </div>
-                    </td>
-                    <td><ValorInput valor={it.valor_pernoite} onChange={(v) => updItem(idx, { valor_pernoite: v })} /></td>
-                    <td><input type="number" min={0} value={it.qtd_diarias} onChange={(e) => updItem(idx, { qtd_diarias: Number(e.target.value) })} style={{ width: 50 }} /></td>
-                    <td><input type="number" min={0} value={it.qtd_pernoites} onChange={(e) => updItem(idx, { qtd_pernoites: Number(e.target.value) })} style={{ width: 50 }} /></td>
-                    <td><strong>{brl(it.valor_total)}</strong></td>
+                    {modo !== 'nova' && <>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <input type="checkbox" checked={!!it.inclui_cafe} onChange={(e) => updItem(idx, { inclui_cafe: e.target.checked })} />
+                          <ValorInput valor={it.valor_cafe} onChange={(v) => updItem(idx, { valor_cafe: v })} />
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <input type="checkbox" checked={!!it.inclui_almoco} onChange={(e) => updItem(idx, { inclui_almoco: e.target.checked })} />
+                          <ValorInput valor={it.valor_almoco} onChange={(v) => updItem(idx, { valor_almoco: v })} />
+                        </div>
+                      </td>
+                      <td>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <input type="checkbox" checked={!!it.inclui_jantar} onChange={(e) => updItem(idx, { inclui_jantar: e.target.checked })} />
+                          <ValorInput valor={it.valor_jantar} onChange={(v) => updItem(idx, { valor_jantar: v })} />
+                        </div>
+                      </td>
+                      <td><ValorInput valor={it.valor_pernoite} onChange={(v) => updItem(idx, { valor_pernoite: v })} /></td>
+                      <td><input type="number" min={0} value={it.qtd_diarias} onChange={(e) => updItem(idx, { qtd_diarias: Number(e.target.value) })} style={{ width: 50 }} /></td>
+                      <td><input type="number" min={0} value={it.qtd_pernoites} onChange={(e) => updItem(idx, { qtd_pernoites: Number(e.target.value) })} style={{ width: 50 }} /></td>
+                      <td><strong>{brl(it.valor_total)}</strong></td>
+                    </>}
                     <td><button type="button" className="button-link danger" onClick={() => removerItem(idx)}>✕</button></td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
-                <tr><td colSpan={8} style={{ textAlign: 'right' }}><strong>Total da solicitação:</strong></td><td><strong>{brl(valorTotal)}</strong></td><td></td></tr>
+                {modo !== 'nova' && (
+                  <tr><td colSpan={8} style={{ textAlign: 'right' }}><strong>Total da solicitação:</strong></td><td><strong>{brl(valorTotal)}</strong></td><td></td></tr>
+                )}
               </tfoot>
             </table>
           </div>
@@ -573,7 +606,9 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
 
           <footer className="modal-footer">
             <button type="button" className="button-secondary" onClick={onClose}>Cancelar</button>
-            <button type="submit" className="button-primary" disabled={saving}>{saving ? 'Salvando…' : 'Salvar'}</button>
+            <button type="submit" className="button-primary" disabled={saving}>
+              {saving ? 'Salvando…' : (modo === 'atender' ? 'Atender e enviar ao financeiro' : 'Salvar')}
+            </button>
           </footer>
         </form>
       </div>

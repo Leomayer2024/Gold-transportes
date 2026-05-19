@@ -9823,6 +9823,17 @@ def create_app():
                 'require_comment_on_approve': False, 'require_comment_on_reject': True, 'ativo': True,
                 '_label': 'Controle de Pneus',
             },
+            'diarias_solicitacoes': {
+                'table': 'diarias_solicitacoes', 'status_field': 'status',
+                'pending_statuses': ['pendente'],
+                'approved_status': 'aprovado', 'rejected_status': 'reprovado',
+                'check_scope': 'menu.diarias', 'permission': 'aprovar.diarias',
+                'approval_fields': ['cidade_destino', 'uf_destino', 'data_inicio', 'data_fim', 'rota', 'valor_total', 'banco'],
+                'approve_update': lambda p: {},
+                'reject_update': lambda p, m: {'observacoes': m},
+                'require_comment_on_approve': False, 'require_comment_on_reject': True, 'ativo': True,
+                '_label': 'Diárias e Hotelaria',
+            },
         }
         try:
             resp = supabase.table('approval_workflow_configs').select('*').execute()
