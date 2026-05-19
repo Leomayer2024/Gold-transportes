@@ -68,6 +68,13 @@ export function AuthProvider({ children }) {
 
       setSession(nextSession)
       setUser(nextSession?.user ?? null)
+      // Marca profileLoading como true ANTES de derrubar initializing pra fechar
+      // a janela em que ProtectedRoute liberaria o conteúdo sem profile carregado.
+      if (nextSession) {
+        setProfileLoading(true)
+      } else {
+        setProfile(null)
+      }
       setInitializing(false)
       void loadProfile(nextSession)
     }

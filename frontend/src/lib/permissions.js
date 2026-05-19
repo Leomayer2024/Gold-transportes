@@ -87,7 +87,14 @@ export function hasScopePermission(profile, scope) {
     return true
   }
 
-  if (!profile?.has_scope_permissions) {
+  // Profile ainda não carregou (ex.: logo após login) → não libera nada.
+  // Evita o "flash" de botões/menus enquanto o backend devolve os escopos.
+  if (!profile) {
+    return false
+  }
+
+  // Compat: usuário antigo sem nenhum escopo configurado libera tudo.
+  if (!profile.has_scope_permissions) {
     return true
   }
 
@@ -134,7 +141,9 @@ export function canCreateResource(profile, resourceName, createScope) {
  */
 export function hasActionPermission(profile, actionName) {
   if (!actionName) return true
-  if (!profile?.has_scope_permissions) return true
+  // Profile ainda não carregou → não vaza botões.
+  if (!profile) return false
+  if (!profile.has_scope_permissions) return true
   const scopes = profile.permission_scopes || []
 
   // Se já tem o escopo explícito, libera.
