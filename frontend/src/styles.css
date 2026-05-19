@@ -486,9 +486,11 @@ textarea:focus {
   background: var(--sidebar);
   color: var(--sidebar-text);
   border-right: 1px solid #111d27;
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.12) transparent;
+  /* Container fixo no viewport — só o menu interno rola */
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  overflow: hidden;
 }
 
 .brand-block {
@@ -510,6 +512,12 @@ textarea:focus {
   gap: 4px;
   flex: 1;
   align-content: start;
+  /* Aqui é onde o menu rola — preserva user-card sempre visível */
+  overflow-y: auto;
+  min-height: 0;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.12) transparent;
+  padding-right: 2px;
 }
 
 .nav-group {
@@ -640,6 +648,7 @@ textarea:focus {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   display: grid;
   gap: 8px;
+  flex-shrink: 0; /* permanece fixo no rodapé do sidebar */
 }
 
 .sidebar-version-watermark {
@@ -2458,6 +2467,16 @@ tr:last-child td {
 
   .login-showcase {
     min-height: 420px;
+  }
+
+  /* Em mobile o sidebar fica acima — não fixa nem limita altura */
+  .sidebar {
+    position: static;
+    height: auto;
+    overflow: visible;
+  }
+  .nav-tree {
+    overflow: visible;
   }
 }
 

@@ -350,6 +350,9 @@ function AbaColaborador({ config, scopeGroups }) {
   const [platformFilter, setPlatformFilter] = useState('all')
   const [scopeSearch, setScopeSearch] = useState('')
   const [showPreview, setShowPreview] = useState(true)
+  // Copiar permissões de outro colaborador
+  const [copying, setCopying] = useState(false)
+  const [copyFromId, setCopyFromId] = useState('')
 
   const autoEnableMap = useMemo(() => buildAutoEnableMap(scopeGroups), [scopeGroups])
   const handleToggleScope = useMemo(() => makeToggleHandler(setActiveScopes, autoEnableMap), [autoEnableMap])
@@ -401,6 +404,30 @@ function AbaColaborador({ config, scopeGroups }) {
   function getFilialLabel(filialId) {
     const f = (config.filiais || []).find((x) => x.id === filialId)
     return f ? `${f.cidade}/${f.uf}` : '-'
+  }
+
+  async function handleCopyFrom() {
+    if (!copyFromId) return
+    const colab = (config.collaborators || []).find((c) => Number(c.id) === Number(copyFromId))
+    if (!colab) {
+      setError('Colaborador de origem não encontrado.')
+      return
+    }
+    if (!window.confirm(
+      `Copiar permissões de "${colab.nome_completo}"?\n\nIsso vai substituir os flags, escopos e bases atuais. Clique em Salvar permissões para confirmar.`,
+    )) return
+    try {
+      const res = await api.getPermissionsDetail(copyFromId)
+      setFlags({ ...INITIAL_FLAGS, ...(res.permission_flags || {}) })
+      setActiveScopes(res.active_scopes || [])
+      setActiveFilialIds(res.active_filial_ids || [])
+      setCopying(false)
+      setCopyFromId('')
+      setFeedback(`Permissões de "${colab.nome_completo}" carregadas (${(res.active_scopes || []).length} escopos). Revise e clique em Salvar.`)
+      setError('')
+    } catch (e) {
+      setError(`Falha ao carregar permissões de "${colab.nome_completo}": ${e.message}`)
+    }
   }
 
   function handleApplyCargoModel() {
@@ -511,18 +538,59 @@ function AbaColaborador({ config, scopeGroups }) {
               </div>
             </div>
 
-            {/* Botão de aplicar modelo do cargo */}
-            {detail.collaborator.cargo && (
-              <div style={{ marginBottom: 16 }}>
+            {/* Botões de aplicar modelo do cargo / copiar de outro colaborador */}
+            <div style={{ marginBottom: 16, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              {detail.collaborator.cargo && (
                 <button className="button-secondary" onClick={handleApplyCargoModel} type="button">
                   ↓ Aplicar modelo do cargo &ldquo;{detail.collaborator.cargo}&rdquo;
                 </button>
-                <small style={{ display: 'block', marginTop: 4, color: 'var(--text-muted)' }}>
-                  Substitui os escopos de telas/funções pelo modelo padrão configurado para este cargo. Salve para
-                  confirmar.
-                </small>
+              )}
+              <button
+                className={`button-secondary${copying ? ' active' : ''}`}
+                onClick={() => { setCopying((c) => !c); setCopyFromId('') }}
+                type="button"
+              >
+                📋 {copying ? 'Cancelar cópia' : 'Copiar permissões de outro colaborador'}
+              </button>
+            </div>
+
+            {copying && (
+              <div style={{
+                marginBottom: 16, padding: 10, borderRadius: 6,
+                background: '#f0f4ff', border: '1px solid #c5cae9',
+                display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
+              }}>
+                <strong style={{ fontSize: 12, color: '#1a237e' }}>Copiar de:</strong>
+                <select
+                  value={copyFromId}
+                  onChange={(e) => setCopyFromId(e.target.value)}
+                  style={{ flex: 1, minWidth: 200 }}
+                >
+                  <option value="">Selecione um colaborador...</option>
+                  {(config.collaborators || [])
+                    .filter((c) => c.id !== selectedId)
+                    .map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.nome_completo}{c.cargo ? ` — ${c.cargo}` : ''}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  type="button"
+                  className="button-primary"
+                  disabled={!copyFromId}
+                  onClick={handleCopyFrom}
+                  style={{ fontSize: 12, padding: '4px 12px' }}
+                >
+                  ↘ Copiar agora
+                </button>
               </div>
             )}
+
+            <small style={{ display: 'block', marginBottom: 12, color: 'var(--text-muted)' }}>
+              Modelo do cargo substitui só os escopos. Copiar de outro colaborador substitui também flags e bases. Em ambos os casos, salve para confirmar.
+            </small>
+
 
             {/* Poderes globais */}
             <div className="permissions-block">
