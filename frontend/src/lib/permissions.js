@@ -12,6 +12,7 @@ export const navigationGroups = [
       { to: '/colaboradores', label: 'Colaboradores', scope: 'menu.colaboradores' },
       { to: '/contratos-operacionais', label: 'Contratos operacionais', scope: 'menu.contratos_operacionais' },
       { to: '/rh-documentos', label: 'Documentos RH', scope: 'menu.colaborador_documentos' },
+      { to: '/diarias', label: 'Diárias / Hotelaria', scope: 'menu.diarias' },
       { to: '/rh-planejamento', label: 'Planejamento RH', scope: 'menu.eventos_rh' },
       { to: '/horas-extras', label: 'Horas extras', scope: 'menu.horas_extras' },
       { to: '/quadro-funcionarios', label: 'Quadro de funcionários', scope: 'menu.quadro_funcionarios' },
