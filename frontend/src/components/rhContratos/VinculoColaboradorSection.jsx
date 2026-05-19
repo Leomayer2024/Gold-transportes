@@ -66,7 +66,9 @@ export default function VinculoColaboradorSection({
     const label = proxima.fase === 'indeterminado'
       ? 'Tornar prazo indeterminado'
       : 'Prorrogar por mais 45 dias'
-    if (!window.confirm(`${label}? Será criado um novo registro de contrato.`)) return
+    // Tipo do documento correspondente que vai entrar na planilha de Documentos RH
+    const tipoDoc = proxima.fase === 'indeterminado' ? 'Contrato de Trabalho' : 'Aditivo Contratual'
+    if (!window.confirm(`${label}?\n\nSerá criada uma nova fase do contrato e também o registro "${tipoDoc}" na planilha de Documentos RH (sem PDF — você sobe depois).`)) return
     setAcaoEmAndamento(true)
     setErro('')
     try {
@@ -83,6 +85,25 @@ export default function VinculoColaboradorSection({
         observacoes: `Prorrogação de #${contratoAtivo.id}`,
         ativo: true,
       })
+      // Cria também o documento correspondente na planilha de Documentos RH.
+      // Falha aqui não derruba a prorrogação — só avisa.
+      try {
+        await api.create('colaborador_documentos', {
+          colaborador_id: contratoAtivo.colaborador_id,
+          filial_id: contratoAtivo.filial_id,
+          categoria: 'contratual',
+          tipo_documento: tipoDoc,
+          data_emissao: proxima.data_inicio,
+          data_validade: proxima.data_fim || null,
+          dias_alerta: proxima.fase === 'indeterminado' ? 0 : 15,
+          obrigatorio: proxima.fase === 'indeterminado',
+          observacoes: `Gerado automaticamente pela ${label.toLowerCase()}. Sobe o PDF assinado depois.`,
+          ativo: true,
+        })
+      } catch (docErr) {
+        // Mostra aviso, mas não trava — a fase foi criada com sucesso.
+        setErro(`Fase do contrato criada, mas falhou ao gerar o doc na planilha: ${docErr.message || docErr}. Cadastre manualmente se necessário.`)
+      }
       onAtualizar?.()
     } catch (e) {
       setErro(e.message || 'Falha ao prorrogar.')

@@ -5910,6 +5910,28 @@ def create_app():
                 except Exception as cascade_exc:
                     app.logger.warning('Falha ao cascatear status para contratos_colaboradores (colaborador %s): %s', item_id, cascade_exc)
 
+                # Quando o colaborador é desligado, encerra também:
+                #  1) Vínculos trabalhistas (colaborador_contratos) ainda em curso
+                #  2) Documentos RH ativos → status 'nao_se_aplica' (preserva o histórico)
+                if not colaborador_ativo and data_desligamento:
+                    # 1) Encerra fases de contrato ainda sem data_desligamento
+                    try:
+                        supabase.table('colaborador_contratos').update({
+                            'data_desligamento': data_desligamento,
+                            'motivo_desligamento': 'Desligamento registrado no cadastro do colaborador.',
+                            'ativo': False,
+                        }).eq('colaborador_id', item_id).is_('data_desligamento', 'null').execute()
+                    except Exception as cascade_exc:
+                        app.logger.warning('Falha ao encerrar colaborador_contratos (colaborador %s): %s', item_id, cascade_exc)
+
+                    # 2) Marca docs ativos como "não se aplica" (não inativa pra preservar histórico)
+                    try:
+                        supabase.table('colaborador_documentos').update({
+                            'status': 'nao_se_aplica',
+                        }).eq('colaborador_id', item_id).eq('ativo', True).execute()
+                    except Exception as cascade_exc:
+                        app.logger.warning('Falha ao arquivar colaborador_documentos (colaborador %s): %s', item_id, cascade_exc)
+
             write_audit_event(
                 profile,
                 action='update',
