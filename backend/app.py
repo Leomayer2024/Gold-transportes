@@ -5905,8 +5905,20 @@ def create_app():
                 data_desligamento = payload.get('data_desligamento')
                 if not colaborador_ativo and data_desligamento:
                     cascade_payload['data_fim_vinculo'] = data_desligamento
+
+                # Defesa em profundidade: usuário com escopo de filial só cascateia
+                # registros das filiais que ele pode acessar (mesmo que ensure_item
+                # já tenha validado o colaborador alvo).
+                allowed_filial_ids = (
+                    None if not profile_has_filial_scope(profile)
+                    else (profile.get('allowed_filial_ids') or [])
+                )
+
                 try:
-                    supabase.table('contratos_colaboradores').update(cascade_payload).eq('colaborador_id', item_id).execute()
+                    q = supabase.table('contratos_colaboradores').update(cascade_payload).eq('colaborador_id', item_id)
+                    if allowed_filial_ids is not None:
+                        q = q.in_('filial_id', allowed_filial_ids)
+                    q.execute()
                 except Exception as cascade_exc:
                     app.logger.warning('Falha ao cascatear status para contratos_colaboradores (colaborador %s): %s', item_id, cascade_exc)
 
@@ -5916,19 +5928,25 @@ def create_app():
                 if not colaborador_ativo and data_desligamento:
                     # 1) Encerra fases de contrato ainda sem data_desligamento
                     try:
-                        supabase.table('colaborador_contratos').update({
+                        q = supabase.table('colaborador_contratos').update({
                             'data_desligamento': data_desligamento,
                             'motivo_desligamento': 'Desligamento registrado no cadastro do colaborador.',
                             'ativo': False,
-                        }).eq('colaborador_id', item_id).is_('data_desligamento', 'null').execute()
+                        }).eq('colaborador_id', item_id).is_('data_desligamento', 'null')
+                        if allowed_filial_ids is not None:
+                            q = q.in_('filial_id', allowed_filial_ids)
+                        q.execute()
                     except Exception as cascade_exc:
                         app.logger.warning('Falha ao encerrar colaborador_contratos (colaborador %s): %s', item_id, cascade_exc)
 
                     # 2) Marca docs ativos como "não se aplica" (não inativa pra preservar histórico)
                     try:
-                        supabase.table('colaborador_documentos').update({
+                        q = supabase.table('colaborador_documentos').update({
                             'status': 'nao_se_aplica',
-                        }).eq('colaborador_id', item_id).eq('ativo', True).execute()
+                        }).eq('colaborador_id', item_id).eq('ativo', True)
+                        if allowed_filial_ids is not None:
+                            q = q.in_('filial_id', allowed_filial_ids)
+                        q.execute()
                     except Exception as cascade_exc:
                         app.logger.warning('Falha ao arquivar colaborador_documentos (colaborador %s): %s', item_id, cascade_exc)
 
