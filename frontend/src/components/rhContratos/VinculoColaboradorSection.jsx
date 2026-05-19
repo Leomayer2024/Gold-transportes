@@ -115,7 +115,7 @@ export default function VinculoColaboradorSection({
   async function registrarDesligamento() {
     if (!contratoAtivo) return
     const hoje = new Date().toISOString().slice(0, 10)
-    const data = window.prompt(`Data de desligamento (AAAA-MM-DD)?`, hoje)
+    const data = window.prompt(`Data de desligamento (AAAA-MM-DD)?\n\nIsso também vai preencher a data de desligamento no cadastro do colaborador e arquivar os documentos RH dele.`, hoje)
     if (!data) return
     if (!/^\d{4}-\d{2}-\d{2}$/.test(data)) {
       setErro('Data inválida. Use o formato AAAA-MM-DD.')
@@ -132,6 +132,19 @@ export default function VinculoColaboradorSection({
         motivo_desligamento: motivo || null,
         ativo: false,
       })))
+
+      // Reflete no cadastro do colaborador. O backend cascateia automaticamente
+      // os documentos para status 'nao_se_aplica' (não precisamos repetir aqui).
+      try {
+        await api.update('colaboradores', contratoAtivo.colaborador_id, {
+          data_desligamento: data,
+          ativo: false,
+        })
+      } catch (colErr) {
+        // Não derruba — apenas avisa. As fases já foram encerradas.
+        setErro(`Contrato encerrado, mas falhou ao atualizar o cadastro do colaborador: ${colErr.message || colErr}. Verifique manualmente.`)
+      }
+
       onAtualizar?.()
     } catch (e) {
       setErro(e.message || 'Falha ao registrar desligamento.')
