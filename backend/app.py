@@ -6092,6 +6092,7 @@ def create_app():
             'pedidos_compra': 'pedidos_compra',
             'horas_extras': 'horas_extras',
             'veiculos_pneus': 'pneus',
+            'diarias_solicitacoes': 'diarias_solicitacoes',
         }
         if resource_name in _SOLICITACAO_TIPO_MAP and 'numero_solicitacao' not in payload:
             _tipo = _SOLICITACAO_TIPO_MAP[resource_name]
