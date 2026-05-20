@@ -269,10 +269,10 @@ export default function ContratosOperacionaisPage() {
                 </>
               )}
 
-              {/* Lista de colaboradores vinculados ATIVOS (custos do mês) */}
-              {contractMetrics.colaboradores_detalhe?.some((c) => c.vinculo_ativo !== false) && (
+              {/* Lista de colaboradores vinculados — inclui inativos (não somam custo) */}
+              {contractMetrics.colaboradores_detalhe?.length > 0 && (
                 <>
-                  <div className="contract-metrics-section-title">Colaboradores vinculados (ativos)</div>
+                  <div className="contract-metrics-section-title">Colaboradores vinculados</div>
                   <div className="contract-gastos-extras-card">
                     <table className="contract-gastos-table">
                       <thead>
@@ -286,10 +286,10 @@ export default function ContratosOperacionaisPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {contractMetrics.colaboradores_detalhe
-                          .filter((c) => c.vinculo_ativo !== false)
-                          .map((c) => (
-                            <tr key={c.colaborador_id}>
+                        {contractMetrics.colaboradores_detalhe.map((c) => {
+                          const inativo = c.vinculo_ativo === false || c.ativo === false
+                          return (
+                            <tr key={c.colaborador_id} style={inativo ? { opacity: 0.65 } : undefined}>
                               <td>{c.nome || '-'}</td>
                               <td>{c.cargo || '-'}</td>
                               <td>{c.is_fora_contrato ? 'Extra' : 'Fixo'}</td>
@@ -297,11 +297,19 @@ export default function ContratosOperacionaisPage() {
                                 <span className={`badge ${c.ativo ? 'badge-success' : 'badge-danger'}`}>
                                   {c.ativo ? 'Ativo' : 'Inativo'}
                                 </span>
+                                {inativo && (
+                                  <span className="badge badge-danger" style={{ marginLeft: 4 }} title="Não soma no custo — registro mantido para HE, contas e histórico">
+                                    Não conta
+                                  </span>
+                                )}
                               </td>
                               <td style={{ textAlign: 'right' }}>{formatPercent(c.percentual_alocacao)}</td>
-                              <td style={{ textAlign: 'right' }}>{formatCurrency(c.custo_alocado)}</td>
+                              <td style={{ textAlign: 'right', color: inativo ? '#888' : undefined }}>
+                                {formatCurrency(c.custo_alocado)}
+                              </td>
                             </tr>
-                          ))}
+                          )
+                        })}
                       </tbody>
                     </table>
                   </div>
