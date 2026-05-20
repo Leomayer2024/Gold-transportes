@@ -1,0 +1,5 @@
+filial;placa;marca;modelo;tipo;tipo_veiculo;ano_modelo;cor;chassi;combustivel;capacidade_tanque;status;odometro_atual;km_proxima_revisao;data_vencimento_crlv;data_vencimento_seguro;data_ultima_revisao;descricao
+Uberlandia/MG;ABC1D23;Volkswagen;Delivery 9.170;rota;caminhao_medio;2026;Branco;9BWZZZ377VT004251;diesel;200;ativo;0;10000;2026-12-31;2026-11-30;2026-03-01;Veículo dedicado à rota A
+Catalao/GO;DEF4G56;Mercedes-Benz;Sprinter;transferencia;van;2026;Branco;;diesel;90;ativo;15000;25000;2026-10-15;2026-09-30;;Transferência entre bases
+Uberlandia/MG;GHI7J89;Fiat;Strada;diaria;utilitario;2026;Preto;;flex;55;ativo;500;15000;;;;Uso pontual
+Uberlandia/MG;JKL0M12;Scania;R450;multidia;caminhao_pesado;2026;Vermelho;;diesel;400;ativo;120000;130000;2026-12-31;2026-10-01;;Viagens longas multi-dia

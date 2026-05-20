@@ -350,6 +350,7 @@ RESOURCE_DEFINITIONS = {
             'odometro_atual',
             'descricao',
             'tipo_veiculo',
+            'tipo',
             'combustivel',
             'capacidade_tanque',
             'data_vencimento_crlv',
@@ -357,10 +358,10 @@ RESOURCE_DEFINITIONS = {
             'data_ultima_revisao',
             'km_proxima_revisao',
         ],
-        'partial_match_fields': ['placa', 'marca', 'modelo', 'chassi', 'cor', 'status', 'tipo_veiculo'],
+        'partial_match_fields': ['placa', 'marca', 'modelo', 'chassi', 'cor', 'status', 'tipo_veiculo', 'tipo'],
         'nullable_fields': [
             'chassi', 'ano_modelo', 'cor', 'odometro_atual', 'descricao',
-            'tipo_veiculo', 'combustivel', 'capacidade_tanque',
+            'tipo_veiculo', 'tipo', 'combustivel', 'capacidade_tanque',
             'data_vencimento_crlv', 'data_vencimento_seguro',
             'data_ultima_revisao', 'km_proxima_revisao',
         ],
@@ -9245,6 +9246,227 @@ def create_app():
             'skipped_duplicates': skipped_duplicates,
             'errors': errors,
             'schema_warnings': schema_warnings,
+            'filiais_disponiveis': filiais_disponiveis,
+        })
+
+    @app.post('/api/veiculos/importar')
+    @rate_limit_endpoint(max_requests=5)
+    @require_auth
+    def veiculos_importar(profile):
+        scope_error = require_scope_permission(profile, 'menu.veiculos')
+        if scope_error:
+            return scope_error
+
+        permission_error = require_create_permission(profile, 'veiculos')
+        if permission_error:
+            return permission_error
+
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            payload = {}
+
+        rows = payload.get('rows') or []
+        if not isinstance(rows, list) or not rows:
+            return jsonify({'error': 'Envie uma lista de linhas para importar.'}), 400
+
+        if len(rows) > 500:
+            return jsonify({'error': 'Importação limitada a 500 linhas por envio.'}), 400
+
+        import unicodedata as _ud
+        def _strip_accents(s):
+            return ''.join(c for c in _ud.normalize('NFD', s) if _ud.category(c) != 'Mn')
+
+        filiais_rows = fetch_accessible_filiais(profile)
+        filiais_by_id = {int(item['id']): item for item in filiais_rows if item.get('id') is not None}
+        filiais_by_city = {
+            (item.get('cidade') or '').strip().lower(): int(item['id'])
+            for item in filiais_rows if item.get('id') is not None
+        }
+        filiais_by_city_uf = {
+            f"{(item.get('cidade') or '').strip().lower()}/{(item.get('uf') or '').strip().lower()}": int(item['id'])
+            for item in filiais_rows if item.get('id') is not None
+        }
+        filiais_by_city_norm = {
+            _strip_accents((item.get('cidade') or '').strip().lower()): int(item['id'])
+            for item in filiais_rows if item.get('id') is not None
+        }
+        filiais_by_city_uf_norm = {
+            _strip_accents(f"{(item.get('cidade') or '').strip().lower()}/{(item.get('uf') or '').strip().lower()}"): int(item['id'])
+            for item in filiais_rows if item.get('id') is not None
+        }
+        filiais_by_codigo = {
+            (item.get('codigo') or '').strip().lower(): int(item['id'])
+            for item in filiais_rows if item.get('id') is not None and item.get('codigo')
+        }
+
+        TIPO_VALID = {'rota', 'transferencia', 'diaria', 'multidia'}
+        TIPO_ALIASES = {
+            'rota': 'rota',
+            'transferência': 'transferencia',
+            'transferencia': 'transferencia',
+            'diária': 'diaria',
+            'diaria': 'diaria',
+            'multidia': 'multidia',
+            'multi-dia': 'multidia',
+            'multi dia': 'multidia',
+        }
+        TIPO_VEICULO_ALIASES = {
+            'utilitario': 'utilitario',
+            'utilitário': 'utilitario',
+            'caminhao leve': 'caminhao_leve',
+            'caminhão leve': 'caminhao_leve',
+            'caminhao medio': 'caminhao_medio',
+            'caminhão médio': 'caminhao_medio',
+            'caminhao pesado': 'caminhao_pesado',
+            'caminhão pesado': 'caminhao_pesado',
+            'van': 'van',
+            'furgao': 'van',
+            'furgão': 'van',
+            'passeio': 'passeio',
+            'moto': 'moto',
+            'outro': 'outro',
+        }
+        STATUS_ALIASES = {
+            'ativo': 'ativo',
+            'manutencao': 'manutencao',
+            'manutenção': 'manutencao',
+            'em manutencao': 'manutencao',
+            'em manutenção': 'manutencao',
+            'inativo': 'inativo',
+        }
+        COMBUSTIVEL_VALID = {'diesel', 'gasolina', 'flex', 'etanol', 'gnv', 'eletrico'}
+
+        def _norm_token(value):
+            return _strip_accents(str(value or '').strip().lower())
+
+        imported = 0
+        updated = 0
+        errors = []
+
+        for index, row in enumerate(rows, start=1):
+            if not isinstance(row, dict):
+                errors.append({'line': index, 'error': 'Linha inválida.'})
+                continue
+
+            raw_filial = row.get('filial') or row.get('filial_id')
+            filial_id = None
+            if str(raw_filial).isdigit():
+                filial_id = int(raw_filial)
+            elif raw_filial:
+                k = str(raw_filial).strip().lower()
+                kn = _strip_accents(k)
+                filial_id = (
+                    filiais_by_city.get(k)
+                    or filiais_by_city_uf.get(k)
+                    or filiais_by_city_norm.get(kn)
+                    or filiais_by_city_uf_norm.get(kn)
+                    or filiais_by_codigo.get(k)
+                )
+
+            if not filial_id and len(filiais_rows) == 1:
+                filial_id = int(filiais_rows[0]['id'])
+
+            if not filial_id or filial_id not in filiais_by_id:
+                attempted = str(raw_filial or '').strip() or '(vazio)'
+                errors.append({'line': index, 'error': f'Filial não encontrada: "{attempted}".'})
+                continue
+
+            placa = (row.get('placa') or '').strip().upper()
+            marca = (row.get('marca') or '').strip()
+            modelo = (row.get('modelo') or '').strip()
+            if not placa or not marca or not modelo:
+                errors.append({'line': index, 'error': 'Campos obrigatórios: placa, marca, modelo.'})
+                continue
+
+            tipo_raw = _norm_token(row.get('tipo'))
+            tipo = TIPO_ALIASES.get(tipo_raw) if tipo_raw else None
+            if tipo_raw and tipo not in TIPO_VALID:
+                errors.append({'line': index, 'error': f'Tipo inválido: "{row.get("tipo")}". Use rota, transferencia, diaria ou multidia.'})
+                continue
+
+            tipo_veiculo_raw = _norm_token(row.get('tipo_veiculo'))
+            tipo_veiculo = TIPO_VEICULO_ALIASES.get(tipo_veiculo_raw) or (tipo_veiculo_raw or None)
+
+            status_raw = _norm_token(row.get('status')) or 'ativo'
+            status = STATUS_ALIASES.get(status_raw, 'ativo')
+
+            combustivel_raw = _norm_token(row.get('combustivel'))
+            combustivel = combustivel_raw if combustivel_raw in COMBUSTIVEL_VALID else (combustivel_raw or None)
+
+            def _to_int(value):
+                try:
+                    return int(str(value).strip()) if str(value or '').strip() else None
+                except Exception:
+                    return None
+
+            def _to_float(value):
+                try:
+                    return float(str(value).replace(',', '.').strip()) if str(value or '').strip() else None
+                except Exception:
+                    return None
+
+            normalized_payload = {
+                'filial_id': filial_id,
+                'placa': placa,
+                'chassi': (row.get('chassi') or '').strip() or None,
+                'marca': marca,
+                'modelo': modelo,
+                'ano_modelo': _to_int(row.get('ano_modelo')),
+                'cor': (row.get('cor') or '').strip() or None,
+                'tipo_veiculo': tipo_veiculo,
+                'tipo': tipo,
+                'combustivel': combustivel,
+                'capacidade_tanque': _to_float(row.get('capacidade_tanque')),
+                'status': status,
+                'odometro_atual': _to_int(row.get('odometro_atual')) or 0,
+                'km_proxima_revisao': _to_int(row.get('km_proxima_revisao')),
+                'data_vencimento_crlv': normalize_import_date(row.get('data_vencimento_crlv')),
+                'data_vencimento_seguro': normalize_import_date(row.get('data_vencimento_seguro')),
+                'data_ultima_revisao': normalize_import_date(row.get('data_ultima_revisao')),
+                'descricao': (row.get('descricao') or row.get('observacoes') or '').strip() or None,
+            }
+
+            try:
+                existing = (
+                    supabase.table('veiculos')
+                    .select('id')
+                    .eq('filial_id', filial_id)
+                    .eq('placa', placa)
+                    .limit(1)
+                    .execute()
+                )
+                existing_row = (existing.data or [None])[0]
+
+                if existing_row:
+                    supabase.table('veiculos').update(normalized_payload).eq('id', existing_row['id']).execute()
+                    updated += 1
+                else:
+                    supabase.table('veiculos').insert(normalized_payload).execute()
+                    imported += 1
+            except Exception as exc:
+                errors.append({
+                    'line': index,
+                    'error': translate_database_error(exc),
+                    'debug': str(exc)[:600],
+                })
+
+        write_audit_event(
+            profile,
+            action='veiculos_import',
+            resource_name='veiculos',
+            details={'imported': imported, 'updated': updated, 'errors': len(errors)},
+        )
+
+        filiais_disponiveis = sorted([
+            f"{item.get('cidade', '')}/{item.get('uf', '')}"
+            for item in filiais_rows if item.get('cidade')
+        ])
+
+        return jsonify({
+            'status': 'ok',
+            'imported': imported,
+            'updated': updated,
+            'errors': errors,
             'filiais_disponiveis': filiais_disponiveis,
         })
 
