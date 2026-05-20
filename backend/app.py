@@ -9376,7 +9376,10 @@ def create_app():
                     return ''
                 return str(v).strip()
 
-            placa = _as_str(row.get('placa')).upper()
+            placa_raw = _as_str(row.get('placa')).upper()
+            # Aceita placa combo cavalo/carreta: "ABC1D23/XYZ4W56" ou "ABC1D23,XYZ4W56".
+            # Normaliza separadores e espaços para "PLACA1/PLACA2".
+            placa = re.sub(r'\s*[/,;]\s*', '/', placa_raw).strip('/').strip()
             if not placa:
                 errors.append({'line': index, 'error': 'Placa é obrigatória.'})
                 continue

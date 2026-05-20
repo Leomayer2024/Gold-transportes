@@ -779,7 +779,7 @@ export const resourceConfigs = {
       tipoOptions: ['rota', 'transferencia', 'diaria', 'multidia'],
       mapping: [
         { csv: 'filial', field: 'Filial', help: 'Cidade ou cidade/UF (ex: Belém/PA). Obrigatório.' },
-        { csv: 'placa', field: 'Placa', help: 'Identificador único. Obrigatório.' },
+        { csv: 'placa', field: 'Placa', help: 'Identificador único. Obrigatório. Combo cavalo/carreta aceito: "ABC1D23/XYZ4W56".' },
         { csv: 'marca', field: 'Marca', help: 'Ex: Volvo, Scania. Vazio vira "—".' },
         { csv: 'modelo', field: 'Modelo', help: 'Ex: FH 540. Vazio ou "0" vira "—".' },
         { csv: 'tipo', field: 'Tipo operacional', help: 'rota, transferencia, diaria ou multidia.' },
