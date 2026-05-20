@@ -3658,6 +3658,30 @@ def create_app():
             contracts = contract_query.execute().data or []
 
         # ────────────────────────────────────────────────────────────────
+        # Bulk-load contratos_colaboradores SEM filtro de ativo (somente
+        # para aba Variável/RTM — colab inativo que teve horas no mês
+        # deve aparecer no agregado RTM, mas não no custo de salário)
+        # ────────────────────────────────────────────────────────────────
+        rtm_links_by_contract = {}
+        try:
+            month_start_rtm, month_end_rtm = month_date_bounds(month_reference)
+            rtm_links_query = (
+                supabase.table('contratos_colaboradores')
+                .select('*')
+                .or_(f'inicio_vigencia.is.null,inicio_vigencia.lte.{month_end_rtm.isoformat()}')
+            )
+            rtm_links_query = apply_filial_scope(rtm_links_query, profile, RESOURCE_DEFINITIONS['contratos_colaboradores'])
+            if filial_id:
+                rtm_links_query = rtm_links_query.eq('filial_id', filial_id)
+            for link_row in (rtm_links_query.execute().data or []):
+                cid_rtm = link_row.get('contrato_operacional_id')
+                if cid_rtm is None:
+                    continue
+                rtm_links_by_contract.setdefault(int(cid_rtm), []).append(link_row)
+        except Exception as exc:
+            logging.warning(f'Falha ao carregar contratos_colaboradores (incl. inativos) p/ RTM: {exc}')
+
+        # ────────────────────────────────────────────────────────────────
         # Bulk-load RTM horas extras do mês (para aba Variável do contrato)
         # Também coleta meses disponíveis (qualquer período) por colaborador
         # ────────────────────────────────────────────────────────────────
@@ -3706,6 +3730,12 @@ def create_app():
             cid = link.get('colaborador_id')
             if cid is not None:
                 all_linked_cids.add(int(cid))
+        # Inclui também colab dos vínculos inativos (para RTM)
+        for links_list in rtm_links_by_contract.values():
+            for link in links_list:
+                cid = link.get('colaborador_id')
+                if cid is not None:
+                    all_linked_cids.add(int(cid))
         if all_linked_cids:
             try:
                 info_resp = supabase.table('colaboradores').select(
@@ -3878,6 +3908,8 @@ def create_app():
 
             # ──────────────────────────────────────────────────────────────
             # Detalhe por colaborador + totais RTM (aba Variável)
+            # União de vínculos ATIVOS (linked_rows) + INATIVOS do mês
+            # (rtm_links_by_contract) — RTM soma inativos; custo só ativos
             # ──────────────────────────────────────────────────────────────
             colaboradores_detalhe = []
             rtm_total_50_valor = 0.0
@@ -3887,8 +3919,20 @@ def create_app():
             rtm_total_horas_100 = 0.0
             colaboradores_inativos_count = 0
             rtm_meses_set = set()
+
+            contract_id_int = int(contract.get('id')) if contract.get('id') is not None else None
+            active_link_cids = {int(l.get('colaborador_id')) for l in linked_rows if l.get('colaborador_id') is not None}
+            union_links = list(linked_rows)
+            for extra_link in rtm_links_by_contract.get(contract_id_int, []):
+                ecid = extra_link.get('colaborador_id')
+                if ecid is None:
+                    continue
+                if int(ecid) in active_link_cids:
+                    continue
+                union_links.append(extra_link)
+
             seen_cids_detalhe = set()
-            for link in linked_rows:
+            for link in union_links:
                 cid_link = link.get('colaborador_id')
                 if cid_link is None:
                     continue
@@ -3901,7 +3945,10 @@ def create_app():
                 info = colab_info_map.get(cid_int, {'nome': '', 'ativo': True, 'cargo': ''})
                 rtm = rtm_by_colaborador.get(cid_int)
                 allocation2 = max(0.0, min(100.0, parse_float_or_default(link.get('percentual_alocacao'), 100.0)))
-                custo_col = parse_float_or_default(collaborator_cost_by_id.get(cid_int), 0.0) * (allocation2 / 100.0)
+                vinculo_ativo = bool(link.get('ativo', True)) and (cid_int in active_link_cids)
+                # Custo só conta para vínculos ativos
+                custo_col = (parse_float_or_default(collaborator_cost_by_id.get(cid_int), 0.0) * (allocation2 / 100.0)
+                             if vinculo_ativo else 0.0)
                 valor_cobrado_link2 = max(0.0, parse_float_or_default(link.get('valor_cobrado_colaborador'), 0.0))
                 if not info.get('ativo', True):
                     colaboradores_inativos_count += 1
@@ -3910,6 +3957,7 @@ def create_app():
                     'nome': info.get('nome') or (rtm.get('funcionario_nome') if rtm else ''),
                     'cargo': info.get('cargo') or '',
                     'ativo': info.get('ativo', True),
+                    'vinculo_ativo': vinculo_ativo,
                     'tipo_item': tipo_item_link2,
                     'is_fora_contrato': is_fora2,
                     'percentual_alocacao': round(allocation2, 2),
@@ -3921,7 +3969,7 @@ def create_app():
                     'rtm_horas_50': round(rtm['horas_50'], 2) if rtm else 0.0,
                     'rtm_horas_100': round(rtm['horas_100'], 2) if rtm else 0.0,
                 })
-                # Totais variáveis: somente colaboradores fixos do contrato (não-fora) entram
+                # Totais variáveis: colab fixos (não-fora) — ativos OU inativos com RTM no mês
                 if not is_fora2:
                     if rtm:
                         rtm_total_50_valor += rtm['total_50']
@@ -3929,7 +3977,6 @@ def create_app():
                         rtm_total_geral_valor += rtm['total_geral']
                         rtm_total_horas_50 += rtm['horas_50']
                         rtm_total_horas_100 += rtm['horas_100']
-                    # Meses com qualquer dado RTM para os colab fixos (sugestões UI)
                     rtm_meses_set.update(rtm_meses_por_colaborador.get(cid_int, set()))
 
             contracts_enriched.append({
