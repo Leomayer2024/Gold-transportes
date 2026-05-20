@@ -337,6 +337,25 @@ export default function ContratosOperacionaisPage() {
                 )}
               </div>
 
+              {/* Hint: meses com dados RTM disponíveis */}
+              {(!contractMetrics.colaboradores_detalhe?.some((c) => c.rtm_total_geral > 0)
+                && contractMetrics.rtm_meses_disponiveis?.length > 0) && (
+                <p className="contract-gastos-empty" style={{ background: '#fef8e6', borderLeft: '3px solid #e0c76a', padding: '8px 12px', marginBottom: 8 }}>
+                  Sem dados RTM para {selectedMonth}. Disponível em:{' '}
+                  {contractMetrics.rtm_meses_disponiveis.map((m, idx) => (
+                    <button
+                      key={m}
+                      type="button"
+                      className="button-ghost button-sm"
+                      onClick={() => setSelectedMonth(m)}
+                      style={{ padding: '0 4px', fontWeight: 700 }}
+                    >
+                      {m}{idx < contractMetrics.rtm_meses_disponiveis.length - 1 ? ',' : ''}
+                    </button>
+                  ))}
+                </p>
+              )}
+
               {/* Detalhe RTM por colaborador */}
               {contractMetrics.colaboradores_detalhe?.some((c) => c.rtm_total_geral > 0) ? (
                 <div className="contract-gastos-extras-card" style={{ marginTop: 8 }}>
@@ -399,34 +418,39 @@ export default function ContratosOperacionaisPage() {
                   <small>Descontado do resultado do contrato</small>
                 </div>
 
-                {showGastosDetail && contractMetrics.gastos_extras_linhas?.length > 0 && (
-                  <table className="contract-gastos-table">
-                    <thead>
-                      <tr>
-                        <th>Descrição</th>
-                        <th style={{ textAlign: 'right' }}>Valor</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {contractMetrics.gastos_extras_linhas.map((g) => (
-                        <tr key={g.id}>
-                          <td>{g.nome_gasto}</td>
-                          <td style={{ textAlign: 'right' }}>{formatCurrency(g.valor_mensal)}</td>
+                {(() => {
+                  const linhasNaoZero = (contractMetrics.gastos_extras_linhas || []).filter(
+                    (g) => Number(g.valor_mensal || 0) > 0,
+                  )
+                  if (!showGastosDetail) return null
+                  if (linhasNaoZero.length === 0) {
+                    return <p className="contract-gastos-empty">Nenhum gasto extra registrado para este mês.</p>
+                  }
+                  return (
+                    <table className="contract-gastos-table">
+                      <thead>
+                        <tr>
+                          <th>Descrição</th>
+                          <th style={{ textAlign: 'right' }}>Valor</th>
                         </tr>
-                      ))}
-                      <tr className="contract-gastos-table-footer">
-                        <td><strong>Total</strong></td>
-                        <td style={{ textAlign: 'right' }}>
-                          <strong>{formatCurrency(contractMetrics.custos_extras_gold_linhas_mensais)}</strong>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                )}
-
-                {showGastosDetail && (!contractMetrics.gastos_extras_linhas || contractMetrics.gastos_extras_linhas.length === 0) && (
-                  <p className="contract-gastos-empty">Nenhum gasto extra registrado para este mês.</p>
-                )}
+                      </thead>
+                      <tbody>
+                        {linhasNaoZero.map((g) => (
+                          <tr key={g.id}>
+                            <td>{g.nome_gasto}</td>
+                            <td style={{ textAlign: 'right' }}>{formatCurrency(g.valor_mensal)}</td>
+                          </tr>
+                        ))}
+                        <tr className="contract-gastos-table-footer">
+                          <td><strong>Total</strong></td>
+                          <td style={{ textAlign: 'right' }}>
+                            <strong>{formatCurrency(contractMetrics.custos_extras_gold_linhas_mensais)}</strong>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  )
+                })()}
               </div>
             </>
           )}
