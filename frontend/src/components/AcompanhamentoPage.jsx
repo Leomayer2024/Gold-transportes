@@ -171,7 +171,7 @@ function buildDetalhesResumido(s) {
 
 // ─── Editor de valores de diária (usado dentro do modal atender) ──────────────
 
-function ValorInput({ valor, onChange, disabled }) {
+function ValorInput({ valor, onChange, disabled, width = 90 }) {
   const [texto, setTexto] = useState(() => Number(valor || 0).toFixed(2).replace('.', ','))
   useEffect(() => { setTexto(Number(valor || 0).toFixed(2).replace('.', ',')) }, [valor])
 
@@ -187,15 +187,21 @@ function ValorInput({ valor, onChange, disabled }) {
   }
 
   return (
-    <input
-      type="text"
-      value={texto}
-      disabled={disabled}
-      onChange={(e) => setTexto(e.target.value.replace(/[^\d,.-]/g, ''))}
-      onBlur={aoSair}
-      style={{ width: 70, fontSize: 10, textAlign: 'right' }}
-      placeholder="0,00"
-    />
+    <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
+      <span style={{ position: 'absolute', left: 6, fontSize: 11, color: 'var(--text-muted, #888)', pointerEvents: 'none' }}>R$</span>
+      <input
+        type="text"
+        value={texto}
+        disabled={disabled}
+        onChange={(e) => setTexto(e.target.value.replace(/[^\d,.-]/g, ''))}
+        onBlur={aoSair}
+        style={{
+          width, fontSize: 12, textAlign: 'right', padding: '4px 6px 4px 24px',
+          border: '1px solid var(--border, #d1d5db)', borderRadius: 4, background: '#fff',
+        }}
+        placeholder="0,00"
+      />
+    </div>
   )
 }
 
@@ -209,10 +215,18 @@ function recalcTotalItem(it) {
   return Number((valorDia * qtdD + Number(it.valor_pernoite || 0) * qtdP).toFixed(2))
 }
 
-function EditorDiaria({ itens, setItens, processando }) {
+function EditorDiaria({ itens, setItens, processando, carregando }) {
   function updItem(idx, patch) {
     setItens((arr) => arr.map((it, i) => {
       if (i !== idx) return it
+      const next = { ...it, ...patch }
+      next.valor_total = recalcTotalItem(next)
+      return next
+    }))
+  }
+
+  function aplicarParaTodos(patch) {
+    setItens((arr) => arr.map((it) => {
       const next = { ...it, ...patch }
       next.valor_total = recalcTotalItem(next)
       return next
@@ -224,97 +238,178 @@ function EditorDiaria({ itens, setItens, processando }) {
     [itens],
   )
 
+  if (carregando) {
+    return (
+      <div style={{
+        border: '1px dashed var(--border, #d1d5db)', borderRadius: 8,
+        padding: '20px', marginTop: 12, textAlign: 'center',
+        color: 'var(--text-muted, #6b7280)', fontSize: 13,
+      }}>
+        ⏳ Carregando motoristas da solicitação…
+      </div>
+    )
+  }
+
   if (itens.length === 0) {
     return <div className="alert-warn" style={{ marginTop: 12 }}>Nenhum motorista cadastrado nesta solicitação.</div>
   }
 
+  const refeicoes = [
+    { flag: 'inclui_cafe',   val: 'valor_cafe',   label: 'Café' },
+    { flag: 'inclui_almoco', val: 'valor_almoco', label: 'Almoço' },
+    { flag: 'inclui_jantar', val: 'valor_jantar', label: 'Jantar' },
+  ]
+
   return (
     <div style={{
-      border: '1px solid #c3e6cb', borderRadius: 8,
-      background: 'rgba(40,167,69,0.04)', padding: '12px 14px',
-      marginTop: 12, display: 'grid', gap: 10,
+      border: '1px solid #c3e6cb', borderRadius: 10,
+      background: 'linear-gradient(180deg, rgba(40,167,69,0.06), rgba(40,167,69,0.02))',
+      padding: 16, marginTop: 12, display: 'grid', gap: 14,
     }}>
-      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--success, #1a7340)' }}>
-        Preencha os valores e aprove
+      <div>
+        <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--success, #1a7340)', marginBottom: 2 }}>
+          💰 Preencha os valores e aprove
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--text-muted, #6b7280)' }}>
+          Marque quais refeições estão inclusas, ajuste o valor de cada uma e a quantidade de diárias/pernoites. O total recalcula sozinho.
+        </div>
       </div>
 
-      <div style={{ overflowX: 'auto' }}>
-        <table className="rh-doc-table" style={{ fontSize: 11 }}>
-          <thead>
-            <tr>
-              <th>Motorista</th>
-              <th>Placa</th>
-              <th>Café</th>
-              <th>Almoço</th>
-              <th>Jantar</th>
-              <th>Pernoite</th>
-              <th>Diárias</th>
-              <th>Pernoites</th>
-              <th>Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            {itens.map((it, idx) => (
-              <tr key={it.id || idx}>
-                <td style={{ minWidth: 130 }}>{it.motorista_nome}</td>
-                <td>{it.placa || '—'}</td>
-                {[
-                  ['inclui_cafe',   'valor_cafe'],
-                  ['inclui_almoco', 'valor_almoco'],
-                  ['inclui_jantar', 'valor_jantar'],
-                ].map(([flagKey, valKey]) => (
-                  <td key={flagKey}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <input
-                        type="checkbox"
-                        checked={!!it[flagKey]}
-                        disabled={processando}
-                        onChange={(e) => updItem(idx, { [flagKey]: e.target.checked })}
-                      />
-                      <ValorInput
-                        valor={it[valKey]}
-                        disabled={processando}
-                        onChange={(v) => updItem(idx, { [valKey]: v })}
-                      />
-                    </div>
-                  </td>
+      {/* Atalho: copiar valores do primeiro pra todos */}
+      {itens.length > 1 && (
+        <div style={{
+          background: '#fff', border: '1px dashed var(--border, #d1d5db)', borderRadius: 6,
+          padding: '6px 10px', fontSize: 11, display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <span style={{ color: 'var(--text-muted)' }}>Atalho:</span>
+          <button
+            type="button"
+            className="button-link"
+            disabled={processando}
+            onClick={() => {
+              const ref = itens[0]
+              aplicarParaTodos({
+                inclui_cafe: ref.inclui_cafe, inclui_almoco: ref.inclui_almoco, inclui_jantar: ref.inclui_jantar,
+                valor_cafe: ref.valor_cafe, valor_almoco: ref.valor_almoco,
+                valor_jantar: ref.valor_jantar, valor_pernoite: ref.valor_pernoite,
+              })
+            }}
+          >
+            ↡ Aplicar valores do primeiro motorista a todos
+          </button>
+        </div>
+      )}
+
+      {/* Cards por motorista */}
+      <div style={{ display: 'grid', gap: 10 }}>
+        {itens.map((it, idx) => (
+          <div
+            key={it.id || idx}
+            style={{
+              background: '#fff', border: '1px solid var(--border, #e5e7eb)',
+              borderRadius: 8, padding: 12, display: 'grid', gap: 10,
+              boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+            }}
+          >
+            {/* Cabeçalho do card */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <div>
+                <div style={{ fontWeight: 700, fontSize: 13 }}>👤 {it.motorista_nome}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted, #6b7280)' }}>
+                  Placa: <strong>{it.placa || '—'}</strong>
+                </div>
+              </div>
+              <div style={{
+                background: '#1a7340', color: '#fff', padding: '6px 12px',
+                borderRadius: 20, fontSize: 13, fontWeight: 700,
+              }}>
+                {fmtMoeda(it.valor_total)}
+              </div>
+            </div>
+
+            {/* Refeições — toggle pill com valor */}
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', marginBottom: 6 }}>
+                Refeições inclusas
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {refeicoes.map(({ flag, val, label }) => (
+                  <label
+                    key={flag}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      padding: '6px 10px', borderRadius: 6,
+                      border: `1px solid ${it[flag] ? '#1a7340' : 'var(--border, #d1d5db)'}`,
+                      background: it[flag] ? 'rgba(40,167,69,0.08)' : '#fafafa',
+                      cursor: processando ? 'not-allowed' : 'pointer',
+                      fontSize: 12,
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={!!it[flag]}
+                      disabled={processando}
+                      onChange={(e) => updItem(idx, { [flag]: e.target.checked })}
+                      style={{ margin: 0 }}
+                    />
+                    <span style={{ fontWeight: 600, minWidth: 50 }}>{label}</span>
+                    <ValorInput
+                      valor={it[val]}
+                      disabled={processando || !it[flag]}
+                      onChange={(v) => updItem(idx, { [val]: v })}
+                      width={80}
+                    />
+                  </label>
                 ))}
-                <td>
-                  <ValorInput
-                    valor={it.valor_pernoite}
-                    disabled={processando}
-                    onChange={(v) => updItem(idx, { valor_pernoite: v })}
-                  />
-                </td>
-                <td>
-                  <input
-                    type="number" min={0}
-                    value={it.qtd_diarias}
-                    disabled={processando}
-                    onChange={(e) => updItem(idx, { qtd_diarias: Number(e.target.value) })}
-                    style={{ width: 50 }}
-                  />
-                </td>
-                <td>
-                  <input
-                    type="number" min={0}
-                    value={it.qtd_pernoites}
-                    disabled={processando}
-                    onChange={(e) => updItem(idx, { qtd_pernoites: Number(e.target.value) })}
-                    style={{ width: 50 }}
-                  />
-                </td>
-                <td><strong>{fmtMoeda(it.valor_total)}</strong></td>
-              </tr>
-            ))}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td colSpan={8} style={{ textAlign: 'right' }}><strong>Total da solicitação:</strong></td>
-              <td><strong>{fmtMoeda(total)}</strong></td>
-            </tr>
-          </tfoot>
-        </table>
+              </div>
+            </div>
+
+            {/* Pernoite + Qtds */}
+            <div style={{
+              display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 10,
+            }}>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11 }}>
+                <span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Pernoite (R$)</span>
+                <ValorInput
+                  valor={it.valor_pernoite}
+                  disabled={processando}
+                  onChange={(v) => updItem(idx, { valor_pernoite: v })}
+                  width={100}
+                />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11 }}>
+                <span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Qtd diárias</span>
+                <input
+                  type="number" min={0}
+                  value={it.qtd_diarias}
+                  disabled={processando}
+                  onChange={(e) => updItem(idx, { qtd_diarias: Number(e.target.value) })}
+                  style={{ width: 80, padding: '4px 6px', fontSize: 12, border: '1px solid var(--border, #d1d5db)', borderRadius: 4 }}
+                />
+              </label>
+              <label style={{ display: 'flex', flexDirection: 'column', gap: 4, fontSize: 11 }}>
+                <span style={{ fontWeight: 600, color: 'var(--text-muted)' }}>Qtd pernoites</span>
+                <input
+                  type="number" min={0}
+                  value={it.qtd_pernoites}
+                  disabled={processando}
+                  onChange={(e) => updItem(idx, { qtd_pernoites: Number(e.target.value) })}
+                  style={{ width: 80, padding: '4px 6px', fontSize: 12, border: '1px solid var(--border, #d1d5db)', borderRadius: 4 }}
+                />
+              </label>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Total geral */}
+      <div style={{
+        display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        background: '#1a7340', color: '#fff', padding: '10px 14px', borderRadius: 8,
+        fontSize: 14, fontWeight: 700,
+      }}>
+        <span>Total da solicitação</span>
+        <span style={{ fontSize: 16 }}>{fmtMoeda(total)}</span>
       </div>
     </div>
   )
@@ -328,6 +423,7 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
   const [processando, setProc]  = useState(false)
   const [erroAcao, setErroAcao] = useState('')
   const [itensDiaria, setItensDiaria] = useState([])
+  const [loadingItens, setLoadingItens] = useState(false)
 
   useEffect(() => { setErroAcao('') }, [acao])
 
@@ -341,19 +437,30 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
   const estaEmAnalise = STATUS_EM_ANALISE.includes(statusAtual)
   const estaPendente  = STATUS_PENDENTE.includes(statusAtual) && !estaEmAnalise
 
-  // Carrega itens da diária ao abrir
+  // Carrega itens da diária ao abrir (retry simples em caso de falha transitória)
   useEffect(() => {
     if (!isDiaria) return
     let cancel = false
+    setLoadingItens(true)
+    setErroAcao('')
     ;(async () => {
-      try {
-        const res = await api.list('diarias_itens', { solicitacao_id: solicitacao.id, limit: 200 })
-        const rows = res?.data || res || []
-        if (!cancel) {
+      let lastErr = null
+      for (let attempt = 1; attempt <= 3; attempt++) {
+        try {
+          const res = await api.list('diarias_itens', { solicitacao_id: solicitacao.id })
+          const rows = res?.data || res || []
+          if (cancel) return
           setItensDiaria(rows.map((r) => ({ ...r, valor_total: recalcTotalItem(r) })))
+          setLoadingItens(false)
+          return
+        } catch (e) {
+          lastErr = e
+          await new Promise((r) => setTimeout(r, 250 * attempt))
         }
-      } catch (e) {
-        if (!cancel) setErroAcao(e.message || 'Falha ao carregar itens da diária.')
+      }
+      if (!cancel) {
+        setErroAcao(lastErr?.message || 'Falha ao carregar itens da diária.')
+        setLoadingItens(false)
       }
     })()
     return () => { cancel = true }
@@ -492,8 +599,17 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
             </div>
           )}
 
+          {/* Loading indicator pros itens da diária */}
+          {isDiaria && loadingItens && acao !== 'aprovar' && (
+            <div style={{
+              padding: '10px 12px', border: '1px dashed var(--border, #d1d5db)',
+              borderRadius: 6, fontSize: 12, color: 'var(--text-muted, #6b7280)',
+              marginBottom: 12, textAlign: 'center',
+            }}>⏳ Carregando motoristas da solicitação…</div>
+          )}
+
           {/* Itens da diária — sempre visível (read-only fora do modo aprovar) */}
-          {isDiaria && itensDiaria.length > 0 && acao !== 'aprovar' && (
+          {isDiaria && !loadingItens && itensDiaria.length > 0 && acao !== 'aprovar' && (
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 6 }}>
                 Motoristas ({itensDiaria.length})
@@ -634,7 +750,12 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
                     </div>
 
                     {isDiaria && (
-                      <EditorDiaria itens={itensDiaria} setItens={setItensDiaria} processando={processando} />
+                      <EditorDiaria
+                        itens={itensDiaria}
+                        setItens={setItensDiaria}
+                        processando={processando}
+                        carregando={loadingItens}
+                      />
                     )}
 
                     <label className="field" style={{ margin: 0 }}>
@@ -653,8 +774,17 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
                       <button type="button" className="button-secondary" onClick={cancelarAcao} disabled={processando}>
                         Cancelar
                       </button>
-                      <button type="button" className="button-primary" onClick={() => confirmar()} disabled={processando || (isDiaria && itensDiaria.length === 0)}>
-                        {processando ? 'Aprovando...' : (isDiaria ? 'Salvar valores e aprovar' : 'Confirmar aprovação')}
+                      <button
+                        type="button"
+                        className="button-primary"
+                        onClick={() => confirmar()}
+                        disabled={processando || (isDiaria && (loadingItens || itensDiaria.length === 0))}
+                      >
+                        {processando
+                          ? 'Aprovando...'
+                          : (isDiaria
+                            ? (loadingItens ? 'Carregando…' : 'Salvar valores e aprovar')
+                            : 'Confirmar aprovação')}
                       </button>
                     </div>
                   </div>
