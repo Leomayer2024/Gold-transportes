@@ -9377,12 +9377,14 @@ def create_app():
                 return str(v).strip()
 
             placa = _as_str(row.get('placa')).upper()
-            marca = _as_str(row.get('marca'))
-            modelo = _as_str(row.get('modelo'))
-            missing = [k for k, v in (('placa', placa), ('marca', marca), ('modelo', modelo)) if not v]
-            if missing:
-                errors.append({'line': index, 'error': f'Campos obrigatórios ausentes: {", ".join(missing)}.'})
+            if not placa:
+                errors.append({'line': index, 'error': 'Placa é obrigatória.'})
                 continue
+            # marca/modelo aceitos vazios — usa placeholder quando ausente
+            # (colunas NOT NULL no banco). Usuário pode editar depois.
+            marca = _as_str(row.get('marca')) or '—'
+            modelo_raw = _as_str(row.get('modelo'))
+            modelo = modelo_raw if modelo_raw and modelo_raw != '0' else '—'
 
             tipo_raw = _norm_token(row.get('tipo'))
             tipo = TIPO_ALIASES.get(tipo_raw) if tipo_raw else None
