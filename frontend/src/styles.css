@@ -1998,6 +1998,52 @@ tr:last-child td {
   color: var(--muted);
 }
 
+.contract-resultado-tabs {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 6px 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.contract-resultado-tabs .button-secondary.active {
+  background: #1f2d3d;
+  color: #fff;
+  border-color: #1f2d3d;
+}
+
+.contract-resultado-tabs-hint {
+  font-size: 10px;
+  color: var(--muted);
+  font-style: italic;
+  margin-left: 4px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-radius: 10px;
+  border: 1px solid transparent;
+}
+
+.badge-success {
+  background: #edf8f2;
+  color: #1f5234;
+  border-color: #98cdb0;
+}
+
+.badge-danger {
+  background: #fdf0ef;
+  color: #8a2419;
+  border-color: #e8b4af;
+}
+
 .contract-metrics-equation {
   display: flex;
   align-items: center;
