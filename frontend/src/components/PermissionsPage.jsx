@@ -997,9 +997,12 @@ function AbaCargos({ scopeGroups }) {
 // ─── Aba 3: configuração de workflows de aprovação ───────────────────────────
 
 const TIPO_ICONS = {
-  manutencoes:    '🔧',
-  pedidos_compra: '📦',
-  horas_extras:   '⏰',
+  manutencoes:           '🔧',
+  pedidos_compra:        '📦',
+  horas_extras:          '⏰',
+  diarias_solicitacoes:  '🏨',
+  abastecimentos:        '⛽',
+  pneus:                 '🛞',
 }
 
 function AprovadoresSelector({ scopeName, label, allCollaborators, onToggle }) {
