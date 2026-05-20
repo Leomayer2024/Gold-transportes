@@ -355,7 +355,33 @@ function AbaColaborador({ config, scopeGroups }) {
   const [copyFromId, setCopyFromId] = useState('')
 
   const autoEnableMap = useMemo(() => buildAutoEnableMap(scopeGroups), [scopeGroups])
-  const handleToggleScope = useMemo(() => makeToggleHandler(setActiveScopes, autoEnableMap), [autoEnableMap])
+  const labelMap = useMemo(() => buildLabelMap(scopeGroups), [scopeGroups])
+  const baseToggleScope = useMemo(() => makeToggleHandler(setActiveScopes, autoEnableMap), [autoEnableMap])
+
+  const cargoModelo = useMemo(() => {
+    const cargo = detail?.collaborator?.cargo
+    if (!cargo) return null
+    return cargos.find((c) => c.nome?.toLowerCase() === cargo.toLowerCase()) || null
+  }, [cargos, detail])
+
+  const cargoScopesSet = useMemo(
+    () => new Set(cargoModelo?.permissoes_padrao || []),
+    [cargoModelo],
+  )
+
+  const handleToggleScope = useMemo(() => {
+    return (name, checked) => {
+      if (checked && cargoModelo && cargoScopesSet.size > 0 && !cargoScopesSet.has(name)) {
+        const label = labelMap[name] || name
+        const ok = window.confirm(
+          `Aviso: o cargo "${cargoModelo.nome}" não tem "${label}" no modelo padrão.\n\n` +
+          `A permissão prevalece pelo COLABORADOR, não pelo cargo. Liberar mesmo assim?`,
+        )
+        if (!ok) return
+      }
+      baseToggleScope(name, checked)
+    }
+  }, [baseToggleScope, cargoModelo, cargoScopesSet, labelMap])
 
   useEffect(() => {
     api.getCargosModelos().then(setCargos).catch(() => {})
