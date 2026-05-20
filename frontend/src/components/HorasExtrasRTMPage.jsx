@@ -235,6 +235,10 @@ function AbaHistorico() {
   const [saving, setSaving] = useState(false)
   const [modoImpressao, setModoImpressao] = useState(false)
   const [hiddenIds, setHiddenIds] = useState(new Set())
+  const [filterFilial, setFilterFilial] = useState('')
+  const [filterMes, setFilterMes] = useState('')
+  const [mostrarValorReal, setMostrarValorReal] = useState(true)
+  const [colaboradores, setColaboradores] = useState([])
   const _loaded = useRef(false)
 
   const [selMes, selFilial] = selKey ? selKey.split('|') : [null, null]
@@ -244,6 +248,31 @@ function AbaHistorico() {
   function carregar() {
     if (!_loaded.current) setLoading(true)
     api.rtmMesesFiliais().then((r) => setMesFiliais(r.data || [])).catch(() => {}).finally(() => { _loaded.current = true; setLoading(false) })
+    api.list('colaboradores', { limit: 2000 }).then((res) => setColaboradores(res.items || res || [])).catch(() => {})
+  }
+
+  // Mapa colaborador_id -> colaborador para calcular valor real (salario + periculosidade + noturno)
+  const colabPorId = useMemo(() => {
+    const m = new Map()
+    for (const c of colaboradores) if (c?.id != null) m.set(String(c.id), c)
+    return m
+  }, [colaboradores])
+
+  function valorRealRegistro(r) {
+    const col = r.colaborador_id != null ? colabPorId.get(String(r.colaborador_id)) : null
+    if (!col) return null
+    const salary = parseFloat(col.salario_base_mensal) || 0
+    const weeklyH = parseFloat(col.carga_horaria_semanal) || 44
+    const monthlyH = weeklyH * (52 / 12)
+    if (!salary || !monthlyH) return null
+    const pctPeric = parseFloat(col.percentual_periculosidade) || 0
+    const pctNoturno = parseFloat(col.percentual_adicional_clt) || 0
+    const valorPeric = salary * (pctPeric / 100)
+    const baseHora = (salary + valorPeric) / monthlyH
+    const fatorNoturno = 1 + pctNoturno / 100
+    const hora50 = baseHora * 1.5 * fatorNoturno
+    const hora100 = baseHora * 2.0 * fatorNoturno
+    return (r.horas_normais || 0) * hora50 + (r.horas_extra_100 || 0) * hora100
   }
 
   function toggleHidden(id) {
@@ -335,6 +364,7 @@ function AbaHistorico() {
   const totExtra = detVisible.reduce((s, r) => s + (r.tipo_hora === 'extra' ? (r.total_geral || 0) : 0), 0)
   const totVal50 = detVisible.reduce((s, r) => s + (r.total_50 || 0), 0)
   const totVal100 = detVisible.reduce((s, r) => s + (r.total_100 || 0), 0)
+  const totValReal = detVisible.reduce((s, r) => s + (valorRealRegistro(r) || 0), 0)
 
   // preview dos totais ao editar
   const prevT50 = (parseFloat(editForm.horas_normais) || 0) * (parseFloat(editForm.valor_hora_50) || 0)
@@ -353,7 +383,26 @@ function AbaHistorico() {
         <div style={{ display: 'grid', gridTemplateColumns: selKey && !modoImpressao ? '280px 1fr' : '1fr', gap: 14 }}>
           {/* Cards filial + mês */}
           <div style={{ display: modoImpressao ? 'none' : 'flex', flexDirection: 'column', gap: 8 }}>
-            {mesFiliais.map((m) => {
+            {(() => {
+              const filiaisOpts = [...new Set(mesFiliais.map((m) => m.filial_nome).filter(Boolean))].sort()
+              const mesesOpts = [...new Set(mesFiliais.map((m) => m.mes_referencia).filter(Boolean))].sort().reverse()
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 4 }}>
+                  <select className="input" value={filterFilial} onChange={(e) => setFilterFilial(e.target.value)} style={{ fontSize: 11, padding: '4px 6px' }}>
+                    <option value="">Todas as filiais</option>
+                    {filiaisOpts.map((f) => <option key={f} value={f}>{f}</option>)}
+                  </select>
+                  <select className="input" value={filterMes} onChange={(e) => setFilterMes(e.target.value)} style={{ fontSize: 11, padding: '4px 6px' }}>
+                    <option value="">Todos os meses</option>
+                    {mesesOpts.map((m) => <option key={m} value={m}>{formatMes(m)}</option>)}
+                  </select>
+                  {(filterFilial || filterMes) && (
+                    <button className="button-secondary" type="button" style={{ fontSize: 10, padding: '2px 6px' }} onClick={() => { setFilterFilial(''); setFilterMes('') }}>Limpar filtros</button>
+                  )}
+                </div>
+              )
+            })()}
+            {mesFiliais.filter((m) => (!filterFilial || m.filial_nome === filterFilial) && (!filterMes || m.mes_referencia === filterMes)).map((m) => {
               const key = `${m.mes_referencia}|${m.filial_nome}`
               const ativo = selKey === key
               return (
@@ -453,6 +502,11 @@ function AbaHistorico() {
                       style={{ fontSize: 11 }} title="Recalcula NO CONTRATO / FORA CONTRATO com base nos contratos atuais">
                       {recalculating ? 'Recalculando…' : 'Recalcular tipo'}
                     </button>
+                    <button className="button-secondary" onClick={() => setMostrarValorReal((v) => !v)} type="button"
+                      style={{ fontSize: 11, color: mostrarValorReal ? '#7c3aed' : undefined, borderColor: mostrarValorReal ? '#7c3aed' : undefined }}
+                      title="Valor real calculado conforme salário base + periculosidade + adicional noturno do cadastro do colaborador">
+                      {mostrarValorReal ? 'Ocultar valor real' : 'Mostrar valor real'}
+                    </button>
                     {recalcMsg && (
                       <span style={{ fontSize: 11, fontWeight: 600, color: recalcMsg.type === 'success' ? 'var(--success)' : 'var(--danger)' }}>
                         {recalcMsg.text}
@@ -497,12 +551,13 @@ function AbaHistorico() {
                           <th style={{ textAlign: 'right' }}>Total 50%</th>
                           <th style={{ textAlign: 'right' }}>Total 100%</th>
                           <th style={{ textAlign: 'right' }}>Total</th>
+                          {mostrarValorReal && <th style={{ textAlign: 'right', color: '#7c3aed' }} title="Valor calculado conforme salário + periculosidade + adicional noturno">Valor Real</th>}
                           {!modoImpressao && <th style={{ width: 100 }}></th>}
                         </tr>
                       </thead>
                       <tbody>
                         {detVisible.length === 0 && (
-                          <tr><td colSpan={modoImpressao ? 9 : 11} style={{ textAlign: 'center', color: 'var(--muted)', padding: '20px 0' }}>Nenhum resultado</td></tr>
+                          <tr><td colSpan={(modoImpressao ? 9 : 11) + (mostrarValorReal ? 1 : 0)} style={{ textAlign: 'center', color: 'var(--muted)', padding: '20px 0' }}>Nenhum resultado</td></tr>
                         )}
                         {detFiltrado.map((r) => {
                           const emEdicao = editando === r.id
@@ -510,7 +565,7 @@ function AbaHistorico() {
                           if (!modoImpressao && oculto) {
                             return (
                               <tr key={r.id} style={{ opacity: 0.35 }}>
-                                <td colSpan={9} style={{ fontSize: 11, color: 'var(--muted)', fontStyle: 'italic', paddingLeft: 10 }}>
+                                <td colSpan={9 + (mostrarValorReal ? 1 : 0)} style={{ fontSize: 11, color: 'var(--muted)', fontStyle: 'italic', paddingLeft: 10 }}>
                                   {r.funcionario_nome} — oculto
                                 </td>
                                 <td colSpan={2}>
@@ -544,6 +599,7 @@ function AbaHistorico() {
                                 <td style={{ textAlign: 'right', fontSize: 11, color: 'var(--muted)' }}>{formatBRL(prevT50)}</td>
                                 <td style={{ textAlign: 'right', fontSize: 11, color: 'var(--muted)' }}>{formatBRL(prevT100)}</td>
                                 <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--success)', fontSize: 12 }}>{formatBRL(prevT50 + prevT100)}</td>
+                                {mostrarValorReal && <td style={{ textAlign: 'right', fontSize: 11, color: 'var(--muted)' }}>—</td>}
                                 {!modoImpressao && (
                                   <td style={{ display: 'flex', gap: 4, padding: '6px 8px' }}>
                                     <button className="button-primary" style={{ fontSize: 10, padding: '3px 8px' }} onClick={salvarEdicao} disabled={saving} type="button">{saving ? '…' : 'OK'}</button>
@@ -553,6 +609,7 @@ function AbaHistorico() {
                               </tr>
                             )
                           }
+                          const valReal = mostrarValorReal ? valorRealRegistro(r) : null
                           return (
                             <tr key={r.id}>
                               <td><strong style={{ fontSize: 12 }}>{r.funcionario_nome}</strong></td>
@@ -565,6 +622,12 @@ function AbaHistorico() {
                               <td style={{ textAlign: 'right', fontSize: 12 }}>{formatBRL(r.total_50)}</td>
                               <td style={{ textAlign: 'right', fontSize: 12 }}>{formatBRL(r.total_100)}</td>
                               <td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--success)' }}>{formatBRL(r.total_geral)}</td>
+                              {mostrarValorReal && (
+                                <td style={{ textAlign: 'right', fontWeight: 700, color: valReal != null ? '#7c3aed' : '#ccc', fontSize: 12 }}
+                                  title={valReal == null ? 'Sem colaborador vinculado ou sem dados de salário' : 'Calculado: (salário base + periculosidade) ÷ horas mensais × 1,5 (50%) ou ×2 (100%), com adicional noturno se cadastrado'}>
+                                  {valReal != null ? formatBRL(valReal) : '—'}
+                                </td>
+                              )}
                               {!modoImpressao && (
                                 <td>
                                   <div style={{ display: 'flex', gap: 4 }}>
@@ -584,6 +647,7 @@ function AbaHistorico() {
                           <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 12, color: totH100 > 0 ? 'var(--warning)' : undefined }}>{formatHHMM(totH100)}</td>
                           <td colSpan={4} />
                           <td style={{ textAlign: 'right', color: 'var(--success)', fontSize: 13 }}>{formatBRL(totGeral)}</td>
+                          {mostrarValorReal && <td style={{ textAlign: 'right', color: '#7c3aed', fontSize: 13 }}>{formatBRL(totValReal)}</td>}
                           {!modoImpressao && <td />}
                         </tr>
                       </tfoot>
