@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import * as XLSX from 'xlsx'
 import { useAuth } from '../context/AuthContext'
 import { canCreateResource } from '../lib/permissions'
 import { uploadRhDocumentFile } from '../lib/supabase'
@@ -349,7 +350,13 @@ export default function ResourcePage({
   const canDelete = Boolean(profile?.permissions?.delete) || canCreate
   const showActions = canEdit || canDelete
   const hasUploadingField = Object.values(uploadingFields).some(Boolean)
-  const hasImporter = Boolean(config.resource === 'colaboradores' && config.importer)
+  const hasImporter = Boolean(config.importer && ['colaboradores', 'veiculos'].includes(config.resource))
+  const importerApi = config.resource === 'veiculos' ? api.importVeiculos : api.importCollaborators
+  const importerAcceptExcel = Boolean(config.importer?.acceptsExcel)
+  const importerAcceptAttr = importerAcceptExcel
+    ? '.csv,.xlsx,.xls,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel'
+    : '.csv,text/csv'
+  const importerEntityLabel = config.resource === 'veiculos' ? 'veículos' : 'colaboradores'
   const isEditingDirty = useMemo(
     () =>
       Boolean(
@@ -892,6 +899,28 @@ export default function ResourcePage({
     return rawValue
   }
 
+  async function parseImportFile(file) {
+    const name = (file.name || '').toLowerCase()
+    const isExcel = name.endsWith('.xlsx') || name.endsWith('.xls')
+    if (!isExcel) {
+      const text = await file.text()
+      return parseImportText(text)
+    }
+
+    const buffer = await file.arrayBuffer()
+    const workbook = XLSX.read(buffer, { type: 'array' })
+    const firstSheetName = workbook.SheetNames[0]
+    if (!firstSheetName) return []
+    const sheet = workbook.Sheets[firstSheetName]
+    const json = XLSX.utils.sheet_to_json(sheet, { defval: '', raw: false })
+    return json.map((row) => {
+      return Object.entries(row).reduce((acc, [key, value]) => {
+        acc[String(key).trim().toLowerCase()] = value
+        return acc
+      }, {})
+    })
+  }
+
   async function handleImportFile(file) {
     if (!file) {
       return
@@ -903,8 +932,7 @@ export default function ResourcePage({
     setDebugOverlayMessage('')
 
     try {
-      const text = await file.text()
-      const parsedRows = parseImportText(text)
+      const parsedRows = await parseImportFile(file)
       if (parsedRows.length === 0) {
         throw new Error('Arquivo sem linhas válidas para importação.')
       }
@@ -916,7 +944,7 @@ export default function ResourcePage({
         }, {})
       })
 
-      const result = await api.importCollaborators({ rows: normalizedRows })
+      const result = await importerApi({ rows: normalizedRows })
       await refreshList()
 
       const importedCount = Number(result.imported || 0)
@@ -945,8 +973,8 @@ export default function ResourcePage({
         setDebugOverlayMessage((current) => (current ? `${current} || ${warningText}` : warningText))
       }
     } catch (error) {
-      setErrorMessage(error.message || 'Falha ao importar colaboradores.')
-      setDebugOverlayMessage(error.stack || error.message || 'Falha ao importar colaboradores.')
+      setErrorMessage(error.message || `Falha ao importar ${importerEntityLabel}.`)
+      setDebugOverlayMessage(error.stack || error.message || `Falha ao importar ${importerEntityLabel}.`)
     } finally {
       setImporting(false)
     }
@@ -969,7 +997,7 @@ export default function ResourcePage({
       const normalizedRows = parsedRows.map((row) =>
         Object.entries(row).reduce((acc, [k, v]) => { acc[k] = normalizeImportCellValue(v); return acc }, {})
       )
-      const result = await api.importCollaborators({ rows: normalizedRows })
+      const result = await importerApi({ rows: normalizedRows })
       const importedCount = Number(result.imported || 0)
       const updatedCount = Number(result.updated || 0)
       if (result.filiais_disponiveis?.length) setPasteFiliais(result.filiais_disponiveis)
@@ -1287,13 +1315,22 @@ export default function ResourcePage({
             <div className="import-panel">
               <div className="import-panel-head">
                 <span className="eyebrow">Importação em lote</span>
-                <strong>Modelo Excel/CSV para colaboradores</strong>
+                <strong>{`Modelo Excel/CSV para ${importerEntityLabel}`}</strong>
               </div>
               <p>
-                Use o modelo pronto e importe em CSV (separador ; ou ,). CPF aceito no formato
-                {' '}
-                <strong>{config.importer.cpfMask}</strong>
-                .
+                {importerAcceptExcel
+                  ? 'Use o modelo pronto e importe em Excel (.xlsx) ou CSV (separador ; ou ,).'
+                  : 'Use o modelo pronto e importe em CSV (separador ; ou ,).'}
+                {config.importer.cpfMask && (
+                  <>
+                    {' '}CPF aceito no formato <strong>{config.importer.cpfMask}</strong>.
+                  </>
+                )}
+                {config.importer.tipoOptions && (
+                  <>
+                    {' '}Coluna <strong>tipo</strong> aceita: {config.importer.tipoOptions.join(', ')}.
+                  </>
+                )}
               </p>
               <div className="import-columns-list">
                 {(config.importer.columns || []).map((columnName) => (
@@ -1305,9 +1342,11 @@ export default function ResourcePage({
                   Baixar modelo de colunas
                 </a>
                 <label className="button-secondary import-upload-label">
-                  {importing ? 'Importando...' : 'Importar arquivo (.csv)'}
+                  {importing
+                    ? 'Importando...'
+                    : importerAcceptExcel ? 'Importar arquivo (.xlsx / .csv)' : 'Importar arquivo (.csv)'}
                   <input
-                    accept=".csv,text/csv"
+                    accept={importerAcceptAttr}
                     disabled={importing}
                     onChange={(event) => {
                       void handleImportFile(event.target.files?.[0])

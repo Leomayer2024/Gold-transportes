@@ -131,6 +131,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  importVeiculos: (payload) =>
+    request('/veiculos/importar', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
   list: (resource, params = {}) => {
     const search = new URLSearchParams(params)
     const suffix = search.toString() ? `?${search.toString()}` : ''
