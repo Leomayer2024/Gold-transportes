@@ -974,8 +974,11 @@ function VisaoContratos({ contratos, colaboradores, filiais, aoEditar, aoAbrirFi
 // Aliases: tipos legados ou variantes mapeados para o tipo canônico do catálogo,
 // evitando colunas duplicadas (ex.: "Contrato" virou "Contrato de Trabalho").
 const TIPO_ALIASES = {
-  'Contrato': 'Contrato de Trabalho',
-  'Contrato CLT': 'Contrato de Trabalho',
+  'Contrato de Trabalho': 'Contrato',
+  'Contrato de Experiência': 'Contrato',
+  'Contrato de Experiencia': 'Contrato',
+  'Aditivo Contratual': 'Contrato',
+  'Contrato CLT': 'Contrato',
 }
 const canonicoTipo = (t) => TIPO_ALIASES[t] || t
 
