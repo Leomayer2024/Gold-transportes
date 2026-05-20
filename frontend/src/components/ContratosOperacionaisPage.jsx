@@ -248,17 +248,17 @@ export default function ContratosOperacionaisPage() {
                 || contractMetrics.valor_cobrado_colaboradores_fora_total > 0
                 || contractMetrics.custo_mensal_fora_contrato > 0) && (
                 <>
-                  <div className="contract-metrics-section-title">Extra (fora do contrato — informativo)</div>
+                  <div className="contract-metrics-section-title">Extra (informativo)</div>
                   <div className="contract-metrics-grid">
                     <article>
                       <span>Pessoas extras</span>
                       <strong>{contractMetrics.headcount_fora_contrato || 0}</strong>
-                      <small>Itens marcados como "fora do headcount"</small>
+                      <small>Itens marcados como extras</small>
                     </article>
                     <article>
                       <span>Valor cobrado extra</span>
                       <strong>{formatCurrency(contractMetrics.valor_cobrado_colaboradores_fora_total)}</strong>
-                      <small>Receita adicional fora do contrato</small>
+                      <small>Receita adicional</small>
                     </article>
                     <article>
                       <span>Custo extra</span>
@@ -269,8 +269,8 @@ export default function ContratosOperacionaisPage() {
                 </>
               )}
 
-              {/* Lista de colaboradores vinculados — inclui inativos (não somam custo) */}
-              {contractMetrics.colaboradores_detalhe?.length > 0 && (
+              {/* Lista de colaboradores vinculados — apenas ATIVOS */}
+              {contractMetrics.colaboradores_detalhe?.some((c) => c.vinculo_ativo !== false && c.ativo !== false) && (
                 <>
                   <div className="contract-metrics-section-title">Colaboradores vinculados</div>
                   <div className="contract-gastos-extras-card">
@@ -286,30 +286,20 @@ export default function ContratosOperacionaisPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {contractMetrics.colaboradores_detalhe.map((c) => {
-                          const inativo = c.vinculo_ativo === false || c.ativo === false
-                          return (
-                            <tr key={c.colaborador_id} style={inativo ? { opacity: 0.65 } : undefined}>
+                        {contractMetrics.colaboradores_detalhe
+                          .filter((c) => c.vinculo_ativo !== false && c.ativo !== false)
+                          .map((c) => (
+                            <tr key={c.colaborador_id}>
                               <td>{c.nome || '-'}</td>
                               <td>{c.cargo || '-'}</td>
                               <td>{c.is_fora_contrato ? 'Extra' : 'Fixo'}</td>
                               <td>
-                                <span className={`badge ${c.ativo ? 'badge-success' : 'badge-danger'}`}>
-                                  {c.ativo ? 'Ativo' : 'Inativo'}
-                                </span>
-                                {inativo && (
-                                  <span className="badge badge-danger" style={{ marginLeft: 4 }} title="Não soma no custo — registro mantido para HE, contas e histórico">
-                                    Não conta
-                                  </span>
-                                )}
+                                <span className="badge badge-success">Ativo</span>
                               </td>
                               <td style={{ textAlign: 'right' }}>{formatPercent(c.percentual_alocacao)}</td>
-                              <td style={{ textAlign: 'right', color: inativo ? '#888' : undefined }}>
-                                {formatCurrency(c.custo_alocado)}
-                              </td>
+                              <td style={{ textAlign: 'right' }}>{formatCurrency(c.custo_alocado)}</td>
                             </tr>
-                          )
-                        })}
+                          ))}
                       </tbody>
                     </table>
                   </div>
@@ -402,12 +392,18 @@ export default function ContratosOperacionaisPage() {
                 </div>
 
                 {(() => {
-                  // Mostra: (a) gastos ativos com valor > 0 OU (b) inativos (informativos, não somam)
-                  const linhasVisiveis = (contractMetrics.gastos_extras_linhas || []).filter(
-                    (g) => Number(g.valor_mensal || 0) > 0 || g.colaborador_ativo === false,
-                  )
                   if (!showGastosDetail) return null
-                  if (linhasVisiveis.length === 0) {
+                  const linhasAtivas = (contractMetrics.gastos_extras_linhas || []).filter(
+                    (g) => Number(g.valor_mensal || 0) > 0 && g.colaborador_ativo !== false,
+                  )
+                  const linhasInativas = (contractMetrics.gastos_extras_linhas || []).filter(
+                    (g) => g.colaborador_ativo === false,
+                  )
+                  const totalInativos = linhasInativas.reduce(
+                    (acc, g) => acc + Number(g.valor_mensal_calculado || 0),
+                    0,
+                  )
+                  if (linhasAtivas.length === 0 && linhasInativas.length === 0) {
                     return <p className="contract-gastos-empty">Nenhum gasto extra registrado para este mês.</p>
                   }
                   return (
@@ -419,30 +415,23 @@ export default function ContratosOperacionaisPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {linhasVisiveis.map((g) => {
-                          const inativo = g.colaborador_ativo === false
-                          return (
-                            <tr key={g.id} style={inativo ? { opacity: 0.65 } : undefined}>
-                              <td>
-                                {g.nome_gasto}
-                                {inativo && (
-                                  <span className="badge badge-danger" style={{ marginLeft: 6 }} title="Colaborador inativo — registro mantido mas não conta no total">
-                                    Inativo — não conta
-                                  </span>
-                                )}
-                              </td>
-                              <td style={{ textAlign: 'right' }}>
-                                {inativo ? (
-                                  <span style={{ textDecoration: 'line-through', color: '#888' }}>
-                                    {formatCurrency(g.valor_mensal_calculado || 0)}
-                                  </span>
-                                ) : (
-                                  formatCurrency(g.valor_mensal)
-                                )}
-                              </td>
-                            </tr>
-                          )
-                        })}
+                        {linhasAtivas.map((g) => (
+                          <tr key={g.id}>
+                            <td>{g.nome_gasto}</td>
+                            <td style={{ textAlign: 'right' }}>{formatCurrency(g.valor_mensal)}</td>
+                          </tr>
+                        ))}
+                        {linhasInativas.length > 0 && (
+                          <tr style={{ opacity: 0.65 }}>
+                            <td>
+                              {linhasInativas.length} gasto(s) de colab inativo
+                              <span className="badge badge-danger" style={{ marginLeft: 6 }}>Não conta</span>
+                            </td>
+                            <td style={{ textAlign: 'right', color: '#888' }}>
+                              {formatCurrency(totalInativos)}
+                            </td>
+                          </tr>
+                        )}
                         <tr className="contract-gastos-table-footer">
                           <td><strong>Total</strong></td>
                           <td style={{ textAlign: 'right' }}>
