@@ -140,6 +140,7 @@ RESOURCE_DEFINITIONS = {
             'tipo_item',
             'colaborador_id',
             'veiculo_carregamento_id',
+            'veiculo_proprio_id',
             'nome_item',
             'percentual_alocacao',
             'valor_cobrado_colaborador',
@@ -160,7 +161,7 @@ RESOURCE_DEFINITIONS = {
             'observacoes', 'inicio_vigencia', 'fim_vigencia',
             'data_inicio_vinculo', 'data_fim_vinculo',
             'tipo_periodo', 'dias_duracao_periodo', 'dias_alerta_antes',
-            'colaborador_id', 'veiculo_carregamento_id', 'nome_item',
+            'colaborador_id', 'veiculo_carregamento_id', 'veiculo_proprio_id', 'nome_item',
         ],
         'view_scope': 'menu.contratos_operacionais',
         'create_scope': 'create.contratos_operacionais',
@@ -1019,6 +1020,7 @@ TIPO_ITEM_VALID_VALUES = {
     'colaborador',
     'colaborador_fora_contrato',
     'veiculo',
+    'veiculo_proprio',
     'caminhao',
     'outro',
 }
@@ -2010,25 +2012,34 @@ def create_app():
                 sanitized['tipo_item'] = 'colaborador'
 
             item_type = (sanitized.get('tipo_item') or 'colaborador').strip().lower()
-            if item_type not in {'colaborador', 'colaborador_fora_contrato', 'caminhao', 'outro'}:
-                return None, 'Tipo de item inválido para contrato. Use colaborador, colaborador_fora_contrato, caminhao ou outro.'
+            if item_type not in {'colaborador', 'colaborador_fora_contrato', 'caminhao', 'veiculo_proprio', 'outro'}:
+                return None, 'Tipo de item inválido para contrato. Use colaborador, colaborador_fora_contrato, caminhao, veiculo_proprio ou outro.'
 
             if item_type in {'colaborador', 'colaborador_fora_contrato'} and not sanitized.get('colaborador_id'):
                 return None, 'Para tipo colaborador, selecione o colaborador.'
             if item_type == 'caminhao' and not sanitized.get('veiculo_carregamento_id'):
-                return None, 'Para tipo caminhão, selecione o veículo de carregamento.'
+                return None, 'Para tipo caminhão terceiro, selecione o veículo de carregamento.'
+            if item_type == 'veiculo_proprio' and not sanitized.get('veiculo_proprio_id'):
+                return None, 'Para tipo veículo próprio, selecione o veículo da frota.'
             if item_type == 'outro' and not sanitized.get('nome_item'):
                 return None, 'Para tipo outro, informe o nome/descrição do item.'
 
             if item_type in {'colaborador', 'colaborador_fora_contrato'}:
                 sanitized['veiculo_carregamento_id'] = None
+                sanitized['veiculo_proprio_id'] = None
                 sanitized['nome_item'] = None
             elif item_type == 'caminhao':
                 sanitized['colaborador_id'] = None
+                sanitized['veiculo_proprio_id'] = None
+                sanitized['nome_item'] = None
+            elif item_type == 'veiculo_proprio':
+                sanitized['colaborador_id'] = None
+                sanitized['veiculo_carregamento_id'] = None
                 sanitized['nome_item'] = None
             else:
                 sanitized['colaborador_id'] = None
                 sanitized['veiculo_carregamento_id'] = None
+                sanitized['veiculo_proprio_id'] = None
 
             if 'percentual_alocacao' in sanitized:
                 sanitized['percentual_alocacao'] = max(0.0, min(100.0, parse_float_or_default(sanitized.get('percentual_alocacao'), 100)))
