@@ -9371,11 +9371,17 @@ def create_app():
                 errors.append({'line': index, 'error': f'Filial não encontrada: "{attempted}".'})
                 continue
 
-            placa = (row.get('placa') or '').strip().upper()
-            marca = (row.get('marca') or '').strip()
-            modelo = (row.get('modelo') or '').strip()
-            if not placa or not marca or not modelo:
-                errors.append({'line': index, 'error': 'Campos obrigatórios: placa, marca, modelo.'})
+            def _as_str(v):
+                if v is None or v is False:
+                    return ''
+                return str(v).strip()
+
+            placa = _as_str(row.get('placa')).upper()
+            marca = _as_str(row.get('marca'))
+            modelo = _as_str(row.get('modelo'))
+            missing = [k for k, v in (('placa', placa), ('marca', marca), ('modelo', modelo)) if not v]
+            if missing:
+                errors.append({'line': index, 'error': f'Campos obrigatórios ausentes: {", ".join(missing)}.'})
                 continue
 
             tipo_raw = _norm_token(row.get('tipo'))
@@ -9395,24 +9401,36 @@ def create_app():
 
             def _to_int(value):
                 try:
-                    return int(str(value).strip()) if str(value or '').strip() else None
+                    s = _as_str(value)
+                    return int(s) if s else None
                 except Exception:
                     return None
 
             def _to_float(value):
                 try:
-                    return float(str(value).replace(',', '.').strip()) if str(value or '').strip() else None
+                    s = _as_str(value).replace(',', '.')
+                    return float(s) if s else None
                 except Exception:
                     return None
+
+            def _to_date(value):
+                s = _as_str(value)
+                if not s or s in {'0', '0000-00-00'}:
+                    return None
+                parsed = normalize_import_date(s)
+                # normalize_import_date returns raw if no date match — discard non-ISO strings
+                if parsed and re.fullmatch(r'\d{4}-\d{2}-\d{2}', parsed):
+                    return parsed
+                return None
 
             normalized_payload = {
                 'filial_id': filial_id,
                 'placa': placa,
-                'chassi': (row.get('chassi') or '').strip() or None,
+                'chassi': _as_str(row.get('chassi')) or None,
                 'marca': marca,
                 'modelo': modelo,
                 'ano_modelo': _to_int(row.get('ano_modelo')),
-                'cor': (row.get('cor') or '').strip() or None,
+                'cor': _as_str(row.get('cor')) or None,
                 'tipo_veiculo': tipo_veiculo,
                 'tipo': tipo,
                 'combustivel': combustivel,
@@ -9420,10 +9438,10 @@ def create_app():
                 'status': status,
                 'odometro_atual': _to_int(row.get('odometro_atual')) or 0,
                 'km_proxima_revisao': _to_int(row.get('km_proxima_revisao')),
-                'data_vencimento_crlv': normalize_import_date(row.get('data_vencimento_crlv')),
-                'data_vencimento_seguro': normalize_import_date(row.get('data_vencimento_seguro')),
-                'data_ultima_revisao': normalize_import_date(row.get('data_ultima_revisao')),
-                'descricao': (row.get('descricao') or row.get('observacoes') or '').strip() or None,
+                'data_vencimento_crlv': _to_date(row.get('data_vencimento_crlv')),
+                'data_vencimento_seguro': _to_date(row.get('data_vencimento_seguro')),
+                'data_ultima_revisao': _to_date(row.get('data_ultima_revisao')),
+                'descricao': _as_str(row.get('descricao')) or _as_str(row.get('observacoes')) or None,
             }
 
             try:
