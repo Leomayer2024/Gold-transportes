@@ -3616,6 +3616,29 @@ def create_app():
         contracts = []
         contracts_ready = contratos_operacionais_table_ready()
         contract_expenses = fetch_active_contract_expenses(profile, month_reference, filial_id)
+
+        # Pré-carrega custo básico (salário + benefícios mensais) de colab
+        # referenciados em gastos extras que NÃO estão em collaborator_cost_by_id
+        # (caso comum: colab inativo, mas gasto extra ainda vinculado a ele)
+        expense_colab_ids_missing = {
+            int(e.get('colaborador_id'))
+            for e in contract_expenses
+            if e.get('colaborador_id') is not None
+            and int(e.get('colaborador_id')) not in collaborator_cost_by_id
+        }
+        if expense_colab_ids_missing:
+            try:
+                fallback_resp = supabase.table('colaboradores').select(
+                    'id, salario_base_mensal, beneficios_mensais'
+                ).in_('id', list(expense_colab_ids_missing)).execute()
+                for c in (fallback_resp.data or []):
+                    cid_fb = int(c['id'])
+                    salario_fb = max(0.0, parse_float_or_default(c.get('salario_base_mensal'), 0.0))
+                    beneficios_fb = max(0.0, parse_float_or_default(c.get('beneficios_mensais'), 0.0))
+                    collaborator_cost_by_id[cid_fb] = round(salario_fb + beneficios_fb, 2)
+            except Exception as exc:
+                logging.warning(f'Falha ao carregar custo fallback colab gasto extra: {exc}')
+
         expense_rows_by_contract = {}
         expense_total_by_contract = {}
         for expense in contract_expenses:
