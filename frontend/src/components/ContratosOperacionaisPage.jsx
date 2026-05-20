@@ -49,6 +49,7 @@ export default function ContratosOperacionaisPage() {
   const [metricsLoading, setMetricsLoading] = useState(false)
   const [metricsError, setMetricsError] = useState('')
   const [showGastosDetail, setShowGastosDetail] = useState(true)
+  const [resultadoTab, setResultadoTab] = useState('fixo')
 
   const contractForcedValues = useMemo(() => {
     if (!selectedContract) return null
@@ -157,115 +158,280 @@ export default function ContratosOperacionaisPage() {
         </div>
       ) : (
         <>
-          {/* Linha 1: Headcount + Valor do contrato + Horas extras */}
-          <div className="contract-metrics-grid">
-            <article className={`tone-${headcountTone(contractMetrics.headcount_real, contractMetrics.qtd_colaboradores_contratados)}`}>
-              <span>Efetivo real</span>
-              <strong>{contractMetrics.headcount_real || 0}</strong>
-              <small>Contratado: {contractMetrics.qtd_colaboradores_contratados || 0}</small>
-            </article>
-
-            <article>
-              <span>Valor cobrado</span>
-              <strong>{formatCurrency(contractMetrics.valor_mensal_contrato_itens)}</strong>
-              <small>Ref. cadastro: {formatCurrency(contractMetrics.valor_mensal_contrato_cadastro)}</small>
-            </article>
-
-            {(contractMetrics.horas_50_cobradas_total > 0 || contractMetrics.horas_100_cobradas_total > 0) && (
-              <article>
-                <span>Horas extras cobradas</span>
-                <strong>50%: {contractMetrics.horas_50_cobradas_total || 0}h</strong>
-                <small>100%: {contractMetrics.horas_100_cobradas_total || 0}h</small>
-              </article>
-            )}
-
-            <article className={`tone-${accuracyTone(contractMetrics.acuracidade_headcount)}`}>
-              <span>Acurácia efetivo</span>
-              <strong>{formatPercent(contractMetrics.acuracidade_headcount)}</strong>
-              <small>{contractMetrics.itens_vinculados_total || 0} item(s) vinculado(s)</small>
-            </article>
-          </div>
-
-          {/* Linha 2: Cálculo de custo detalhado */}
-          <div className="contract-metrics-section-title">Composição do custo</div>
-          <div className="contract-metrics-grid">
-            <article>
-              <span>Salários (CLT + adicionais)</span>
-              <strong>{formatCurrency(contractMetrics.gasto_salario_mensal)}</strong>
-            </article>
-
-            <article>
-              <span>Benefícios</span>
-              <strong>{formatCurrency(contractMetrics.gasto_beneficios_sem_bonificacao_mensal)}</strong>
-              {contractMetrics.gasto_bonificacao_mensal > 0 && (
-                <small>+ Bônus: {formatCurrency(contractMetrics.gasto_bonificacao_mensal)}</small>
-              )}
-            </article>
-
-            <article>
-              <span>Custo equipe (contrato)</span>
-              <strong>{formatCurrency(contractMetrics.custo_mensal_vinculos_contrato)}</strong>
-              <small>Colaboradores alocados no contrato</small>
-            </article>
-
-            {contractMetrics.custos_extras_gold_fixo_mensais > 0 && (
-              <article>
-                <span>Custos fixos Gold</span>
-                <strong>{formatCurrency(contractMetrics.custos_extras_gold_fixo_mensais)}</strong>
-                <small>Campo "Custos extras Gold" do contrato</small>
-              </article>
-            )}
-          </div>
-
-          {/* Card separado: Gastos extras */}
-          <div className="contract-metrics-section-title">
-            Gastos extras operacionais
+          {/* Sub-abas: Fixo vs Variável */}
+          <div className="contract-resultado-tabs">
             <button
-              className="button-ghost button-sm"
-              onClick={() => setShowGastosDetail((v) => !v)}
+              className={`button-secondary button-sm${resultadoTab === 'fixo' ? ' active' : ''}`}
+              onClick={() => setResultadoTab('fixo')}
               type="button"
             >
-              {showGastosDetail ? 'Ocultar detalhes' : 'Ver detalhes'}
+              Fixo
             </button>
-          </div>
-          <div className="contract-gastos-extras-card">
-            <div className="contract-gastos-extras-total">
-              <span>Total gastos extras</span>
-              <strong>{formatCurrency(contractMetrics.custos_extras_gold_linhas_mensais)}</strong>
-              <small>Descontado do resultado do contrato</small>
-            </div>
-
-            {showGastosDetail && contractMetrics.gastos_extras_linhas?.length > 0 && (
-              <table className="contract-gastos-table">
-                <thead>
-                  <tr>
-                    <th>Descrição</th>
-                    <th style={{ textAlign: 'right' }}>Valor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {contractMetrics.gastos_extras_linhas.map((g) => (
-                    <tr key={g.id}>
-                      <td>{g.nome_gasto}</td>
-                      <td style={{ textAlign: 'right' }}>{formatCurrency(g.valor_mensal)}</td>
-                    </tr>
-                  ))}
-                  <tr className="contract-gastos-table-footer">
-                    <td><strong>Total</strong></td>
-                    <td style={{ textAlign: 'right' }}>
-                      <strong>{formatCurrency(contractMetrics.custos_extras_gold_linhas_mensais)}</strong>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            )}
-
-            {showGastosDetail && (!contractMetrics.gastos_extras_linhas || contractMetrics.gastos_extras_linhas.length === 0) && (
-              <p className="contract-gastos-empty">Nenhum gasto extra registrado para este mês.</p>
-            )}
+            <button
+              className={`button-secondary button-sm${resultadoTab === 'variavel' ? ' active' : ''}`}
+              onClick={() => setResultadoTab('variavel')}
+              type="button"
+            >
+              Variável
+            </button>
+            <span className="contract-resultado-tabs-hint">
+              {resultadoTab === 'fixo'
+                ? 'Itens fixos do contrato e custo da equipe.'
+                : 'Horas extras (Calc. RTM) e gastos extras operacionais — variam mês a mês.'}
+            </span>
           </div>
 
-          {/* Linha 3: Resultado final */}
+          {resultadoTab === 'fixo' && (
+            <>
+              {/* Linha 1: Headcount + Valor do contrato */}
+              <div className="contract-metrics-grid">
+                <article className={`tone-${headcountTone(contractMetrics.headcount_real, contractMetrics.qtd_colaboradores_contratados)}`}>
+                  <span>Efetivo real</span>
+                  <strong>{contractMetrics.headcount_real || 0}</strong>
+                  <small>Contratado: {contractMetrics.qtd_colaboradores_contratados || 0}</small>
+                </article>
+
+                <article>
+                  <span>Valor cobrado (fixo)</span>
+                  <strong>{formatCurrency(contractMetrics.valor_mensal_contrato_itens)}</strong>
+                  <small>Ref. cadastro: {formatCurrency(contractMetrics.valor_mensal_contrato_cadastro)}</small>
+                </article>
+
+                <article className={`tone-${accuracyTone(contractMetrics.acuracidade_headcount)}`}>
+                  <span>Acurácia efetivo</span>
+                  <strong>{formatPercent(contractMetrics.acuracidade_headcount)}</strong>
+                  <small>{contractMetrics.itens_vinculados_total || 0} item(s) vinculado(s)</small>
+                </article>
+
+                {contractMetrics.colaboradores_inativos_count > 0 && (
+                  <article className="tone-warning">
+                    <span>Colab. inativos vinculados</span>
+                    <strong>{contractMetrics.colaboradores_inativos_count}</strong>
+                    <small>Conferir tela "Colaboradores"</small>
+                  </article>
+                )}
+              </div>
+
+              {/* Composição do custo */}
+              <div className="contract-metrics-section-title">Composição do custo (fixo)</div>
+              <div className="contract-metrics-grid">
+                <article>
+                  <span>Salários (CLT + adicionais)</span>
+                  <strong>{formatCurrency(contractMetrics.gasto_salario_mensal)}</strong>
+                </article>
+
+                <article>
+                  <span>Benefícios</span>
+                  <strong>{formatCurrency(contractMetrics.gasto_beneficios_sem_bonificacao_mensal)}</strong>
+                  {contractMetrics.gasto_bonificacao_mensal > 0 && (
+                    <small>+ Bônus: {formatCurrency(contractMetrics.gasto_bonificacao_mensal)}</small>
+                  )}
+                </article>
+
+                <article>
+                  <span>Custo equipe (contrato)</span>
+                  <strong>{formatCurrency(contractMetrics.custo_mensal_vinculos_contrato)}</strong>
+                  <small>Colaboradores alocados no contrato</small>
+                </article>
+
+                {contractMetrics.custos_extras_gold_fixo_mensais > 0 && (
+                  <article>
+                    <span>Custos fixos Gold</span>
+                    <strong>{formatCurrency(contractMetrics.custos_extras_gold_fixo_mensais)}</strong>
+                    <small>Campo "Custos extras Gold" do contrato</small>
+                  </article>
+                )}
+              </div>
+
+              {/* Card Extra (renomeado de "por fora") — informativo */}
+              {(contractMetrics.headcount_fora_contrato > 0
+                || contractMetrics.valor_cobrado_colaboradores_fora_total > 0
+                || contractMetrics.custo_mensal_fora_contrato > 0) && (
+                <>
+                  <div className="contract-metrics-section-title">Extra (fora do contrato — informativo)</div>
+                  <div className="contract-metrics-grid">
+                    <article>
+                      <span>Pessoas extras</span>
+                      <strong>{contractMetrics.headcount_fora_contrato || 0}</strong>
+                      <small>Itens marcados como "fora do headcount"</small>
+                    </article>
+                    <article>
+                      <span>Valor cobrado extra</span>
+                      <strong>{formatCurrency(contractMetrics.valor_cobrado_colaboradores_fora_total)}</strong>
+                      <small>Receita adicional fora do contrato</small>
+                    </article>
+                    <article>
+                      <span>Custo extra</span>
+                      <strong>{formatCurrency(contractMetrics.custo_mensal_fora_contrato)}</strong>
+                      <small>Custo dos colaboradores extras</small>
+                    </article>
+                  </div>
+                </>
+              )}
+
+              {/* Lista de colaboradores vinculados (com badge ativo) */}
+              {contractMetrics.colaboradores_detalhe?.length > 0 && (
+                <>
+                  <div className="contract-metrics-section-title">Colaboradores vinculados</div>
+                  <div className="contract-gastos-extras-card">
+                    <table className="contract-gastos-table">
+                      <thead>
+                        <tr>
+                          <th>Colaborador</th>
+                          <th>Cargo</th>
+                          <th>Tipo</th>
+                          <th>Status</th>
+                          <th style={{ textAlign: 'right' }}>Aloc.</th>
+                          <th style={{ textAlign: 'right' }}>Custo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {contractMetrics.colaboradores_detalhe.map((c) => (
+                          <tr key={c.colaborador_id}>
+                            <td>{c.nome || '-'}</td>
+                            <td>{c.cargo || '-'}</td>
+                            <td>{c.is_fora_contrato ? 'Extra' : 'Fixo'}</td>
+                            <td>
+                              <span className={`badge ${c.ativo ? 'badge-success' : 'badge-danger'}`}>
+                                {c.ativo ? 'Ativo' : 'Inativo'}
+                              </span>
+                            </td>
+                            <td style={{ textAlign: 'right' }}>{formatPercent(c.percentual_alocacao)}</td>
+                            <td style={{ textAlign: 'right' }}>{formatCurrency(c.custo_alocado)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
+          {resultadoTab === 'variavel' && (
+            <>
+              {/* Horas extras RTM */}
+              <div className="contract-metrics-section-title">Horas extras (Calc. RTM)</div>
+              <div className="contract-metrics-grid">
+                <article>
+                  <span>Horas 50%</span>
+                  <strong>{contractMetrics.rtm_horas_50_total || 0}h</strong>
+                  <small>Valor: {formatCurrency(contractMetrics.rtm_valor_total_50)}</small>
+                </article>
+                <article>
+                  <span>Horas 100%</span>
+                  <strong>{contractMetrics.rtm_horas_100_total || 0}h</strong>
+                  <small>Valor: {formatCurrency(contractMetrics.rtm_valor_total_100)}</small>
+                </article>
+                <article>
+                  <span>Total HE no mês</span>
+                  <strong>{formatCurrency(contractMetrics.rtm_valor_total_geral)}</strong>
+                  <small>Variável — pode ou não ocorrer</small>
+                </article>
+                {(contractMetrics.horas_50_cobradas_total > 0 || contractMetrics.horas_100_cobradas_total > 0) && (
+                  <article>
+                    <span>HE cobradas (contrato)</span>
+                    <strong>50%: {contractMetrics.horas_50_cobradas_total || 0}h</strong>
+                    <small>100%: {contractMetrics.horas_100_cobradas_total || 0}h</small>
+                  </article>
+                )}
+              </div>
+
+              {/* Detalhe RTM por colaborador */}
+              {contractMetrics.colaboradores_detalhe?.some((c) => c.rtm_total_geral > 0) ? (
+                <div className="contract-gastos-extras-card" style={{ marginTop: 8 }}>
+                  <table className="contract-gastos-table">
+                    <thead>
+                      <tr>
+                        <th>Colaborador</th>
+                        <th>Status</th>
+                        <th style={{ textAlign: 'right' }}>H 50%</th>
+                        <th style={{ textAlign: 'right' }}>H 100%</th>
+                        <th style={{ textAlign: 'right' }}>Total</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {contractMetrics.colaboradores_detalhe
+                        .filter((c) => !c.is_fora_contrato && c.rtm_total_geral > 0)
+                        .map((c) => (
+                          <tr key={c.colaborador_id}>
+                            <td>{c.nome || '-'}</td>
+                            <td>
+                              <span className={`badge ${c.ativo ? 'badge-success' : 'badge-danger'}`}>
+                                {c.ativo ? 'Ativo' : 'Inativo'}
+                              </span>
+                            </td>
+                            <td style={{ textAlign: 'right' }}>{c.rtm_horas_50}h</td>
+                            <td style={{ textAlign: 'right' }}>{c.rtm_horas_100}h</td>
+                            <td style={{ textAlign: 'right' }}>{formatCurrency(c.rtm_total_geral)}</td>
+                          </tr>
+                        ))}
+                      <tr className="contract-gastos-table-footer">
+                        <td colSpan="4"><strong>Total RTM</strong></td>
+                        <td style={{ textAlign: 'right' }}>
+                          <strong>{formatCurrency(contractMetrics.rtm_valor_total_geral)}</strong>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="contract-gastos-empty">
+                  Nenhuma hora extra (RTM) registrada para colaboradores deste contrato no mês.
+                </p>
+              )}
+
+              {/* Gastos extras operacionais (variáveis também) */}
+              <div className="contract-metrics-section-title">
+                Gastos extras operacionais
+                <button
+                  className="button-ghost button-sm"
+                  onClick={() => setShowGastosDetail((v) => !v)}
+                  type="button"
+                >
+                  {showGastosDetail ? 'Ocultar detalhes' : 'Ver detalhes'}
+                </button>
+              </div>
+              <div className="contract-gastos-extras-card">
+                <div className="contract-gastos-extras-total">
+                  <span>Total gastos extras</span>
+                  <strong>{formatCurrency(contractMetrics.custos_extras_gold_linhas_mensais)}</strong>
+                  <small>Descontado do resultado do contrato</small>
+                </div>
+
+                {showGastosDetail && contractMetrics.gastos_extras_linhas?.length > 0 && (
+                  <table className="contract-gastos-table">
+                    <thead>
+                      <tr>
+                        <th>Descrição</th>
+                        <th style={{ textAlign: 'right' }}>Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {contractMetrics.gastos_extras_linhas.map((g) => (
+                        <tr key={g.id}>
+                          <td>{g.nome_gasto}</td>
+                          <td style={{ textAlign: 'right' }}>{formatCurrency(g.valor_mensal)}</td>
+                        </tr>
+                      ))}
+                      <tr className="contract-gastos-table-footer">
+                        <td><strong>Total</strong></td>
+                        <td style={{ textAlign: 'right' }}>
+                          <strong>{formatCurrency(contractMetrics.custos_extras_gold_linhas_mensais)}</strong>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                )}
+
+                {showGastosDetail && (!contractMetrics.gastos_extras_linhas || contractMetrics.gastos_extras_linhas.length === 0) && (
+                  <p className="contract-gastos-empty">Nenhum gasto extra registrado para este mês.</p>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Resultado final (sempre visível) */}
           <div className="contract-metrics-section-title">Resultado</div>
           <div className="contract-metrics-grid contract-metrics-result">
             <article>

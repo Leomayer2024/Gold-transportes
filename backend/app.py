@@ -3640,6 +3640,61 @@ def create_app():
                 contract_query = contract_query.eq('filial_id', filial_id)
             contracts = contract_query.execute().data or []
 
+        # ────────────────────────────────────────────────────────────────
+        # Bulk-load RTM horas extras do mês (para aba Variável do contrato)
+        # ────────────────────────────────────────────────────────────────
+        rtm_by_colaborador = {}
+        try:
+            mes_ref_prefix = month_reference.strftime('%Y-%m')
+            rtm_query = supabase.table('horas_extras_rtm_registros').select(
+                'colaborador_id, funcionario_nome, filial_id, mes_referencia, '
+                'total_50, total_100, total_geral, horas_normais, horas_extra_100, '
+                'valor_hora_50, valor_hora_100, tipo_hora'
+            ).like('mes_referencia', f'{mes_ref_prefix}%')
+            if filial_id:
+                rtm_query = rtm_query.eq('filial_id', filial_id)
+            rtm_resp = rtm_query.execute()
+            for reg in (rtm_resp.data or []):
+                cid = reg.get('colaborador_id')
+                if cid is None:
+                    continue
+                key = int(cid)
+                cur = rtm_by_colaborador.setdefault(key, {
+                    'total_50': 0.0, 'total_100': 0.0, 'total_geral': 0.0,
+                    'horas_50': 0.0, 'horas_100': 0.0,
+                    'funcionario_nome': reg.get('funcionario_nome', ''),
+                    'tipo_hora': reg.get('tipo_hora', ''),
+                })
+                cur['total_50'] += parse_float_or_default(reg.get('total_50'), 0.0)
+                cur['total_100'] += parse_float_or_default(reg.get('total_100'), 0.0)
+                cur['total_geral'] += parse_float_or_default(reg.get('total_geral'), 0.0)
+                cur['horas_50'] += parse_float_or_default(reg.get('horas_normais'), 0.0)
+                cur['horas_100'] += parse_float_or_default(reg.get('horas_extra_100'), 0.0)
+        except Exception as exc:
+            logging.warning(f'Falha ao carregar horas_extras_rtm_registros: {exc}')
+
+        # Bulk-load nome + ativo de TODOS os colaboradores referenciados nos vínculos
+        # (inclusive inativos — dashboard principal filtra ativo=True)
+        colab_info_map = {}
+        all_linked_cids = set()
+        for link in contract_links:
+            cid = link.get('colaborador_id')
+            if cid is not None:
+                all_linked_cids.add(int(cid))
+        if all_linked_cids:
+            try:
+                info_resp = supabase.table('colaboradores').select(
+                    'id, nome_completo, ativo, cargo'
+                ).in_('id', list(all_linked_cids)).execute()
+                for c in (info_resp.data or []):
+                    colab_info_map[int(c['id'])] = {
+                        'nome': c.get('nome_completo') or '',
+                        'cargo': c.get('cargo') or '',
+                        'ativo': bool(c.get('ativo', True)),
+                    }
+            except Exception as exc:
+                logging.warning(f'Falha ao carregar info colaboradores vinculados: {exc}')
+
         contracts_enriched = []
         acuracidade_headcount_values = []
         acuracidade_valor_values = []
@@ -3796,6 +3851,58 @@ def create_app():
             total_horas_50 = horas_50_contrato if horas_50_contrato > 0 else total_horas_50_itens
             total_horas_100 = horas_100_contrato if horas_100_contrato > 0 else total_horas_100_itens
 
+            # ──────────────────────────────────────────────────────────────
+            # Detalhe por colaborador + totais RTM (aba Variável)
+            # ──────────────────────────────────────────────────────────────
+            colaboradores_detalhe = []
+            rtm_total_50_valor = 0.0
+            rtm_total_100_valor = 0.0
+            rtm_total_geral_valor = 0.0
+            rtm_total_horas_50 = 0.0
+            rtm_total_horas_100 = 0.0
+            colaboradores_inativos_count = 0
+            seen_cids_detalhe = set()
+            for link in linked_rows:
+                cid_link = link.get('colaborador_id')
+                if cid_link is None:
+                    continue
+                cid_int = int(cid_link)
+                if cid_int in seen_cids_detalhe:
+                    continue
+                seen_cids_detalhe.add(cid_int)
+                tipo_item_link2 = (link.get('tipo_item') or 'colaborador').strip().lower()
+                is_fora2 = tipo_item_link2 in {'colaborador_fora_contrato', 'fora_contrato'}
+                info = colab_info_map.get(cid_int, {'nome': '', 'ativo': True, 'cargo': ''})
+                rtm = rtm_by_colaborador.get(cid_int)
+                allocation2 = max(0.0, min(100.0, parse_float_or_default(link.get('percentual_alocacao'), 100.0)))
+                custo_col = parse_float_or_default(collaborator_cost_by_id.get(cid_int), 0.0) * (allocation2 / 100.0)
+                valor_cobrado_link2 = max(0.0, parse_float_or_default(link.get('valor_cobrado_colaborador'), 0.0))
+                if not info.get('ativo', True):
+                    colaboradores_inativos_count += 1
+                colaboradores_detalhe.append({
+                    'colaborador_id': cid_int,
+                    'nome': info.get('nome') or (rtm.get('funcionario_nome') if rtm else ''),
+                    'cargo': info.get('cargo') or '',
+                    'ativo': info.get('ativo', True),
+                    'tipo_item': tipo_item_link2,
+                    'is_fora_contrato': is_fora2,
+                    'percentual_alocacao': round(allocation2, 2),
+                    'custo_alocado': round(custo_col, 2),
+                    'valor_cobrado': round(valor_cobrado_link2, 2),
+                    'rtm_total_geral': round(rtm['total_geral'], 2) if rtm else 0.0,
+                    'rtm_total_50': round(rtm['total_50'], 2) if rtm else 0.0,
+                    'rtm_total_100': round(rtm['total_100'], 2) if rtm else 0.0,
+                    'rtm_horas_50': round(rtm['horas_50'], 2) if rtm else 0.0,
+                    'rtm_horas_100': round(rtm['horas_100'], 2) if rtm else 0.0,
+                })
+                # Totais variáveis: somente colaboradores fixos do contrato (não-fora) entram
+                if not is_fora2 and rtm:
+                    rtm_total_50_valor += rtm['total_50']
+                    rtm_total_100_valor += rtm['total_100']
+                    rtm_total_geral_valor += rtm['total_geral']
+                    rtm_total_horas_50 += rtm['horas_50']
+                    rtm_total_horas_100 += rtm['horas_100']
+
             contracts_enriched.append({
                 'id': contract.get('id'),
                 'filial_id': contract_filial_id,
@@ -3838,6 +3945,15 @@ def create_app():
                 'gastos_extras_linhas': expense_rows_by_contract.get(int(contract.get('id')), []) if contract.get('id') is not None else [],
                 'acuracidade_headcount': headcount_accuracy,
                 'acuracidade_valor': value_accuracy,
+                # Variável: RTM horas extras (somente colaboradores fixos do contrato)
+                'rtm_valor_total_50': round(rtm_total_50_valor, 2),
+                'rtm_valor_total_100': round(rtm_total_100_valor, 2),
+                'rtm_valor_total_geral': round(rtm_total_geral_valor, 2),
+                'rtm_horas_50_total': round(rtm_total_horas_50, 2),
+                'rtm_horas_100_total': round(rtm_total_horas_100, 2),
+                # Detalhe por colaborador (com ativo/inativo + RTM individual)
+                'colaboradores_detalhe': colaboradores_detalhe,
+                'colaboradores_inativos_count': colaboradores_inativos_count,
             })
 
         avg_headcount_accuracy = round(sum(acuracidade_headcount_values) / len(acuracidade_headcount_values), 2) if acuracidade_headcount_values else None
