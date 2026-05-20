@@ -3600,27 +3600,33 @@ def create_app():
         contracts_ready = contratos_operacionais_table_ready()
         contract_expenses = fetch_active_contract_expenses(profile, month_reference, filial_id)
 
-        # Pré-carrega custo básico (salário + benefícios mensais) de colab
-        # referenciados em gastos extras que NÃO estão em collaborator_cost_by_id
-        # (caso comum: colab inativo, mas gasto extra ainda vinculado a ele)
-        expense_colab_ids_missing = {
+        # Pré-carrega custo básico + status ativo de colab referenciados em
+        # gastos extras que NÃO estão em collaborator_cost_by_id (típico:
+        # colab inativo, mas gasto extra ainda vinculado a ele)
+        expense_colab_ids_all = {
             int(e.get('colaborador_id'))
             for e in contract_expenses
             if e.get('colaborador_id') is not None
-            and int(e.get('colaborador_id')) not in collaborator_cost_by_id
         }
-        if expense_colab_ids_missing:
+        expense_colab_ativo_map = {}  # cid -> bool (True/False)
+        expense_colab_ids_missing = {
+            cid for cid in expense_colab_ids_all
+            if cid not in collaborator_cost_by_id
+        }
+        if expense_colab_ids_all:
             try:
                 fallback_resp = supabase.table('colaboradores').select(
-                    'id, salario_base_mensal, beneficios_mensais'
-                ).in_('id', list(expense_colab_ids_missing)).execute()
+                    'id, salario_base_mensal, beneficios_mensais, ativo'
+                ).in_('id', list(expense_colab_ids_all)).execute()
                 for c in (fallback_resp.data or []):
                     cid_fb = int(c['id'])
-                    salario_fb = max(0.0, parse_float_or_default(c.get('salario_base_mensal'), 0.0))
-                    beneficios_fb = max(0.0, parse_float_or_default(c.get('beneficios_mensais'), 0.0))
-                    collaborator_cost_by_id[cid_fb] = round(salario_fb + beneficios_fb, 2)
+                    expense_colab_ativo_map[cid_fb] = bool(c.get('ativo', True))
+                    if cid_fb in expense_colab_ids_missing:
+                        salario_fb = max(0.0, parse_float_or_default(c.get('salario_base_mensal'), 0.0))
+                        beneficios_fb = max(0.0, parse_float_or_default(c.get('beneficios_mensais'), 0.0))
+                        collaborator_cost_by_id[cid_fb] = round(salario_fb + beneficios_fb, 2)
             except Exception as exc:
-                logging.warning(f'Falha ao carregar custo fallback colab gasto extra: {exc}')
+                logging.warning(f'Falha ao carregar custo/ativo fallback colab gasto extra: {exc}')
 
         expense_rows_by_contract = {}
         expense_total_by_contract = {}
@@ -3633,22 +3639,32 @@ def create_app():
             valor_manual = parse_float_or_default(expense.get('valor_mensal'), 0.0)
             if valor_manual > 0:
                 # Valor manual tem prioridade (usuário informou explicitamente)
-                expense_value = round(valor_manual, 2)
+                expense_value_calc = round(valor_manual, 2)
             elif exp_colaborador_id is not None:
                 # Cálculo automático: custo do colaborador proporcional à alocação
                 exp_colaborador_id = int(exp_colaborador_id)
                 exp_allocation = max(0.0, min(100.0, parse_float_or_default(expense.get('percentual_alocacao'), 100.0)))
                 exp_collab_cost = parse_float_or_default(collaborator_cost_by_id.get(exp_colaborador_id), 0.0)
-                expense_value = round(exp_collab_cost * (exp_allocation / 100.0), 2)
+                expense_value_calc = round(exp_collab_cost * (exp_allocation / 100.0), 2)
             else:
-                expense_value = 0.0
-            expense_total_by_contract[contract_id] = expense_total_by_contract.get(contract_id, 0.0) + expense_value
+                expense_value_calc = 0.0
+
+            # Se o colab vinculado está inativo, o registro permanece mas
+            # NÃO conta no total de gastos extras (só informativo)
+            colab_ativo_flag = True
+            if exp_colaborador_id is not None:
+                colab_ativo_flag = expense_colab_ativo_map.get(int(exp_colaborador_id), True)
+
+            expense_value_total = expense_value_calc if colab_ativo_flag else 0.0
+            expense_total_by_contract[contract_id] = expense_total_by_contract.get(contract_id, 0.0) + expense_value_total
             expense_rows_by_contract.setdefault(contract_id, []).append({
                 'id': expense.get('id'),
                 'nome_gasto': expense.get('nome_gasto') or '',
                 'colaborador_id': expense.get('colaborador_id'),
                 'percentual_alocacao': expense.get('percentual_alocacao'),
-                'valor_mensal': round(expense_value, 2),
+                'valor_mensal': round(expense_value_total, 2),
+                'valor_mensal_calculado': round(expense_value_calc, 2),
+                'colaborador_ativo': colab_ativo_flag,
             })
 
         if contracts_ready:

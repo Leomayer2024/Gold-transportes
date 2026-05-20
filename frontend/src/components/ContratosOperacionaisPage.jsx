@@ -394,11 +394,12 @@ export default function ContratosOperacionaisPage() {
                 </div>
 
                 {(() => {
-                  const linhasNaoZero = (contractMetrics.gastos_extras_linhas || []).filter(
-                    (g) => Number(g.valor_mensal || 0) > 0,
+                  // Mostra: (a) gastos ativos com valor > 0 OU (b) inativos (informativos, não somam)
+                  const linhasVisiveis = (contractMetrics.gastos_extras_linhas || []).filter(
+                    (g) => Number(g.valor_mensal || 0) > 0 || g.colaborador_ativo === false,
                   )
                   if (!showGastosDetail) return null
-                  if (linhasNaoZero.length === 0) {
+                  if (linhasVisiveis.length === 0) {
                     return <p className="contract-gastos-empty">Nenhum gasto extra registrado para este mês.</p>
                   }
                   return (
@@ -410,12 +411,30 @@ export default function ContratosOperacionaisPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {linhasNaoZero.map((g) => (
-                          <tr key={g.id}>
-                            <td>{g.nome_gasto}</td>
-                            <td style={{ textAlign: 'right' }}>{formatCurrency(g.valor_mensal)}</td>
-                          </tr>
-                        ))}
+                        {linhasVisiveis.map((g) => {
+                          const inativo = g.colaborador_ativo === false
+                          return (
+                            <tr key={g.id} style={inativo ? { opacity: 0.65 } : undefined}>
+                              <td>
+                                {g.nome_gasto}
+                                {inativo && (
+                                  <span className="badge badge-danger" style={{ marginLeft: 6 }} title="Colaborador inativo — registro mantido mas não conta no total">
+                                    Inativo — não conta
+                                  </span>
+                                )}
+                              </td>
+                              <td style={{ textAlign: 'right' }}>
+                                {inativo ? (
+                                  <span style={{ textDecoration: 'line-through', color: '#888' }}>
+                                    {formatCurrency(g.valor_mensal_calculado || 0)}
+                                  </span>
+                                ) : (
+                                  formatCurrency(g.valor_mensal)
+                                )}
+                              </td>
+                            </tr>
+                          )
+                        })}
                         <tr className="contract-gastos-table-footer">
                           <td><strong>Total</strong></td>
                           <td style={{ textAlign: 'right' }}>
