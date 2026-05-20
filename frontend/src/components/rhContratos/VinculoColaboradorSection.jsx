@@ -166,12 +166,19 @@ export default function VinculoColaboradorSection({
       //    Mantemos os indeterminados (sem data_validade) como estavam — não
       //    se aplica inativar um contrato vigente quando se cria outro do
       //    mesmo tipo (caso de re-emissão por correção, por exemplo).
+      // Ao Efetivar (indeterminado), inativa TODOS docs contratuais com validade
+      // do colaborador — o Contrato de Trabalho substitui Aditivos/Experiência.
+      // Ao Prorrogar (45+45), inativa só os que já venceram antes da nova fase.
+      const efetivando = proxima.fase === 'indeterminado'
       const docsParaInativar = documentosColaborador.filter((d) => (
         d.categoria === 'contratual' &&
         d.ativo !== false &&
         d.id !== novoDocId &&
-        d.data_validade &&
-        d.data_validade < proxima.data_inicio
+        d.data_validade && (
+          efetivando
+            ? true
+            : d.data_validade < proxima.data_inicio
+        )
       ))
       if (docsParaInativar.length > 0) {
         const patches = []
