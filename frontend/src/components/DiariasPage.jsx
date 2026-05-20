@@ -1,9 +1,9 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { api } from '../services/api'
 import { useAuth } from '../context/AuthContext'
-import { canCreateResource, hasActionPermission } from '../lib/permissions'
+import { canCreateResource } from '../lib/permissions'
 
+// ── Constantes ──────────────────────────────────────────────────────────────
 const STATUS_LABELS = {
   rascunho: 'Rascunho',
   pendente: 'Pendente',
@@ -21,24 +21,27 @@ const BANCOS = [
   'Nubank', 'Inter', 'BTG Pactual', 'Sicoob', 'Sicredi', 'C6 Bank', 'Safra', 'Original', 'Outro',
 ]
 
-function formatBR(iso) {
+// ── Helpers ─────────────────────────────────────────────────────────────────
+const fmtBR = (iso) => {
   if (!iso) return ''
   const m = String(iso).match(/^(\d{4})-(\d{2})-(\d{2})/)
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso
 }
+const brl = (v) => Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
-function brl(v) {
-  return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-}
+const isOwner = (sol, profile) =>
+  profile && (Number(sol.criado_por) === Number(profile.id) || profile.is_super_admin)
 
+const podeEditar = (sol, profile) =>
+  isOwner(sol, profile) && (sol.status === 'pendente' || sol.status === 'rascunho')
+
+// ── Página ──────────────────────────────────────────────────────────────────
 export default function DiariasPage() {
   const { profile } = useAuth()
   const podeCriar = canCreateResource(profile, 'diarias')
-  const podeAprovar = hasActionPermission(profile, 'action.diarias.aprovar')
 
   const [solicitacoes, setSolicitacoes] = useState([])
-  const [itensPorSol, setItensPorSol] = useState({}) // {solId: [itens]}
-  const [valoresCidade, setValoresCidade] = useState([])
+  const [itensPorSol, setItensPorSol] = useState({})
   const [colaboradores, setColaboradores] = useState([])
   const [filiais, setFiliais] = useState([])
   const [carregando, setCarregando] = useState(true)
@@ -50,29 +53,24 @@ export default function DiariasPage() {
   const [expandedId, setExpandedId] = useState(null)
 
   const carregar = useCallback(async () => {
-    setCarregando(true)
-    setErro('')
+    setCarregando(true); setErro('')
     try {
-      const [sols, vals, colabs, fils] = await Promise.all([
+      const [sols, colabs, fils] = await Promise.all([
         api.list('diarias_solicitacoes', { limit: 1000 }),
-        api.list('diarias_valores', { limit: 200, ativo: true }),
         api.list('colaboradores', { limit: 1000 }),
         api.list('filiais', { limit: 200 }),
       ])
       const solRows = sols?.data || sols || []
       setSolicitacoes(solRows)
-      setValoresCidade(vals?.data || vals || [])
       setColaboradores(colabs?.data || colabs || [])
       setFiliais(fils?.data || fils || [])
-      // Carrega itens das solicitações abertas
-      const ids = solRows.map((s) => s.id)
+
       const itensMap = {}
-      if (ids.length > 0) {
+      if (solRows.length > 0) {
         const itensRes = await api.list('diarias_itens', { limit: 5000 })
         const itens = itensRes?.data || itensRes || []
         for (const it of itens) {
-          if (!itensMap[it.solicitacao_id]) itensMap[it.solicitacao_id] = []
-          itensMap[it.solicitacao_id].push(it)
+          (itensMap[it.solicitacao_id] ||= []).push(it)
         }
       }
       setItensPorSol(itensMap)
@@ -84,20 +82,6 @@ export default function DiariasPage() {
   }, [])
 
   useEffect(() => { carregar() }, [carregar])
-
-  // ?atender=ID → abre modal em modo 'atender' automaticamente (vem do Acompanhamento)
-  const [searchParams, setSearchParams] = useSearchParams()
-  useEffect(() => {
-    const atenderId = searchParams.get('atender')
-    if (!atenderId || solicitacoes.length === 0) return
-    const sol = solicitacoes.find((s) => String(s.id) === String(atenderId))
-    if (sol) {
-      setModalSol({ sol, itens: itensPorSol[sol.id] || [], modo: 'atender' })
-      // limpa query
-      searchParams.delete('atender')
-      setSearchParams(searchParams, { replace: true })
-    }
-  }, [searchParams, solicitacoes, itensPorSol, setSearchParams])
 
   const filtradas = useMemo(() => {
     let list = solicitacoes
@@ -114,48 +98,26 @@ export default function DiariasPage() {
         return blob.includes(q)
       })
     }
-    return [...list].sort((a, b) => String(b.data_solicitacao || '').localeCompare(String(a.data_solicitacao || '')))
+    return [...list].sort((a, b) =>
+      String(b.data_solicitacao || '').localeCompare(String(a.data_solicitacao || ''))
+    )
   }, [solicitacoes, itensPorSol, filtroStatus, filtroFilial, filtroBusca])
 
   const totais = useMemo(() => {
     let pendentes = 0, aprovados = 0, pagos = 0, valorTotal = 0
     for (const s of solicitacoes) {
       if (s.status === 'pendente' || s.status === 'em_analise') pendentes++
-      if (s.status === 'aprovado') aprovados++
-      if (s.status === 'pago') pagos++
+      else if (s.status === 'aprovado') aprovados++
+      else if (s.status === 'pago') pagos++
       valorTotal += Number(s.valor_total || 0)
     }
     return { pendentes, aprovados, pagos, valorTotal, total: solicitacoes.length }
   }, [solicitacoes])
 
-  async function aprovar(sol) {
-    if (!window.confirm(`Aprovar solicitação #${sol.numero_solicitacao || sol.id}?`)) return
+  async function cancelar(sol) {
+    if (!window.confirm(`Cancelar a solicitação #${sol.numero_solicitacao || sol.id}?`)) return
     try {
-      await api.update('diarias_solicitacoes', sol.id, {
-        status: 'aprovado',
-        aprovado_por: profile?.id || null,
-        aprovado_em: new Date().toISOString(),
-      })
-      carregar()
-    } catch (e) { setErro(e.message) }
-  }
-  async function reprovar(sol) {
-    const motivo = window.prompt('Motivo da reprovação?')
-    if (!motivo) return
-    try {
-      await api.update('diarias_solicitacoes', sol.id, {
-        status: 'reprovado',
-        motivo_reprovacao: motivo,
-        reprovado_por: profile?.id || null,
-        reprovado_em: new Date().toISOString(),
-      })
-      carregar()
-    } catch (e) { setErro(e.message) }
-  }
-  async function marcarPago(sol) {
-    if (!window.confirm('Marcar como pago?')) return
-    try {
-      await api.update('diarias_solicitacoes', sol.id, { status: 'pago' })
+      await api.update('diarias_solicitacoes', sol.id, { status: 'cancelado' })
       carregar()
     } catch (e) { setErro(e.message) }
   }
@@ -166,13 +128,13 @@ export default function DiariasPage() {
         <div>
           <span className="eyebrow">Operação</span>
           <h1>Diárias e hotelaria</h1>
-          <p>Solicite diárias por viagem. O financeiro recebe, valida e marca como pago.</p>
+          <p>Solicite diárias por viagem. Aprovação, valores e pagamento são feitos pelo financeiro na tela de Acompanhamento.</p>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {podeCriar && (
-            <button className="button-primary" onClick={() => setModalSol('nova')} type="button">+ Nova solicitação</button>
-          )}
-        </div>
+        {podeCriar && (
+          <button className="button-primary" onClick={() => setModalSol('nova')} type="button">
+            + Nova solicitação
+          </button>
+        )}
       </header>
 
       {erro && <div className="alert-danger">{erro}</div>}
@@ -185,7 +147,7 @@ export default function DiariasPage() {
       </section>
 
       <section className="rh-doc-filtros">
-        <input type="search" placeholder="Buscar por motorista, placa, rota, cidade..." value={filtroBusca} onChange={(e) => setFiltroBusca(e.target.value)} />
+        <input type="search" placeholder="Buscar motorista, placa, rota, cidade..." value={filtroBusca} onChange={(e) => setFiltroBusca(e.target.value)} />
         <select value={filtroFilial} onChange={(e) => setFiltroFilial(e.target.value)}>
           <option value="">Todas as filiais</option>
           {filiais.map((f) => <option key={f.id} value={f.id}>{f.cidade}/{f.uf}</option>)}
@@ -222,9 +184,10 @@ export default function DiariasPage() {
                 const itens = itensPorSol[s.id] || []
                 const filial = filiais.find((f) => Number(f.id) === Number(s.filial_id))
                 const open = expandedId === s.id
+                const editavel = podeEditar(s, profile)
                 return (
-                  <>
-                    <tr key={s.id} className={`rh-status-${s.status}`}>
+                  <Fragment key={s.id}>
+                    <tr className={`rh-status-${s.status}`}>
                       <td>
                         <button type="button" className="button-link" onClick={() => setExpandedId(open ? null : s.id)}>
                           {open ? '▼' : '▶'}
@@ -233,30 +196,29 @@ export default function DiariasPage() {
                       <td>{s.numero_solicitacao || `#${s.id}`}</td>
                       <td>{filial?.cidade || `Filial ${s.filial_id}`}</td>
                       <td>{s.cidade_destino}{s.uf_destino ? `/${s.uf_destino}` : ''}</td>
-                      <td>{formatBR(s.data_inicio)} → {formatBR(s.data_fim)}</td>
+                      <td>{fmtBR(s.data_inicio)} → {fmtBR(s.data_fim)}</td>
                       <td>{s.rota || '—'}</td>
                       <td>{itens.length}</td>
                       <td>{brl(s.valor_total)}</td>
                       <td><span className={`rh-status-badge ${s.status}`}>{STATUS_LABELS[s.status] || s.status}</span></td>
                       <td style={{ whiteSpace: 'nowrap' }}>
-                        {podeAprovar && s.status === 'pendente' && (
-                          <button type="button" className="button-link" style={{ fontWeight: 600 }} onClick={() => setModalSol({ sol: s, itens, modo: 'atender' })}>atender</button>
+                        {editavel && (
+                          <>
+                            <button type="button" className="button-link" onClick={() => setModalSol({ sol: s, itens })}>editar</button>
+                            <button type="button" className="button-link danger" onClick={() => cancelar(s)}>cancelar</button>
+                          </>
                         )}
-                        <button type="button" className="button-link" onClick={() => setModalSol({ sol: s, itens })}>editar</button>
-                        {podeAprovar && (s.status === 'pendente' || s.status === 'em_analise') && (
-                          <button type="button" className="button-link danger" onClick={() => reprovar(s)}>reprovar</button>
-                        )}
-                        {podeAprovar && s.status === 'aprovado' && (
-                          <button type="button" className="button-link" onClick={() => marcarPago(s)}>marcar pago</button>
-                        )}
+                        {!editavel && <span className="muted" style={{ fontSize: 11 }}>—</span>}
                       </td>
                     </tr>
                     {open && (
-                      <tr><td colSpan={10} style={{ background: 'var(--surface-2, #f7f8fa)', padding: 12 }}>
-                        <DetalheSolicitacao sol={s} itens={itens} filiais={filiais} />
-                      </td></tr>
+                      <tr>
+                        <td colSpan={10} style={{ background: 'var(--surface-2, #f7f8fa)', padding: 12 }}>
+                          <DetalheSolicitacao sol={s} itens={itens} filiais={filiais} />
+                        </td>
+                      </tr>
                     )}
-                  </>
+                  </Fragment>
                 )
               })}
             </tbody>
@@ -266,10 +228,9 @@ export default function DiariasPage() {
 
       {modalSol && (
         <DiariasModal
-          modo={modalSol === 'nova' ? 'nova' : (modalSol.modo || 'edicao')}
+          modo={modalSol === 'nova' ? 'nova' : 'edicao'}
           solicitacao={modalSol === 'nova' ? null : modalSol.sol}
           itensIniciais={modalSol === 'nova' ? [] : modalSol.itens}
-          valoresCidade={valoresCidade}
           colaboradores={colaboradores}
           filiais={filiais}
           onClose={() => setModalSol(null)}
@@ -280,7 +241,7 @@ export default function DiariasPage() {
   )
 }
 
-// ── Detalhe expandido com o texto formatado pra mandar ao financeiro ────────
+// ── Detalhe expandido (texto pra mandar ao financeiro) ──────────────────────
 function DetalheSolicitacao({ sol, itens, filiais }) {
   const filial = filiais.find((f) => Number(f.id) === Number(sol.filial_id))
   const texto = useMemo(() => {
@@ -291,9 +252,11 @@ function DetalheSolicitacao({ sol, itens, filiais }) {
       : ''
     const banco = `Banco: ${sol.banco || 'Itau'}\n\n`
     const linhas = itens.map((it) => {
-      const semAlmoco = !it.inclui_almoco
-      const det = semAlmoco ? `${it.qtd_diarias} diarias(sem almoço) ${it.qtd_pernoites} pernoites` : `${it.qtd_diarias} diarias e ${it.qtd_pernoites} pernoites`
-      return `${(it.motorista_nome || '').toUpperCase()} - Mot ${filial?.cidade || ''}/ Placa ${it.placa || '—'}\n${det} ${formatBR(it.data_inicio)} a ${formatBR(it.data_fim)}\n${brl(it.valor_total)}\n`
+      const sem = !it.inclui_almoco
+      const det = sem
+        ? `${it.qtd_diarias} diarias(sem almoço) ${it.qtd_pernoites} pernoites`
+        : `${it.qtd_diarias} diarias e ${it.qtd_pernoites} pernoites`
+      return `${(it.motorista_nome || '').toUpperCase()} - Mot ${filial?.cidade || ''}/ Placa ${it.placa || '—'}\n${det} ${fmtBR(it.data_inicio)} a ${fmtBR(it.data_fim)}\n${brl(it.valor_total)}\n`
     }).join('\n')
     return cabe + tabela + banco + 'FUNCIONARIO | REFERENCIA | VALOR\n\n' + linhas + `\nTotal geral: ${brl(sol.valor_total)}`
   }, [sol, itens, filial])
@@ -310,8 +273,8 @@ function DetalheSolicitacao({ sol, itens, filiais }) {
   )
 }
 
-// ── Modal de criar/editar ───────────────────────────────────────────────────
-function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colaboradores, filiais, onClose, onSaved }) {
+// ── Modal criar/editar (sem valores; só dados básicos) ──────────────────────
+function DiariasModal({ modo, solicitacao, itensIniciais, colaboradores, filiais, onClose, onSaved }) {
   const { profile } = useAuth()
   const [sol, setSol] = useState(() => solicitacao || {
     filial_id: profile?.filial_id || (filiais[0]?.id ?? ''),
@@ -322,8 +285,8 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
     data_inicio: '',
     data_fim: '',
     rota: '',
-    status: 'pendente', // sempre pendente ao criar
-    banco: '',          // vazio por padrão; usuário escolhe no dropdown
+    status: 'pendente',
+    banco: '',
     observacoes: '',
   })
   const [itens, setItens] = useState(() => itensIniciais.length > 0 ? itensIniciais : [novoItem()])
@@ -347,59 +310,34 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
     }
   }
 
-  // Valores agora são digitados manualmente — nenhum auto-fill por cidade.
-
-  // Auto-calcula qtds e total quando datas/checks mudam
+  // Auto-calc qtds quando datas mudam (valores ficam zerados; financeiro preenche)
   useEffect(() => {
-    setItens((arr) => arr.map((it) => recalcItem(it, sol.data_inicio, sol.data_fim)))
+    setItens((arr) => arr.map((it) => recalcQtds(it, sol.data_inicio, sol.data_fim)))
   }, [sol.data_inicio, sol.data_fim])
 
-  function recalcItem(it, ini, fim) {
+  function recalcQtds(it, ini, fim) {
     const inicio = it.data_inicio || ini
     const fimEf = it.data_fim || fim
-    let qtdDiarias = it.qtd_diarias
-    let qtdPern = it.qtd_pernoites
-    if (inicio && fimEf) {
-      const d1 = new Date(`${inicio}T00:00:00`); const d2 = new Date(`${fimEf}T00:00:00`)
-      if (!isNaN(d1) && !isNaN(d2)) {
-        const dias = Math.max(0, Math.round((d2 - d1) / 86400000) + 1)
-        qtdDiarias = dias
-        qtdPern = Math.max(0, dias - 1)
-      }
-    }
-    const valorDia = (it.inclui_cafe ? Number(it.valor_cafe || 0) : 0)
-      + (it.inclui_almoco ? Number(it.valor_almoco || 0) : 0)
-      + (it.inclui_jantar ? Number(it.valor_jantar || 0) : 0)
-    const total = valorDia * qtdDiarias + Number(it.valor_pernoite || 0) * qtdPern
-    return { ...it, qtd_diarias: qtdDiarias, qtd_pernoites: qtdPern, valor_total: Number(total.toFixed(2)) }
+    if (!inicio || !fimEf) return it
+    const d1 = new Date(`${inicio}T00:00:00`), d2 = new Date(`${fimEf}T00:00:00`)
+    if (isNaN(d1) || isNaN(d2)) return it
+    const dias = Math.max(0, Math.round((d2 - d1) / 86400000) + 1)
+    return { ...it, qtd_diarias: dias, qtd_pernoites: Math.max(0, dias - 1) }
   }
 
-  function updItem(idx, patch) {
-    setItens((arr) => arr.map((it, i) => {
-      if (i !== idx) return it
-      return recalcItem({ ...it, ...patch }, sol.data_inicio, sol.data_fim)
-    }))
-  }
-
-  function removerItem(idx) {
-    setItens((arr) => arr.filter((_, i) => i !== idx))
-  }
-
-  function adicionarItem() {
-    setItens((arr) => [...arr, recalcItem(novoItem(), sol.data_inicio, sol.data_fim)])
-  }
-
-  const valorTotal = useMemo(() => itens.reduce((acc, it) => acc + Number(it.valor_total || 0), 0), [itens])
+  const updItem = (idx, patch) => setItens((arr) =>
+    arr.map((it, i) => i === idx ? recalcQtds({ ...it, ...patch }, sol.data_inicio, sol.data_fim) : it)
+  )
+  const removerItem = (idx) => setItens((arr) => arr.filter((_, i) => i !== idx))
+  const adicionarItem = () => setItens((arr) => [...arr, recalcQtds(novoItem(), sol.data_inicio, sol.data_fim)])
 
   async function salvar(event) {
     event.preventDefault()
     if (!sol.cidade_destino || !sol.data_inicio || !sol.data_fim) {
-      setErro('Preencha cidade destino e período.')
-      return
+      return setErro('Preencha cidade destino e período.')
     }
     if (itens.length === 0 || itens.some((it) => !it.motorista_nome.trim())) {
-      setErro('Adicione pelo menos um motorista com nome.')
-      return
+      return setErro('Adicione ao menos um motorista com nome.')
     }
     setSaving(true); setErro('')
     try {
@@ -412,11 +350,7 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
         data_inicio: sol.data_inicio,
         data_fim: sol.data_fim,
         rota: sol.rota || null,
-        // Status: nova→pendente, atender→aprovado, edicao→preserva
-        status: modo === 'nova'     ? 'pendente' :
-                modo === 'atender' ? 'aprovado'  :
-                                     (sol.status || 'pendente'),
-        valor_total: valorTotal,
+        status: modo === 'nova' ? 'pendente' : (sol.status || 'pendente'),
         banco: sol.banco || null,
         observacoes: sol.observacoes || null,
         criado_por: profile?.id || null,
@@ -428,13 +362,12 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
       } else {
         await api.update('diarias_solicitacoes', solicitacao.id, solPayload)
         solId = solicitacao.id
-        // Apaga itens antigos e recria (simples — N < 50)
         for (const old of itensIniciais) {
           try { await api.remove('diarias_itens', old.id) } catch {}
         }
       }
       for (const it of itens) {
-        const payload = {
+        await api.create('diarias_itens', {
           solicitacao_id: solId,
           filial_id: Number(sol.filial_id),
           colaborador_id: it.colaborador_id || null,
@@ -453,8 +386,7 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
           valor_pernoite: Number(it.valor_pernoite || 0),
           valor_total: Number(it.valor_total || 0),
           observacoes: it.observacoes || null,
-        }
-        await api.create('diarias_itens', payload)
+        })
       }
       onSaved?.()
     } catch (e) {
@@ -468,51 +400,38 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
     <div className="modal-overlay" onClick={(e) => e.target === e.currentTarget && onClose?.()}>
       <div className="modal-card rh-doc-modal-lg">
         <header className="modal-header">
-          <h3>{
-            modo === 'nova'    ? 'Nova solicitação de diárias' :
-            modo === 'atender' ? `Atender solicitação #${solicitacao?.numero_solicitacao || solicitacao?.id}` :
-                                 `Editar solicitação #${solicitacao?.numero_solicitacao || solicitacao?.id}`
-          }</h3>
+          <h3>{modo === 'nova'
+            ? 'Nova solicitação de diárias'
+            : `Editar solicitação #${solicitacao?.numero_solicitacao || solicitacao?.id}`}</h3>
           <button className="button-link" onClick={onClose} type="button">✕</button>
         </header>
         <form onSubmit={salvar} className="rh-doc-form">
           <div className="rh-doc-form-grid">
-            <label>
-              <span>Filial *</span>
+            <label><span>Filial *</span>
               <select value={sol.filial_id} onChange={(e) => setSol({ ...sol, filial_id: e.target.value })} required>
                 <option value="">Selecione</option>
                 {filiais.map((f) => <option key={f.id} value={f.id}>{f.cidade}/{f.uf}</option>)}
               </select>
             </label>
-            <label>
-              <span>Cidade destino *</span>
-              <input
-                type="text"
-                value={sol.cidade_destino}
+            <label><span>Cidade destino *</span>
+              <input type="text" value={sol.cidade_destino}
                 onChange={(e) => setSol({ ...sol, cidade_destino: e.target.value.toUpperCase() })}
-                placeholder="Ex.: LONDRINA"
-                required
-                style={{ textTransform: 'uppercase' }}
-              />
+                placeholder="Ex.: LONDRINA" required style={{ textTransform: 'uppercase' }} />
             </label>
-            <label>
-              <span>UF</span>
-              <input type="text" maxLength={2} value={sol.uf_destino || ''} onChange={(e) => setSol({ ...sol, uf_destino: e.target.value.toUpperCase() })} />
+            <label><span>UF</span>
+              <input type="text" maxLength={2} value={sol.uf_destino || ''}
+                onChange={(e) => setSol({ ...sol, uf_destino: e.target.value.toUpperCase() })} />
             </label>
-            <label>
-              <span>Rota</span>
+            <label><span>Rota</span>
               <input type="text" value={sol.rota || ''} onChange={(e) => setSol({ ...sol, rota: e.target.value })} placeholder="Ex.: 03" />
             </label>
-            <label>
-              <span>Data início *</span>
+            <label><span>Data início *</span>
               <input type="date" value={sol.data_inicio || ''} onChange={(e) => setSol({ ...sol, data_inicio: e.target.value })} required />
             </label>
-            <label>
-              <span>Data fim *</span>
+            <label><span>Data fim *</span>
               <input type="date" value={sol.data_fim || ''} onChange={(e) => setSol({ ...sol, data_fim: e.target.value })} required />
             </label>
-            <label>
-              <span>Banco</span>
+            <label><span>Banco</span>
               <select value={sol.banco || ''} onChange={(e) => setSol({ ...sol, banco: e.target.value })}>
                 {BANCOS.map((b) => <option key={b} value={b}>{b || '— selecione —'}</option>)}
               </select>
@@ -523,12 +442,9 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
             <strong>Motoristas / placas</strong>
             <button type="button" className="button-secondary" onClick={adicionarItem} style={{ fontSize: 11, padding: '3px 10px' }}>+ Adicionar motorista</button>
           </div>
-
-          {modo === 'nova' && (
-            <small style={{ color: 'var(--text-muted, #666)', display: 'block', marginBottom: 6 }}>
-              Valores (café/almoço/jantar/pernoite/qtd) serão preenchidos no atendimento desta solicitação.
-            </small>
-          )}
+          <small style={{ color: 'var(--text-muted, #666)', display: 'block', marginBottom: 6 }}>
+            Valores (café/almoço/jantar/pernoite) são definidos pelo financeiro durante a aprovação, na tela de Acompanhamento.
+          </small>
 
           <div style={{ overflowX: 'auto' }}>
             <table className="rh-doc-table" style={{ fontSize: 11 }}>
@@ -536,15 +452,8 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
                 <tr>
                   <th>Motorista</th>
                   <th>Placa</th>
-                  {modo !== 'nova' && <>
-                    <th>Café</th>
-                    <th>Almoço</th>
-                    <th>Jantar</th>
-                    <th>Pernoite</th>
-                    <th>Diárias</th>
-                    <th>Pernoites</th>
-                    <th>Total</th>
-                  </>}
+                  <th>Diárias</th>
+                  <th>Pernoites</th>
                   <th></th>
                 </tr>
               </thead>
@@ -561,39 +470,12 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
                       />
                     </td>
                     <td><input type="text" value={it.placa || ''} onChange={(e) => updItem(idx, { placa: e.target.value.toUpperCase() })} style={{ width: 90 }} /></td>
-                    {modo !== 'nova' && <>
-                      <td>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                          <input type="checkbox" checked={!!it.inclui_cafe} onChange={(e) => updItem(idx, { inclui_cafe: e.target.checked })} />
-                          <ValorInput valor={it.valor_cafe} onChange={(v) => updItem(idx, { valor_cafe: v })} />
-                        </div>
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                          <input type="checkbox" checked={!!it.inclui_almoco} onChange={(e) => updItem(idx, { inclui_almoco: e.target.checked })} />
-                          <ValorInput valor={it.valor_almoco} onChange={(v) => updItem(idx, { valor_almoco: v })} />
-                        </div>
-                      </td>
-                      <td>
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                          <input type="checkbox" checked={!!it.inclui_jantar} onChange={(e) => updItem(idx, { inclui_jantar: e.target.checked })} />
-                          <ValorInput valor={it.valor_jantar} onChange={(v) => updItem(idx, { valor_jantar: v })} />
-                        </div>
-                      </td>
-                      <td><ValorInput valor={it.valor_pernoite} onChange={(v) => updItem(idx, { valor_pernoite: v })} /></td>
-                      <td><input type="number" min={0} value={it.qtd_diarias} onChange={(e) => updItem(idx, { qtd_diarias: Number(e.target.value) })} style={{ width: 50 }} /></td>
-                      <td><input type="number" min={0} value={it.qtd_pernoites} onChange={(e) => updItem(idx, { qtd_pernoites: Number(e.target.value) })} style={{ width: 50 }} /></td>
-                      <td><strong>{brl(it.valor_total)}</strong></td>
-                    </>}
+                    <td>{it.qtd_diarias}</td>
+                    <td>{it.qtd_pernoites}</td>
                     <td><button type="button" className="button-link danger" onClick={() => removerItem(idx)}>✕</button></td>
                   </tr>
                 ))}
               </tbody>
-              <tfoot>
-                {modo !== 'nova' && (
-                  <tr><td colSpan={8} style={{ textAlign: 'right' }}><strong>Total da solicitação:</strong></td><td><strong>{brl(valorTotal)}</strong></td><td></td></tr>
-                )}
-              </tfoot>
             </table>
           </div>
 
@@ -607,7 +489,7 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
           <footer className="modal-footer">
             <button type="button" className="button-secondary" onClick={onClose}>Cancelar</button>
             <button type="submit" className="button-primary" disabled={saving}>
-              {saving ? 'Salvando…' : (modo === 'atender' ? 'Atender e enviar ao financeiro' : 'Salvar')}
+              {saving ? 'Salvando…' : (modo === 'nova' ? 'Enviar para aprovação' : 'Salvar alterações')}
             </button>
           </footer>
         </form>
@@ -616,7 +498,7 @@ function DiariasModal({ modo, solicitacao, itensIniciais, valoresCidade, colabor
   )
 }
 
-// ── Combobox de motorista (digita 3+ letras pra filtrar) ────────────────────
+// ── Combobox de motorista (3+ letras filtra) ────────────────────────────────
 function MotoristaCombo({ colaboradores, valor, colaboradorId, onSelect, onTextChange }) {
   const [aberto, setAberto] = useState(false)
   const [busca, setBusca] = useState(valor || '')
@@ -626,7 +508,7 @@ function MotoristaCombo({ colaboradores, valor, colaboradorId, onSelect, onTextC
   const ativos = useMemo(() => colaboradores.filter((c) => c.ativo !== false), [colaboradores])
   const filtrados = useMemo(() => {
     const q = (busca || '').trim().toLowerCase()
-    if (q.length < 3) return ativos.slice(0, 20) // mostra alguns por default ao focar
+    if (q.length < 3) return ativos.slice(0, 20)
     const termos = q.split(/\s+/).filter(Boolean)
     return ativos.filter((c) => {
       const nome = (c.nome_completo || '').toLowerCase()
@@ -674,44 +556,5 @@ function MotoristaCombo({ colaboradores, valor, colaboradorId, onSelect, onTextC
         </div>
       )}
     </div>
-  )
-}
-
-// ── Input de valor R$ editável ──────────────────────────────────────────────
-function ValorInput({ valor, onChange }) {
-  const [texto, setTexto] = useState(() => formatarValor(valor))
-  useEffect(() => { setTexto(formatarValor(valor)) }, [valor])
-
-  function formatarValor(v) {
-    const n = Number(v || 0)
-    return n.toFixed(2).replace('.', ',')
-  }
-
-  function aoDigitar(e) {
-    const raw = e.target.value.replace(/[^\d,.-]/g, '')
-    setTexto(raw)
-  }
-
-  function aoSair() {
-    // Normaliza: aceita "15,50", "15.50", "1500" → numérico
-    let s = (texto || '').replace(/\./g, '').replace(',', '.')
-    const n = Number(s)
-    if (Number.isFinite(n)) {
-      onChange?.(n)
-      setTexto(formatarValor(n))
-    } else {
-      setTexto(formatarValor(valor))
-    }
-  }
-
-  return (
-    <input
-      type="text"
-      value={texto}
-      onChange={aoDigitar}
-      onBlur={aoSair}
-      style={{ width: 70, fontSize: 10, textAlign: 'right' }}
-      placeholder="0,00"
-    />
   )
 }

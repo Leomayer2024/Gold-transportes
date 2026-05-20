@@ -6,66 +6,53 @@ import '../styles/acompanhamento.css'
 // ─── Constantes ──────────────────────────────────────────────────────────────
 
 const TIPOS = {
-  manutencoes:    'Manutenção',
-  pedidos_compra: 'Pedido de Compra',
-  horas_extras:   'Hora Extra',
-  abastecimentos: 'Abastecimento',
-  pneus:          'Pneu',
+  manutencoes:          'Manutenção',
+  pedidos_compra:       'Pedido de Compra',
+  horas_extras:         'Hora Extra',
+  abastecimentos:       'Abastecimento',
+  pneus:                'Pneu',
   diarias_solicitacoes: 'Diárias / Hotelaria',
 }
 
 const REEMBOLSO_LABEL = {
-  pix:          'PIX',
-  dinheiro:     'Dinheiro em espécie',
-  transferencia:'Transferência bancária',
-  cartao:       'Cartão',
+  pix: 'PIX', dinheiro: 'Dinheiro em espécie',
+  transferencia: 'Transferência bancária', cartao: 'Cartão',
 }
 
 const FORMA_PAG_LABEL = {
-  dinheiro:          'Dinheiro',
-  pix:               'PIX',
-  cartao_debito:     'Cartão débito',
-  cartao_credito:    'Cartão crédito',
-  boleto:            'Boleto',
-  credito_fornecedor:'Crédito fornecedor',
+  dinheiro: 'Dinheiro', pix: 'PIX',
+  cartao_debito: 'Cartão débito', cartao_credito: 'Cartão crédito',
+  boleto: 'Boleto', credito_fornecedor: 'Crédito fornecedor',
 }
 
-const STATUS_PENDENTE  = ['pendente', 'pendente_aprovacao', 'aguardando_aprovacao', 'solicitado', 'analise', 'em_analise']
+const STATUS_PENDENTE   = ['pendente', 'pendente_aprovacao', 'aguardando_aprovacao', 'solicitado', 'analise', 'em_analise']
 const STATUS_EM_ANALISE = ['analise', 'em_analise']
-const STATUS_APROVADO  = ['aprovado', 'aprovada']
-const STATUS_REJEITADO = ['reprovado', 'reprovada', 'cancelado']
+const STATUS_APROVADO   = ['aprovado', 'aprovada']
+const STATUS_REJEITADO  = ['reprovado', 'reprovada', 'cancelado']
 
 const STATUS_LABEL = {
-  pendente:             'Pendente',
-  pendente_aprovacao:   'Pendente',
-  aguardando_aprovacao: 'Aguard. Aprovação',
-  solicitado:           'Solicitado',
-  analise:              'Em Análise',
-  em_analise:           'Em Análise',
-  aprovado:             'Aprovado',
-  aprovada:             'Aprovada',
-  reprovado:            'Reprovado',
-  reprovada:            'Reprovada',
-  cancelado:            'Cancelado',
-  aberta:               'Aberta',
-  em_execucao:          'Em Execução',
-  concluida:            'Concluída',
+  pendente: 'Pendente', pendente_aprovacao: 'Pendente',
+  aguardando_aprovacao: 'Aguard. Aprovação', solicitado: 'Solicitado',
+  analise: 'Em Análise', em_analise: 'Em Análise',
+  aprovado: 'Aprovado', aprovada: 'Aprovada',
+  reprovado: 'Reprovado', reprovada: 'Reprovada',
+  cancelado: 'Cancelado', aberta: 'Aberta',
+  em_execucao: 'Em Execução', concluida: 'Concluída',
 }
 
-// Campos a exibir no modal por tipo, em ordem
 const CAMPOS_MODAL = {
   manutencoes: [
     { k: 'numero_solicitacao', l: 'N° Solicitação' },
-    { k: 'titulo',           l: 'Título' },
-    { k: 'tipo_manutencao',  l: 'Tipo de manutenção' },
-    { k: 'descricao',        l: 'Descrição', full: true },
-    { k: 'prioridade',       l: 'Prioridade' },
-    { k: 'data_abertura',    l: 'Data de abertura', date: true },
-    { k: 'veiculo_id',       l: 'ID Veículo' },
-    { k: 'km_atual',         l: 'KM atual' },
-    { k: 'valor_estimado',   l: 'Valor estimado', moeda: true },
-    { k: 'fornecedor',       l: 'Fornecedor' },
-    { k: 'observacoes',      l: 'Observações', full: true },
+    { k: 'titulo',            l: 'Título' },
+    { k: 'tipo_manutencao',   l: 'Tipo de manutenção' },
+    { k: 'descricao',         l: 'Descrição', full: true },
+    { k: 'prioridade',        l: 'Prioridade' },
+    { k: 'data_abertura',     l: 'Data de abertura', date: true },
+    { k: 'veiculo_id',        l: 'ID Veículo' },
+    { k: 'km_atual',          l: 'KM atual' },
+    { k: 'valor_estimado',    l: 'Valor estimado', moeda: true },
+    { k: 'fornecedor',        l: 'Fornecedor' },
+    { k: 'observacoes',       l: 'Observações', full: true },
   ],
   abastecimentos: [
     { k: 'numero_solicitacao', l: 'N° Solicitação' },
@@ -80,28 +67,28 @@ const CAMPOS_MODAL = {
     { k: 'observacoes',        l: 'Observações', full: true },
   ],
   pedidos_compra: [
-    { k: 'numero_solicitacao', l: 'N° Solicitação' },
-    { k: 'numero_pedido',    l: 'N° Pedido' },
-    { k: 'fornecedor',       l: 'Fornecedor' },
-    { k: 'data_pedido',      l: 'Data do pedido', date: true },
-    { k: 'data_necessidade', l: 'Necessário até', date: true },
-    { k: 'forma_pagamento',  l: 'Forma de pagamento', formaPag: true },
-    { k: 'prazo_pagamento',  l: 'Prazo de pagamento' },
-    { k: 'centro_custo',     l: 'Centro de custo' },
+    { k: 'numero_solicitacao',    l: 'N° Solicitação' },
+    { k: 'numero_pedido',         l: 'N° Pedido' },
+    { k: 'fornecedor',            l: 'Fornecedor' },
+    { k: 'data_pedido',           l: 'Data do pedido', date: true },
+    { k: 'data_necessidade',      l: 'Necessário até',  date: true },
+    { k: 'forma_pagamento',       l: 'Forma de pagamento', formaPag: true },
+    { k: 'prazo_pagamento',       l: 'Prazo de pagamento' },
+    { k: 'centro_custo',          l: 'Centro de custo' },
     { k: 'valor_total_calculado', l: 'Valor total', moeda: true },
-    { k: 'tipo_reembolso',   l: 'Tipo de reembolso', reembolso: true },
-    { k: 'chave_pix',        l: 'Chave PIX' },
-    { k: 'dados_bancarios',  l: 'Dados bancários', full: true },
-    { k: 'observacoes',      l: 'Observações', full: true },
+    { k: 'tipo_reembolso',        l: 'Tipo de reembolso', reembolso: true },
+    { k: 'chave_pix',             l: 'Chave PIX' },
+    { k: 'dados_bancarios',       l: 'Dados bancários', full: true },
+    { k: 'observacoes',           l: 'Observações', full: true },
   ],
   horas_extras: [
-    { k: 'numero_solicitacao', l: 'N° Solicitação' },
-    { k: 'colaborador_nome',   l: 'Colaborador' },
-    { k: 'data_hora_inicio',   l: 'Início', datetime: true },
-    { k: 'data_hora_fim',      l: 'Fim', datetime: true },
-    { k: 'total_horas',        l: 'Total horas' },
-    { k: 'data_solicitacao',   l: 'Data solicitação', date: true },
-    { k: 'justificativa',      l: 'Justificativa', full: true },
+    { k: 'numero_solicitacao',   l: 'N° Solicitação' },
+    { k: 'colaborador_nome',     l: 'Colaborador' },
+    { k: 'data_hora_inicio',     l: 'Início', datetime: true },
+    { k: 'data_hora_fim',        l: 'Fim',    datetime: true },
+    { k: 'total_horas',          l: 'Total horas' },
+    { k: 'data_solicitacao',     l: 'Data solicitação', date: true },
+    { k: 'justificativa',        l: 'Justificativa', full: true },
     { k: 'justificativa_gestor', l: 'Parecer do gestor', full: true },
   ],
   pneus: [
@@ -121,13 +108,21 @@ const CAMPOS_MODAL = {
     { k: 'cidade_destino',     l: 'Cidade destino' },
     { k: 'uf_destino',         l: 'UF' },
     { k: 'data_inicio',        l: 'Início', date: true },
-    { k: 'data_fim',           l: 'Fim', date: true },
+    { k: 'data_fim',           l: 'Fim',    date: true },
     { k: 'rota',               l: 'Rota' },
     { k: 'banco',              l: 'Banco' },
     { k: 'valor_total',        l: 'Valor total', moeda: true },
     { k: 'observacoes',        l: 'Observações', full: true },
   ],
 }
+
+const TABS = [
+  { id: 'pendentes',  label: 'Pendentes' },
+  { id: 'aprovadas',  label: 'Aprovadas' },
+  { id: 'rejeitadas', label: 'Rejeitadas' },
+  { id: 'todas',      label: 'Todas' },
+  { id: 'historico',  label: 'Histórico' },
+]
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -153,9 +148,8 @@ function fmtDatetime(d) {
   })
 }
 
-function fmtMoeda(v) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v)
-}
+const fmtMoeda = (v) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0)
 
 function buildDetalhesResumido(s) {
   const fi = s.full_item || {}
@@ -168,16 +162,163 @@ function buildDetalhesResumido(s) {
     out.push(`Total: ${fmtMoeda(fi.valor_litro * fi.litros)}`)
   if (fi.posicao)                out.push(`Pos: ${fi.posicao}`)
   if (fi.marca || fi.modelo)     out.push([fi.marca, fi.modelo].filter(Boolean).join(' '))
+  if (s.resource_type === 'diarias_solicitacoes') {
+    if (fi.cidade_destino) out.push(`${fi.cidade_destino}${fi.uf_destino ? '/' + fi.uf_destino : ''}`)
+    if (fi.valor_total)    out.push(`Total: ${fmtMoeda(fi.valor_total)}`)
+  }
   return out.slice(0, 3)
 }
 
-const TABS = [
-  { id: 'pendentes',  label: 'Pendentes' },
-  { id: 'aprovadas',  label: 'Aprovadas' },
-  { id: 'rejeitadas', label: 'Rejeitadas' },
-  { id: 'todas',      label: 'Todas' },
-  { id: 'historico',  label: 'Histórico' },
-]
+// ─── Editor de valores de diária (usado dentro do modal atender) ──────────────
+
+function ValorInput({ valor, onChange, disabled }) {
+  const [texto, setTexto] = useState(() => Number(valor || 0).toFixed(2).replace('.', ','))
+  useEffect(() => { setTexto(Number(valor || 0).toFixed(2).replace('.', ',')) }, [valor])
+
+  function aoSair() {
+    const s = String(texto || '').replace(/\./g, '').replace(',', '.')
+    const n = Number(s)
+    if (Number.isFinite(n)) {
+      onChange?.(n)
+      setTexto(n.toFixed(2).replace('.', ','))
+    } else {
+      setTexto(Number(valor || 0).toFixed(2).replace('.', ','))
+    }
+  }
+
+  return (
+    <input
+      type="text"
+      value={texto}
+      disabled={disabled}
+      onChange={(e) => setTexto(e.target.value.replace(/[^\d,.-]/g, ''))}
+      onBlur={aoSair}
+      style={{ width: 70, fontSize: 10, textAlign: 'right' }}
+      placeholder="0,00"
+    />
+  )
+}
+
+function recalcTotalItem(it) {
+  const qtdD = Number(it.qtd_diarias || 0)
+  const qtdP = Number(it.qtd_pernoites || 0)
+  const valorDia =
+    (it.inclui_cafe   ? Number(it.valor_cafe   || 0) : 0) +
+    (it.inclui_almoco ? Number(it.valor_almoco || 0) : 0) +
+    (it.inclui_jantar ? Number(it.valor_jantar || 0) : 0)
+  return Number((valorDia * qtdD + Number(it.valor_pernoite || 0) * qtdP).toFixed(2))
+}
+
+function EditorDiaria({ itens, setItens, processando }) {
+  function updItem(idx, patch) {
+    setItens((arr) => arr.map((it, i) => {
+      if (i !== idx) return it
+      const next = { ...it, ...patch }
+      next.valor_total = recalcTotalItem(next)
+      return next
+    }))
+  }
+
+  const total = useMemo(
+    () => itens.reduce((acc, it) => acc + Number(it.valor_total || 0), 0),
+    [itens],
+  )
+
+  if (itens.length === 0) {
+    return <div className="alert-warn" style={{ marginTop: 12 }}>Nenhum motorista cadastrado nesta solicitação.</div>
+  }
+
+  return (
+    <div style={{
+      border: '1px solid #c3e6cb', borderRadius: 8,
+      background: 'rgba(40,167,69,0.04)', padding: '12px 14px',
+      marginTop: 12, display: 'grid', gap: 10,
+    }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--success, #1a7340)' }}>
+        Preencha os valores e aprove
+      </div>
+
+      <div style={{ overflowX: 'auto' }}>
+        <table className="rh-doc-table" style={{ fontSize: 11 }}>
+          <thead>
+            <tr>
+              <th>Motorista</th>
+              <th>Placa</th>
+              <th>Café</th>
+              <th>Almoço</th>
+              <th>Jantar</th>
+              <th>Pernoite</th>
+              <th>Diárias</th>
+              <th>Pernoites</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {itens.map((it, idx) => (
+              <tr key={it.id || idx}>
+                <td style={{ minWidth: 130 }}>{it.motorista_nome}</td>
+                <td>{it.placa || '—'}</td>
+                {[
+                  ['inclui_cafe',   'valor_cafe'],
+                  ['inclui_almoco', 'valor_almoco'],
+                  ['inclui_jantar', 'valor_jantar'],
+                ].map(([flagKey, valKey]) => (
+                  <td key={flagKey}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <input
+                        type="checkbox"
+                        checked={!!it[flagKey]}
+                        disabled={processando}
+                        onChange={(e) => updItem(idx, { [flagKey]: e.target.checked })}
+                      />
+                      <ValorInput
+                        valor={it[valKey]}
+                        disabled={processando}
+                        onChange={(v) => updItem(idx, { [valKey]: v })}
+                      />
+                    </div>
+                  </td>
+                ))}
+                <td>
+                  <ValorInput
+                    valor={it.valor_pernoite}
+                    disabled={processando}
+                    onChange={(v) => updItem(idx, { valor_pernoite: v })}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="number" min={0}
+                    value={it.qtd_diarias}
+                    disabled={processando}
+                    onChange={(e) => updItem(idx, { qtd_diarias: Number(e.target.value) })}
+                    style={{ width: 50 }}
+                  />
+                </td>
+                <td>
+                  <input
+                    type="number" min={0}
+                    value={it.qtd_pernoites}
+                    disabled={processando}
+                    onChange={(e) => updItem(idx, { qtd_pernoites: Number(e.target.value) })}
+                    style={{ width: 50 }}
+                  />
+                </td>
+                <td><strong>{fmtMoeda(it.valor_total)}</strong></td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colSpan={8} style={{ textAlign: 'right' }}><strong>Total da solicitação:</strong></td>
+              <td><strong>{fmtMoeda(total)}</strong></td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  )
+}
 
 // ─── Modal de atendimento ─────────────────────────────────────────────────────
 
@@ -186,25 +327,44 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
   const [motivo, setMotivo]     = useState('')
   const [processando, setProc]  = useState(false)
   const [erroAcao, setErroAcao] = useState('')
+  const [itensDiaria, setItensDiaria] = useState([])
 
-  // Garante que o erro da ação anterior nunca aparece em outro modo
   useEffect(() => { setErroAcao('') }, [acao])
 
   const fi    = solicitacao.full_item || {}
   const tipo  = solicitacao.resource_type
   const campos = CAMPOS_MODAL[tipo] || []
 
-  const isPedido    = tipo === 'pedidos_compra'
-  const statusAtual = solicitacao.status
+  const isPedido      = tipo === 'pedidos_compra'
+  const isDiaria      = tipo === 'diarias_solicitacoes'
+  const statusAtual   = solicitacao.status
   const estaEmAnalise = STATUS_EM_ANALISE.includes(statusAtual)
   const estaPendente  = STATUS_PENDENTE.includes(statusAtual) && !estaEmAnalise
+
+  // Carrega itens da diária ao abrir
+  useEffect(() => {
+    if (!isDiaria) return
+    let cancel = false
+    ;(async () => {
+      try {
+        const res = await api.list('diarias_itens', { solicitacao_id: solicitacao.id, limit: 200 })
+        const rows = res?.data || res || []
+        if (!cancel) {
+          setItensDiaria(rows.map((r) => ({ ...r, valor_total: recalcTotalItem(r) })))
+        }
+      } catch (e) {
+        if (!cancel) setErroAcao(e.message || 'Falha ao carregar itens da diária.')
+      }
+    })()
+    return () => { cancel = true }
+  }, [isDiaria, solicitacao.id])
 
   function renderValor(campo) {
     const v = fi[campo.k]
     if (v == null || v === '') return null
-    if (campo.moeda)    return fmtMoeda(v)
-    if (campo.date)     return fmtDate(v)
-    if (campo.datetime) return fmtDatetime(v)
+    if (campo.moeda)     return fmtMoeda(v)
+    if (campo.date)      return fmtDate(v)
+    if (campo.datetime)  return fmtDatetime(v)
     if (campo.reembolso) return REEMBOLSO_LABEL[v] || v
     if (campo.formaPag)  return FORMA_PAG_LABEL[v] || v
     return String(v)
@@ -216,12 +376,30 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
       setErroAcao('Informe o motivo da rejeição.')
       return
     }
-    setErroAcao('')
-    setProc(true)
+    setErroAcao(''); setProc(true)
     try {
       if (_acao === 'analisar') {
         await api.emAnalise(solicitacao.id)
       } else if (_acao === 'aprovar') {
+        // Para diárias: salva itens com valores + valor_total na solicitação antes de aprovar
+        if (isDiaria) {
+          const total = itensDiaria.reduce((acc, it) => acc + Number(it.valor_total || 0), 0)
+          for (const it of itensDiaria) {
+            await api.update('diarias_itens', it.id, {
+              qtd_diarias:   Number(it.qtd_diarias   || 0),
+              qtd_pernoites: Number(it.qtd_pernoites || 0),
+              inclui_cafe:   !!it.inclui_cafe,
+              inclui_almoco: !!it.inclui_almoco,
+              inclui_jantar: !!it.inclui_jantar,
+              valor_cafe:    Number(it.valor_cafe     || 0),
+              valor_almoco:  Number(it.valor_almoco   || 0),
+              valor_jantar:  Number(it.valor_jantar   || 0),
+              valor_pernoite:Number(it.valor_pernoite || 0),
+              valor_total:   Number(it.valor_total    || 0),
+            })
+          }
+          await api.update('diarias_solicitacoes', solicitacao.id, { valor_total: Number(total.toFixed(2)) })
+        }
         await api.approveRequest(solicitacao.id, tipo, motivo)
       } else {
         await api.rejectRequest(solicitacao.id, tipo, motivo)
@@ -234,40 +412,36 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
     }
   }
 
+  const cancelarAcao = () => { setAcao(null); setMotivo(''); setErroAcao('') }
+
   return (
     <div className="acomp-overlay" onClick={!processando ? onClose : undefined}>
-      <div className="acomp-modal acomp-modal-lg" onClick={e => e.stopPropagation()}>
+      <div className="acomp-modal acomp-modal-lg" onClick={(e) => e.stopPropagation()}>
 
         {/* Cabeçalho */}
         <div className="acomp-modal-hdr">
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <span className={`acomp-tipo tipo-${tipo}`}>{TIPOS[tipo] || tipo}</span>
-            <span className={`status-chip tone-${statusTone(solicitacao.status)}`}>
-              {STATUS_LABEL[solicitacao.status] || solicitacao.status}
+            <span className={`status-chip tone-${statusTone(statusAtual)}`}>
+              {STATUS_LABEL[statusAtual] || statusAtual}
             </span>
-            {fi.numero_solicitacao && (
-              <span className="acomp-num-sol">{fi.numero_solicitacao}</span>
-            )}
+            {fi.numero_solicitacao && <span className="acomp-num-sol">{fi.numero_solicitacao}</span>}
           </div>
           <button type="button" className="button-secondary" onClick={onClose} disabled={processando}>✕</button>
         </div>
 
         <div style={{ padding: '0 16px 16px' }}>
-          {/* Título */}
           <h2 style={{ margin: '12px 0 10px', fontSize: 15 }}>
             {solicitacao.titulo || `#${solicitacao.id}`}
           </h2>
 
           {/* Grade de campos */}
           <div className="acomp-campos-grid">
-            {campos.map(campo => {
+            {campos.map((campo) => {
               const val = renderValor(campo)
               if (val == null) return null
               return (
-                <div
-                  key={campo.k}
-                  className={`acomp-campo-item${campo.full ? ' acomp-campo-full' : ''}`}
-                >
+                <div key={campo.k} className={`acomp-campo-item${campo.full ? ' acomp-campo-full' : ''}`}>
                   <span className="acomp-campo-label">{campo.l}</span>
                   <span className="acomp-campo-valor">{val}</span>
                 </div>
@@ -285,10 +459,10 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--border, #e5e5e5)' }}>
-                      <th style={{ textAlign: 'left', padding: '4px 8px', color: 'var(--text-muted)', fontWeight: 600 }}>Descrição</th>
-                      <th style={{ textAlign: 'left', padding: '4px 8px', color: 'var(--text-muted)', fontWeight: 600 }}>Categoria</th>
+                      <th style={{ textAlign: 'left',  padding: '4px 8px', color: 'var(--text-muted)', fontWeight: 600 }}>Descrição</th>
+                      <th style={{ textAlign: 'left',  padding: '4px 8px', color: 'var(--text-muted)', fontWeight: 600 }}>Categoria</th>
                       <th style={{ textAlign: 'right', padding: '4px 8px', color: 'var(--text-muted)', fontWeight: 600 }}>Qtd</th>
-                      <th style={{ textAlign: 'left', padding: '4px 4px', color: 'var(--text-muted)', fontWeight: 600 }}>Un</th>
+                      <th style={{ textAlign: 'left',  padding: '4px 4px', color: 'var(--text-muted)', fontWeight: 600 }}>Un</th>
                       <th style={{ textAlign: 'right', padding: '4px 8px', color: 'var(--text-muted)', fontWeight: 600 }}>Valor unit.</th>
                       <th style={{ textAlign: 'right', padding: '4px 8px', color: 'var(--text-muted)', fontWeight: 600 }}>Total</th>
                     </tr>
@@ -313,6 +487,36 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
                       </td>
                     </tr>
                   </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Itens da diária — sempre visível (read-only fora do modo aprovar) */}
+          {isDiaria && itensDiaria.length > 0 && acao !== 'aprovar' && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 6 }}>
+                Motoristas ({itensDiaria.length})
+              </div>
+              <div style={{ overflowX: 'auto' }}>
+                <table className="rh-doc-table" style={{ fontSize: 11 }}>
+                  <thead>
+                    <tr>
+                      <th>Motorista</th><th>Placa</th>
+                      <th>Diárias</th><th>Pernoites</th><th>Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {itensDiaria.map((it) => (
+                      <tr key={it.id}>
+                        <td>{it.motorista_nome}</td>
+                        <td>{it.placa || '—'}</td>
+                        <td>{it.qtd_diarias}</td>
+                        <td>{it.qtd_pernoites}</td>
+                        <td>{fmtMoeda(it.valor_total)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
                 </table>
               </div>
             </div>
@@ -359,48 +563,19 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
           )}
 
           {/* Ações */}
-          {/* Diárias: atender exige preencher valores → leva pra DiariasPage */}
-          {tipo === 'diarias_solicitacoes' && STATUS_PENDENTE.includes(solicitacao.status) && podeAprovar && (
-            <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-              <a
-                className="button-primary"
-                href={`/diarias?atender=${solicitacao.id}`}
-                style={{ textDecoration: 'none' }}
-              >
-                Atender (preencher valores) →
-              </a>
-              <button
-                type="button"
-                className="button-secondary"
-                onClick={() => setAcao('rejeitar')}
-              >
-                Rejeitar
-              </button>
-            </div>
-          )}
-          {tipo !== 'diarias_solicitacoes' && STATUS_PENDENTE.includes(solicitacao.status) && (() => {
-            let podeFazerAlgo = false
-            let acaoPrimaria  = null
-            let labelPrimaria = ''
-            let labelBtnPrimario = ''
+          {STATUS_PENDENTE.includes(statusAtual) && (() => {
+            // Resolve permissão / rótulo / ação primária
+            let podeFazerAlgo = false, acaoPrimaria = null, labelPrimaria = ''
 
             if (isPedido) {
               if (estaPendente && podeAnalisar) {
-                podeFazerAlgo   = true
-                acaoPrimaria    = 'analisar'
-                labelPrimaria   = 'Aprovar'
-                labelBtnPrimario = processando ? 'Aprovando...' : 'Aprovar'
+                podeFazerAlgo = true; acaoPrimaria = 'analisar'; labelPrimaria = 'Aprovar'
               } else if (estaEmAnalise && podeAprovar) {
-                podeFazerAlgo   = true
-                acaoPrimaria    = 'aprovar'
-                labelPrimaria   = 'Aprovar pedido'
-                labelBtnPrimario = processando ? 'Aprovando...' : 'Aprovar pedido'
+                podeFazerAlgo = true; acaoPrimaria = 'aprovar';  labelPrimaria = 'Aprovar pedido'
               }
             } else if (podeAprovar) {
-              podeFazerAlgo   = true
-              acaoPrimaria    = 'aprovar'
-              labelPrimaria   = 'Aprovar solicitação'
-              labelBtnPrimario = processando ? 'Aprovando...' : 'Aprovar solicitação'
+              podeFazerAlgo = true; acaoPrimaria = 'aprovar'
+              labelPrimaria = isDiaria ? 'Aprovar (preencher valores)' : 'Aprovar solicitação'
             }
 
             if (!podeFazerAlgo) {
@@ -415,11 +590,9 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
               )
             }
 
-            function cancelarAcao() { setAcao(null); setMotivo(''); setErroAcao('') }
-
             return (
               <div className="acomp-modal-acoes">
-                {/* ── Botões iniciais ── */}
+                {/* Botões iniciais */}
                 {acao === null && (
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button
@@ -439,8 +612,7 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
                         if (acaoPrimaria === 'analisar') {
                           confirmar('analisar')
                         } else {
-                          setMotivo('')
-                          setAcao('aprovar')
+                          setMotivo(''); setAcao('aprovar')
                         }
                       }}
                       disabled={processando}
@@ -450,23 +622,28 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
                   </div>
                 )}
 
-                {/* ── Painel de aprovação ── */}
+                {/* Painel de aprovação */}
                 {acao === 'aprovar' && (
                   <div style={{
                     border: '1px solid #c3e6cb', borderRadius: 8,
                     background: 'rgba(40,167,69,0.06)', padding: '14px 16px',
-                    display: 'grid', gap: 10,
+                    display: 'grid', gap: 10, marginTop: 8,
                   }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--success, #1a7340)' }}>
                       Confirmar aprovação de: <em style={{ fontWeight: 400 }}>{solicitacao.titulo || `#${solicitacao.id}`}</em>
                     </div>
+
+                    {isDiaria && (
+                      <EditorDiaria itens={itensDiaria} setItens={setItensDiaria} processando={processando} />
+                    )}
+
                     <label className="field" style={{ margin: 0 }}>
                       <span>Comentário (opcional)</span>
                       <textarea
                         rows={2}
                         placeholder="Deixe um comentário sobre esta aprovação..."
                         value={motivo}
-                        onChange={e => setMotivo(e.target.value)}
+                        onChange={(e) => setMotivo(e.target.value)}
                         disabled={processando}
                         style={{ resize: 'vertical' }}
                       />
@@ -476,19 +653,19 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
                       <button type="button" className="button-secondary" onClick={cancelarAcao} disabled={processando}>
                         Cancelar
                       </button>
-                      <button type="button" className="button-primary" onClick={() => confirmar()} disabled={processando}>
-                        {processando ? 'Aprovando...' : 'Confirmar aprovação'}
+                      <button type="button" className="button-primary" onClick={() => confirmar()} disabled={processando || (isDiaria && itensDiaria.length === 0)}>
+                        {processando ? 'Aprovando...' : (isDiaria ? 'Salvar valores e aprovar' : 'Confirmar aprovação')}
                       </button>
                     </div>
                   </div>
                 )}
 
-                {/* ── Painel de rejeição ── */}
+                {/* Painel de rejeição */}
                 {acao === 'rejeitar' && (
                   <div style={{
                     border: '1px solid #f5c6cb', borderRadius: 8,
                     background: 'rgba(220,53,69,0.05)', padding: '14px 16px',
-                    display: 'grid', gap: 10,
+                    display: 'grid', gap: 10, marginTop: 8,
                   }}>
                     <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--danger, #c00)' }}>
                       Rejeitar: <em style={{ fontWeight: 400 }}>{solicitacao.titulo || `#${solicitacao.id}`}</em>
@@ -499,7 +676,7 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
                         rows={2}
                         placeholder="Explique o motivo da rejeição..."
                         value={motivo}
-                        onChange={e => setMotivo(e.target.value)}
+                        onChange={(e) => setMotivo(e.target.value)}
                         disabled={processando}
                         style={{ resize: 'vertical' }}
                       />
@@ -537,13 +714,13 @@ export default function AcompanhamentoPage() {
   const permissoes = profile?.permission_scopes || []
 
   const [solicitacoes, setSolicitacoes] = useState([])
-  const [historico, setHistorico]       = useState([])
-  const [loading, setLoading]           = useState(true)
-  const [erro, setErro]                 = useState('')
-  const [aba, setAba]                   = useState('pendentes')
-  const [fTipo, setFTipo]               = useState('')
-  const [fBusca, setFBusca]             = useState('')
-  const [atendendo, setAtendendo]       = useState(null)
+  const [historico,    setHistorico]    = useState([])
+  const [loading,      setLoading]      = useState(true)
+  const [erro,         setErro]         = useState('')
+  const [aba,          setAba]          = useState('pendentes')
+  const [fTipo,        setFTipo]        = useState('')
+  const [fBusca,       setFBusca]       = useState('')
+  const [atendendo,    setAtendendo]    = useState(null)
   const _loaded = useRef(false)
 
   useEffect(() => {
@@ -562,7 +739,7 @@ export default function AcompanhamentoPage() {
       ])
       setSolicitacoes(apRes.items || [])
       setHistorico(histRes.items || [])
-    } catch (err) {
+    } catch {
       setErro('Falha ao carregar solicitações.')
     } finally {
       _loaded.current = true
@@ -570,36 +747,27 @@ export default function AcompanhamentoPage() {
     }
   }
 
-  function podeAprovar(resourceType) {
-    return (
-      permissoes.includes('admin') ||
-      permissoes.includes(`aprovar.${resourceType}`)
-    )
-  }
-
-  function podeAnalisar(resourceType) {
-    return (
-      permissoes.includes('admin') ||
-      permissoes.includes(`analisar.${resourceType}`)
-    )
-  }
+  // Alguns recursos usam um sufixo enxuto no escopo (ex.: diarias_solicitacoes -> aprovar.diarias)
+  const scopeSuffix = (rt) => rt === 'diarias_solicitacoes' ? 'diarias' : rt
+  const podeAprovar  = (rt) => permissoes.includes('admin') || permissoes.includes(`aprovar.${scopeSuffix(rt)}`)
+  const podeAnalisar = (rt) => permissoes.includes('admin') || permissoes.includes(`analisar.${scopeSuffix(rt)}`)
 
   const stats = useMemo(() => ({
-    pendentes:  solicitacoes.filter(s => STATUS_PENDENTE.includes(s.status)).length,
-    aprovadas:  solicitacoes.filter(s => STATUS_APROVADO.includes(s.status)).length,
-    rejeitadas: solicitacoes.filter(s => STATUS_REJEITADO.includes(s.status)).length,
+    pendentes:  solicitacoes.filter((s) => STATUS_PENDENTE.includes(s.status)).length,
+    aprovadas:  solicitacoes.filter((s) => STATUS_APROVADO.includes(s.status)).length,
+    rejeitadas: solicitacoes.filter((s) => STATUS_REJEITADO.includes(s.status)).length,
     total:      solicitacoes.length,
   }), [solicitacoes])
 
   const filtrada = useMemo(() => {
     let lista = solicitacoes
-    if (aba === 'pendentes')  lista = lista.filter(s => STATUS_PENDENTE.includes(s.status))
-    if (aba === 'aprovadas')  lista = lista.filter(s => STATUS_APROVADO.includes(s.status))
-    if (aba === 'rejeitadas') lista = lista.filter(s => STATUS_REJEITADO.includes(s.status))
-    if (fTipo) lista = lista.filter(s => s.resource_type === fTipo)
+    if (aba === 'pendentes')  lista = lista.filter((s) => STATUS_PENDENTE.includes(s.status))
+    if (aba === 'aprovadas')  lista = lista.filter((s) => STATUS_APROVADO.includes(s.status))
+    if (aba === 'rejeitadas') lista = lista.filter((s) => STATUS_REJEITADO.includes(s.status))
+    if (fTipo) lista = lista.filter((s) => s.resource_type === fTipo)
     const q = fBusca.trim().toLowerCase()
-    if (q) lista = lista.filter(s =>
-      [s.titulo, s.resource_type].filter(Boolean).some(v => String(v).toLowerCase().includes(q))
+    if (q) lista = lista.filter((s) =>
+      [s.titulo, s.resource_type].filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
     )
     return lista
   }, [solicitacoes, aba, fTipo, fBusca])
@@ -607,8 +775,8 @@ export default function AcompanhamentoPage() {
   const histFiltrado = useMemo(() => {
     const q = fBusca.trim().toLowerCase()
     if (!q) return historico
-    return historico.filter(h =>
-      [h.recurso, h.nome_colaborador].filter(Boolean).some(v => String(v).toLowerCase().includes(q))
+    return historico.filter((h) =>
+      [h.recurso, h.nome_colaborador].filter(Boolean).some((v) => String(v).toLowerCase().includes(q))
     )
   }, [historico, fBusca])
 
@@ -619,7 +787,7 @@ export default function AcompanhamentoPage() {
         <div>
           <span className="eyebrow">Gestão</span>
           <h1>Acompanhamento de Aprovações</h1>
-          <p>Visualize e gerencie aprovações de manutenções, horas extras, compras e outros recursos.</p>
+          <p>Aprove, ajuste valores e gerencie todas as solicitações em um só lugar.</p>
         </div>
         <button className="button-secondary" onClick={carregar} type="button" disabled={loading}>
           {loading ? 'Carregando...' : '↻ Atualizar'}
@@ -649,7 +817,7 @@ export default function AcompanhamentoPage() {
       {/* Tabs + filtros */}
       <div className="surface-card" style={{ padding: '10px 12px' }}>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
-          {TABS.map(t => (
+          {TABS.map((t) => (
             <button
               key={t.id}
               type="button"
@@ -666,11 +834,9 @@ export default function AcompanhamentoPage() {
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 8 }}>
           <label className="field filter-field">
             <span>Tipo</span>
-            <select value={fTipo} onChange={e => setFTipo(e.target.value)}>
+            <select value={fTipo} onChange={(e) => setFTipo(e.target.value)}>
               <option value="">Todos</option>
-              {Object.entries(TIPOS).map(([k, v]) => (
-                <option key={k} value={k}>{v}</option>
-              ))}
+              {Object.entries(TIPOS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </label>
           <label className="field filter-field" style={{ gridColumn: 'span 3' }}>
@@ -679,7 +845,7 @@ export default function AcompanhamentoPage() {
               type="text"
               placeholder="Título, tipo, colaborador..."
               value={fBusca}
-              onChange={e => setFBusca(e.target.value)}
+              onChange={(e) => setFBusca(e.target.value)}
             />
           </label>
         </div>
@@ -712,7 +878,7 @@ export default function AcompanhamentoPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtrada.map(s => {
+                  {filtrada.map((s) => {
                     const detalhes = buildDetalhesResumido(s)
                     const numOs    = s.full_item?.numero_solicitacao
                     return (
@@ -725,8 +891,7 @@ export default function AcompanhamentoPage() {
                         <td>
                           {numOs
                             ? <span className="acomp-num-sol">{numOs}</span>
-                            : <span style={{ color: 'var(--muted)' }}>—</span>
-                          }
+                            : <span style={{ color: 'var(--muted)' }}>—</span>}
                         </td>
                         <td>
                           <strong style={{ fontSize: 11 }}>{s.titulo || `#${s.id}`}</strong>
@@ -740,9 +905,7 @@ export default function AcompanhamentoPage() {
                         <td>
                           {detalhes.length > 0 ? (
                             <div className="acomp-detalhes">
-                              {detalhes.map((d, i) => (
-                                <span key={i} className="acomp-detalhe-item">{d}</span>
-                              ))}
+                              {detalhes.map((d, i) => <span key={i} className="acomp-detalhe-item">{d}</span>)}
                             </div>
                           ) : <span style={{ color: 'var(--muted)' }}>—</span>}
                         </td>
@@ -798,9 +961,7 @@ export default function AcompanhamentoPage() {
                     return (
                       <tr key={h.id || idx} className="acomp-row">
                         <td>
-                          <span className={`acomp-tipo tipo-${tipo}`}>
-                            {TIPOS[tipo] || tipo || '—'}
-                          </span>
+                          <span className={`acomp-tipo tipo-${tipo}`}>{TIPOS[tipo] || tipo || '—'}</span>
                         </td>
                         <td style={{ fontSize: 11 }}>{h.recurso || '—'}</td>
                         <td>
