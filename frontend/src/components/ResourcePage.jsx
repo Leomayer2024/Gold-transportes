@@ -890,10 +890,10 @@ export default function ResourcePage({
   function normalizeImportCellValue(value) {
     const rawValue = String(value ?? '').trim()
     const lowered = rawValue.toLowerCase()
-    if (['true', 'verdadeiro', 'sim', '1'].includes(lowered)) {
+    if (['true', 'verdadeiro'].includes(lowered)) {
       return true
     }
-    if (['false', 'falso', 'nao', 'não', '0'].includes(lowered)) {
+    if (['false', 'falso'].includes(lowered)) {
       return false
     }
     return rawValue
