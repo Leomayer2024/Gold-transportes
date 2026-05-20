@@ -269,10 +269,10 @@ export default function ContratosOperacionaisPage() {
                 </>
               )}
 
-              {/* Lista de colaboradores vinculados (com badge ativo) */}
-              {contractMetrics.colaboradores_detalhe?.length > 0 && (
+              {/* Lista de colaboradores vinculados ATIVOS (custos do mês) */}
+              {contractMetrics.colaboradores_detalhe?.some((c) => c.vinculo_ativo !== false) && (
                 <>
-                  <div className="contract-metrics-section-title">Colaboradores vinculados</div>
+                  <div className="contract-metrics-section-title">Colaboradores vinculados (ativos)</div>
                   <div className="contract-gastos-extras-card">
                     <table className="contract-gastos-table">
                       <thead>
@@ -286,20 +286,22 @@ export default function ContratosOperacionaisPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {contractMetrics.colaboradores_detalhe.map((c) => (
-                          <tr key={c.colaborador_id}>
-                            <td>{c.nome || '-'}</td>
-                            <td>{c.cargo || '-'}</td>
-                            <td>{c.is_fora_contrato ? 'Extra' : 'Fixo'}</td>
-                            <td>
-                              <span className={`badge ${c.ativo ? 'badge-success' : 'badge-danger'}`}>
-                                {c.ativo ? 'Ativo' : 'Inativo'}
-                              </span>
-                            </td>
-                            <td style={{ textAlign: 'right' }}>{formatPercent(c.percentual_alocacao)}</td>
-                            <td style={{ textAlign: 'right' }}>{formatCurrency(c.custo_alocado)}</td>
-                          </tr>
-                        ))}
+                        {contractMetrics.colaboradores_detalhe
+                          .filter((c) => c.vinculo_ativo !== false)
+                          .map((c) => (
+                            <tr key={c.colaborador_id}>
+                              <td>{c.nome || '-'}</td>
+                              <td>{c.cargo || '-'}</td>
+                              <td>{c.is_fora_contrato ? 'Extra' : 'Fixo'}</td>
+                              <td>
+                                <span className={`badge ${c.ativo ? 'badge-success' : 'badge-danger'}`}>
+                                  {c.ativo ? 'Ativo' : 'Inativo'}
+                                </span>
+                              </td>
+                              <td style={{ textAlign: 'right' }}>{formatPercent(c.percentual_alocacao)}</td>
+                              <td style={{ textAlign: 'right' }}>{formatCurrency(c.custo_alocado)}</td>
+                            </tr>
+                          ))}
                       </tbody>
                     </table>
                   </div>
@@ -379,6 +381,11 @@ export default function ContratosOperacionaisPage() {
                               <span className={`badge ${c.ativo ? 'badge-success' : 'badge-danger'}`}>
                                 {c.ativo ? 'Ativo' : 'Inativo'}
                               </span>
+                              {c.vinculo_ativo === false && (
+                                <span className="badge badge-danger" style={{ marginLeft: 4 }} title="Vínculo desativado no contrato — RTM contabilizado porque ocorreu no mês">
+                                  Vínculo off
+                                </span>
+                              )}
                             </td>
                             <td style={{ textAlign: 'right' }}>{c.rtm_horas_50}h</td>
                             <td style={{ textAlign: 'right' }}>{c.rtm_horas_100}h</td>
