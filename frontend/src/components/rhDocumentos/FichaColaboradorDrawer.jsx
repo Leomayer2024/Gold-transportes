@@ -98,6 +98,29 @@ export default function FichaColaboradorDrawer({
     return { vencidos, alerta, pendentes, vigentes, total: docsDoColab.length }
   }, [docsDoColab])
 
+  // Todos os arquivos (principal + extras) achatados para a seção Downloads.
+  const arquivos = useMemo(() => {
+    const out = []
+    for (const d of docsDoColab) {
+      if (d.arquivo_url) {
+        out.push({ url: d.arquivo_url, nome: d.tipo_documento, doc: d, tipo: d.tipo_documento })
+      }
+      const extras = Array.isArray(d.arquivos_extras) ? d.arquivos_extras : []
+      extras.forEach((a, i) => {
+        if (a?.url) out.push({ url: a.url, nome: a.nome || `${d.tipo_documento} (anexo ${i + 1})`, doc: d, tipo: d.tipo_documento })
+      })
+    }
+    return out
+  }, [docsDoColab])
+
+  function baixarTodos() {
+    if (arquivos.length === 0) return
+    if (!window.confirm(`Abrir ${arquivos.length} arquivo(s) em novas abas para visualizar/baixar?`)) return
+    arquivos.forEach((a, i) => {
+      setTimeout(() => window.open(a.url, '_blank', 'noopener,noreferrer'), i * 150)
+    })
+  }
+
   // Fecha com ESC
   useEffect(() => {
     function onKey(e) { if (e.key === 'Escape') onClose?.() }
@@ -178,6 +201,33 @@ export default function FichaColaboradorDrawer({
                 Cadastrar o primeiro
               </button>
             </div>
+          )}
+
+          {arquivos.length > 0 && (
+            <section className="rh-ficha-group">
+              <h4 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span>📥 Arquivos do colaborador ({arquivos.length})</span>
+                <button
+                  type="button"
+                  className="button-link"
+                  onClick={baixarTodos}
+                  title="Abre todos os arquivos em novas abas para visualização/download"
+                  style={{ fontSize: 11 }}
+                >
+                  Abrir todos
+                </button>
+              </h4>
+              <ul className="rh-ficha-arquivos-list">
+                {arquivos.map((a, i) => (
+                  <li key={`${a.url}-${i}`}>
+                    <span className="rh-ficha-arquivo-tipo">{a.tipo}</span>
+                    <span className="rh-ficha-arquivo-nome">{a.nome}</span>
+                    <a href={a.url} target="_blank" rel="noreferrer" className="button-link" title="Visualizar em nova aba">👁</a>
+                    <a href={a.url} download className="button-link" title="Baixar arquivo">⬇</a>
+                  </li>
+                ))}
+              </ul>
+            </section>
           )}
 
           {CATEGORIAS.map((cat) => {

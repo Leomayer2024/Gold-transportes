@@ -18,7 +18,6 @@ import {
 import { enriquecerDocumento, contarAlertas, formatarDataBr } from './rhDocumentos/helpers'
 import DocumentoModal from './rhDocumentos/DocumentoModal'
 import ImportExcelModal from './rhDocumentos/ImportExcelModal'
-import BulkUploadModal from './rhDocumentos/BulkUploadModal'
 import SensitiveField from './rhDocumentos/SensitiveField'
 import FichaColaboradorDrawer from './rhDocumentos/FichaColaboradorDrawer'
 import {
@@ -97,7 +96,6 @@ export default function ColaboradorDocumentosPage() {
   const [novo, setNovo] = useState(false)
   const [novoColab, setNovoColab] = useState('')
   const [importExcelOpen, setImportExcelOpen] = useState(false)
-  const [bulkUploadOpen, setBulkUploadOpen] = useState(false)
   const [fichaColabId, setFichaColabId] = useState(null) // drawer da ficha
   const [contratoModal, setContratoModal] = useState(null) // null | 'novo' | {...}
 
@@ -490,14 +488,9 @@ export default function ColaboradorDocumentosPage() {
           {podeCriar && visao !== 'contratos' && (
             <>
               {podeImportar && (
-                <>
-                  <button type="button" className="button-secondary" onClick={() => setImportExcelOpen(true)}>
-                    ⬆ Importar Excel
-                  </button>
-                  <button type="button" className="button-secondary" onClick={() => setBulkUploadOpen(true)}>
-                    📎 Upload em lote
-                  </button>
-                </>
+                <button type="button" className="button-secondary" onClick={() => setImportExcelOpen(true)}>
+                  ⬆ Importar Excel
+                </button>
               )}
               <button type="button" className="button-primary" onClick={() => abrirNovo()}>
                 + Novo documento
@@ -688,6 +681,7 @@ export default function ColaboradorDocumentosPage() {
           aoCriar={(colaboradorId) => abrirNovo(colaboradorId)}
           aoEditar={(d) => setEdicao(d)}
           aoAbrirFicha={(colabId) => setFichaColabId(colabId)}
+          aoFiltrarTipo={(tipo) => { setVisao('planilha'); setFiltroBusca(tipo) }}
         />
       ) : (
         <VisaoContratos
@@ -716,15 +710,6 @@ export default function ColaboradorDocumentosPage() {
           colaboradores={colaboradores}
           filiais={filiais}
           onClose={() => setImportExcelOpen(false)}
-          onImported={carregar}
-        />
-      )}
-
-      {bulkUploadOpen && (
-        <BulkUploadModal
-          colaboradores={colaboradores}
-          filiais={filiais}
-          onClose={() => setBulkUploadOpen(false)}
           onImported={carregar}
         />
       )}
@@ -986,24 +971,29 @@ function VisaoContratos({ contratos, colaboradores, filiais, aoEditar, aoAbrirFi
 }
 
 // ── Visão Matriz colaborador × tipo ─────────────────────────────────────────
-function VisaoMatriz({ documentos, colaboradores, aoCriar, aoEditar, aoAbrirFicha }) {
-  // Tipos a mostrar = obrigatórios padrão ∪ tipos que aparecem nos documentos filtrados
+// Aliases: tipos legados ou variantes mapeados para o tipo canônico do catálogo,
+// evitando colunas duplicadas (ex.: "Contrato" virou "Contrato de Trabalho").
+const TIPO_ALIASES = {
+  'Contrato': 'Contrato de Trabalho',
+  'Contrato CLT': 'Contrato de Trabalho',
+}
+const canonicoTipo = (t) => TIPO_ALIASES[t] || t
+
+function VisaoMatriz({ documentos, colaboradores, aoCriar, aoEditar, aoAbrirFicha, aoFiltrarTipo }) {
   const tiposParaMostrar = useMemo(() => {
-    const set = new Set(TIPOS_OBRIGATORIOS_PADRAO)
+    const set = new Set(TIPOS_OBRIGATORIOS_PADRAO.map(canonicoTipo))
     for (const d of documentos) {
-      if (d.tipo_documento) set.add(d.tipo_documento)
+      if (d.tipo_documento) set.add(canonicoTipo(d.tipo_documento))
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'pt-BR'))
   }, [documentos])
 
-  // index[colaborador_id][tipo] = doc mais recente
   const indexCD = useMemo(() => {
     const out = {}
     for (const d of documentos) {
-      const k = `${d.colaborador_id}::${d.tipo_documento}`
+      const k = `${d.colaborador_id}::${canonicoTipo(d.tipo_documento)}`
       const existing = out[k]
       if (!existing) { out[k] = d; continue }
-      // pega o de validade mais nova
       const va = d.data_validade || ''
       const vb = existing.data_validade || ''
       if (va > vb) out[k] = d
@@ -1022,7 +1012,14 @@ function VisaoMatriz({ documentos, colaboradores, aoCriar, aoEditar, aoAbrirFich
           <tr>
             <th className="rh-doc-matrix-name">Colaborador</th>
             {tiposParaMostrar.map((t) => (
-              <th key={t} className="rh-doc-matrix-type" title={t}>{t}</th>
+              <th
+                key={t}
+                className="rh-doc-matrix-type rh-doc-th-clickable"
+                title={`${t} — clique para filtrar a Planilha por este tipo`}
+                onClick={() => aoFiltrarTipo?.(t)}
+              >
+                {t}
+              </th>
             ))}
           </tr>
         </thead>

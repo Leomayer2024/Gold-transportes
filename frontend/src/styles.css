@@ -3271,6 +3271,8 @@ tr:last-child td {
   padding: 0;
   height: 26px;
 }
+.rh-doc-matrix th.rh-doc-th-clickable { cursor: pointer; user-select: none; }
+.rh-doc-matrix th.rh-doc-th-clickable:hover { background: #dde6f0; }
 .rh-doc-matrix-cell { background: var(--surface-strong); }
 .rh-doc-matrix-cell.vencido         { background: #fdf0ef; }
 .rh-doc-matrix-cell.vence_em_breve  { background: #fef8e6; }
@@ -3579,6 +3581,21 @@ tr:last-child td {
 .rh-ficha-doc-meta { font-size: 10px; color: var(--muted); }
 .rh-ficha-doc-files { display: flex; gap: 4px; align-items: center; }
 .rh-ficha-empty { color: var(--muted); font-size: 12px; padding: 20px; text-align: center; }
+.rh-ficha-arquivos-list { list-style: none; margin: 0; padding: 0; }
+.rh-ficha-arquivos-list li {
+  display: grid;
+  grid-template-columns: 140px 1fr auto auto;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
+  border: 1px solid var(--border, #e0e4ea);
+  border-radius: var(--radius-sm, 6px);
+  margin-bottom: 4px;
+  font-size: 11px;
+  background: var(--surface, #fff);
+}
+.rh-ficha-arquivo-tipo { font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rh-ficha-arquivo-nome { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ==========================================================================
    Sino de notificações

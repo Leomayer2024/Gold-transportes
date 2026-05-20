@@ -100,9 +100,8 @@ export default function VinculoColaboradorSection({
     }
 
     const label = proxima.fase === 'indeterminado'
-      ? 'Tornar prazo indeterminado'
+      ? 'Efetivar (Contrato de Trabalho)'
       : 'Prorrogar por mais 45 dias'
-    // Tipo do documento correspondente que vai entrar na planilha de Documentos RH
     const tipoDoc = proxima.fase === 'indeterminado' ? 'Contrato de Trabalho' : 'Aditivo Contratual'
     if (!window.confirm(`${label}?\n\nSerá criada uma nova fase do contrato e também o registro "${tipoDoc}" na planilha de Documentos RH (sem PDF — você sobe depois).\n\nOs registros contratuais anteriores do colaborador ficarão arquivados (status "não se aplica") para não contar como vencidos na planilha.`)) return
     inFlightRef.current = true
@@ -342,10 +341,10 @@ export default function VinculoColaboradorSection({
                       title={
                         contratoAtivo.fase === 'experiencia'
                           ? 'Avança para a 2ª fase (prorrogação de 45 dias)'
-                          : 'Avança para prazo indeterminado'
+                          : 'Efetiva o colaborador (gera Contrato de Trabalho por prazo indeterminado)'
                       }
                     >
-                      {contratoAtivo.fase === 'experiencia' ? '♻ Prorrogar +45 dias' : '∞ Tornar indeterminado'}
+                      {contratoAtivo.fase === 'experiencia' ? '♻ Prorrogar +45 dias' : '✅ Efetivar'}
                     </button>
                   )}
                   <button

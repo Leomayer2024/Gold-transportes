@@ -33,7 +33,21 @@ export async function uploadRhDocumentFile(file, options = {}) {
   })
 
   if (uploadError) {
-    throw new Error(uploadError.message || 'Falha ao enviar arquivo para o armazenamento.')
+    const msg = uploadError.message || ''
+    if (/bucket not found/i.test(msg)) {
+      throw new Error(
+        `Storage não configurado: o bucket "${documentsBucket}" não existe no Supabase. ` +
+        `Crie em Supabase → Storage → New bucket (nome: ${documentsBucket}, Public). ` +
+        `Ou defina VITE_SUPABASE_DOCUMENTS_BUCKET com o nome do bucket já existente.`
+      )
+    }
+    if (/row-level security|RLS|policy/i.test(msg)) {
+      throw new Error(
+        `Bucket "${documentsBucket}" sem permissão de upload. ` +
+        `No Supabase → Storage → Policies, adicione policy de INSERT/SELECT no bucket para a role anon (ou authenticated).`
+      )
+    }
+    throw new Error(msg || 'Falha ao enviar arquivo para o armazenamento.')
   }
 
   const { data } = supabase.storage.from(documentsBucket).getPublicUrl(objectPath)
