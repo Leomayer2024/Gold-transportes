@@ -83,6 +83,23 @@ RESOURCE_DEFINITIONS = {
         'nullable_fields': ['data_desligamento', 'horario_padrao_inicio', 'horario_padrao_fim', 'telefone'],
         'partial_match_fields': ['nome_completo', 'cargo', 'cpf'],
         'view_scope': 'menu.colaboradores',
+        'view_scope_any': [
+            'menu.colaboradores',
+            'menu.colaborador_documentos',
+            'menu.colaborador_contratos',
+            'menu.diarias',
+            'menu.eventos_rh',
+            'menu.contratos_operacionais',
+            'menu.quadro_funcionarios',
+            'menu.horas_extras',
+            'menu.bonificacao',
+            'menu.bonificacao_metricas',
+            'menu.pedidos_compra',
+            'menu.manutencoes',
+            'menu.acompanhamento',
+            'menu.presenca',
+            'menu.carregamento',
+        ],
         'create_scope': 'create.colaboradores',
         'filial_scope_field': 'filial_id',
     },
@@ -5962,9 +5979,14 @@ def create_app():
         if not config:
             return jsonify({'error': 'Recurso não encontrado.'}), 404
 
-        scope_error = require_scope_permission(profile, config.get('view_scope'))
-        if scope_error:
-            return scope_error
+        view_scope_any = config.get('view_scope_any')
+        if view_scope_any:
+            if not any(profile_has_scope_permission(profile, s) for s in view_scope_any):
+                return jsonify({'error': 'Sem permissão para acessar este módulo.'}), 403
+        else:
+            scope_error = require_scope_permission(profile, config.get('view_scope'))
+            if scope_error:
+                return scope_error
 
         try:
             partial_match_fields = set(config.get('partial_match_fields', []))
