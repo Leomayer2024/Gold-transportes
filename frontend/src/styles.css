@@ -3596,6 +3596,15 @@ tr:last-child td {
 }
 .rh-ficha-arquivo-tipo { font-weight: 600; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rh-ficha-arquivo-nome { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rh-ficha-arquivos-empty {
+  font-size: 11px;
+  color: var(--muted);
+  font-style: italic;
+  padding: 10px 12px;
+  border: 1px dashed var(--border, #e0e4ea);
+  border-radius: var(--radius-sm, 6px);
+  text-align: center;
+}
 
 /* ==========================================================================
    Sino de notificações

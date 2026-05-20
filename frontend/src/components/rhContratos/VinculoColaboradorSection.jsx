@@ -75,9 +75,17 @@ export default function VinculoColaboradorSection({
   }, [contratos])
 
   const vinculoAtual = grupos[0]
-  const contratoAtivo = vinculoAtual?.find((c) => !c.data_desligamento && c.ativo !== false)
-    || vinculoAtual?.[vinculoAtual.length - 1]
-    || null
+  // Pega a ÚLTIMA fase ativa (maior data_inicio). Grupo está ordenado asc,
+  // percorremos de trás para frente para achar a fase atual real
+  // (ex.: contrato em "prorrogacao", não "experiencia" antiga).
+  const contratoAtivo = (() => {
+    if (!vinculoAtual) return null
+    for (let i = vinculoAtual.length - 1; i >= 0; i--) {
+      const c = vinculoAtual[i]
+      if (!c.data_desligamento && c.ativo !== false) return c
+    }
+    return vinculoAtual[vinculoAtual.length - 1]
+  })()
 
   async function prorrogarClt() {
     if (inFlightRef.current || acaoEmAndamento) return

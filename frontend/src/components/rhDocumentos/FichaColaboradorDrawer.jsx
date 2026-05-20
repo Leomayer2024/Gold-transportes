@@ -203,30 +203,38 @@ export default function FichaColaboradorDrawer({
             </div>
           )}
 
-          {arquivos.length > 0 && (
+          {resumo.total > 0 && (
             <section className="rh-ficha-group">
               <h4 style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <span>📥 Arquivos do colaborador ({arquivos.length})</span>
-                <button
-                  type="button"
-                  className="button-link"
-                  onClick={baixarTodos}
-                  title="Abre todos os arquivos em novas abas para visualização/download"
-                  style={{ fontSize: 11 }}
-                >
-                  Abrir todos
-                </button>
+                {arquivos.length > 0 && (
+                  <button
+                    type="button"
+                    className="button-link"
+                    onClick={baixarTodos}
+                    title="Abre todos os arquivos em novas abas para visualização/download"
+                    style={{ fontSize: 11 }}
+                  >
+                    Abrir todos
+                  </button>
+                )}
               </h4>
-              <ul className="rh-ficha-arquivos-list">
-                {arquivos.map((a, i) => (
-                  <li key={`${a.url}-${i}`}>
-                    <span className="rh-ficha-arquivo-tipo">{a.tipo}</span>
-                    <span className="rh-ficha-arquivo-nome">{a.nome}</span>
-                    <a href={a.url} target="_blank" rel="noreferrer" className="button-link" title="Visualizar em nova aba">👁</a>
-                    <a href={a.url} download className="button-link" title="Baixar arquivo">⬇</a>
-                  </li>
-                ))}
-              </ul>
+              {arquivos.length === 0 ? (
+                <div className="rh-ficha-arquivos-empty">
+                  Nenhum PDF/foto anexado ainda. Clique em ✏ ao lado de um documento para subir o arquivo.
+                </div>
+              ) : (
+                <ul className="rh-ficha-arquivos-list">
+                  {arquivos.map((a, i) => (
+                    <li key={`${a.url}-${i}`}>
+                      <span className="rh-ficha-arquivo-tipo">{a.tipo}</span>
+                      <span className="rh-ficha-arquivo-nome">{a.nome}</span>
+                      <a href={a.url} target="_blank" rel="noreferrer" className="button-link" title="Visualizar em nova aba">👁</a>
+                      <a href={a.url} download className="button-link" title="Baixar arquivo">⬇</a>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </section>
           )}
 
