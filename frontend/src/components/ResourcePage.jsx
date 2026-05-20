@@ -1332,11 +1332,34 @@ export default function ResourcePage({
                   </>
                 )}
               </p>
-              <div className="import-columns-list">
-                {(config.importer.columns || []).map((columnName) => (
-                  <span className="permission-badge" key={columnName}>{columnName}</span>
-                ))}
-              </div>
+              {config.importer.mapping ? (
+                <div className="import-mapping" style={{ marginTop: 8, marginBottom: 12 }}>
+                  <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border-color, #d0d7de)' }}>
+                        <th style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>Coluna no Excel/CSV</th>
+                        <th style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>Campo no sistema</th>
+                        <th style={{ padding: '6px 8px' }}>Formato esperado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {config.importer.mapping.map((item) => (
+                        <tr key={item.csv} style={{ borderBottom: '1px solid var(--border-color, #eaecef)' }}>
+                          <td style={{ padding: '6px 8px', fontFamily: 'monospace', fontWeight: 600 }}>{item.csv}</td>
+                          <td style={{ padding: '6px 8px' }}>{item.field}</td>
+                          <td style={{ padding: '6px 8px', color: 'var(--muted, #57606a)' }}>{item.help}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="import-columns-list">
+                  {(config.importer.columns || []).map((columnName) => (
+                    <span className="permission-badge" key={columnName}>{columnName}</span>
+                  ))}
+                </div>
+              )}
               <div className="button-row">
                 <a className="button-secondary import-template-link" download href={config.importer.templateUrl}>
                   Baixar modelo de colunas
