@@ -312,32 +312,8 @@ export default function ContratosOperacionaisPage() {
 
           {resultadoTab === 'variavel' && (
             <>
-              {/* Horas extras RTM */}
+              {/* Horas extras RTM — fonte: Calc. Horas Extras */}
               <div className="contract-metrics-section-title">Horas extras (Calc. RTM)</div>
-              <div className="contract-metrics-grid">
-                <article>
-                  <span>Horas 50%</span>
-                  <strong>{contractMetrics.rtm_horas_50_total || 0}h</strong>
-                  <small>Valor: {formatCurrency(contractMetrics.rtm_valor_total_50)}</small>
-                </article>
-                <article>
-                  <span>Horas 100%</span>
-                  <strong>{contractMetrics.rtm_horas_100_total || 0}h</strong>
-                  <small>Valor: {formatCurrency(contractMetrics.rtm_valor_total_100)}</small>
-                </article>
-                <article>
-                  <span>Total HE no mês</span>
-                  <strong>{formatCurrency(contractMetrics.rtm_valor_total_geral)}</strong>
-                  <small>Variável — pode ou não ocorrer</small>
-                </article>
-                {(contractMetrics.horas_50_cobradas_total > 0 || contractMetrics.horas_100_cobradas_total > 0) && (
-                  <article>
-                    <span>HE cobradas (contrato)</span>
-                    <strong>50%: {contractMetrics.horas_50_cobradas_total || 0}h</strong>
-                    <small>100%: {contractMetrics.horas_100_cobradas_total || 0}h</small>
-                  </article>
-                )}
-              </div>
 
               {/* Hint: meses com dados RTM disponíveis */}
               {(!contractMetrics.colaboradores_detalhe?.some((c) => c.rtm_total_geral > 0)
@@ -358,17 +334,14 @@ export default function ContratosOperacionaisPage() {
                 </p>
               )}
 
-              {/* Detalhe RTM por colaborador */}
+              {/* Detalhe RTM por colaborador — apenas Colaborador + Valor */}
               {contractMetrics.colaboradores_detalhe?.some((c) => c.rtm_total_geral > 0) ? (
                 <div className="contract-gastos-extras-card" style={{ marginTop: 8 }}>
                   <table className="contract-gastos-table">
                     <thead>
                       <tr>
                         <th>Colaborador</th>
-                        <th>Status</th>
-                        <th style={{ textAlign: 'right' }}>H 50%</th>
-                        <th style={{ textAlign: 'right' }}>H 100%</th>
-                        <th style={{ textAlign: 'right' }}>Total</th>
+                        <th style={{ textAlign: 'right' }}>Valor</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -376,24 +349,19 @@ export default function ContratosOperacionaisPage() {
                         .filter((c) => !c.is_fora_contrato && c.rtm_total_geral > 0)
                         .map((c) => (
                           <tr key={c.colaborador_id}>
-                            <td>{c.nome || '-'}</td>
                             <td>
-                              <span className={`badge ${c.ativo ? 'badge-success' : 'badge-danger'}`}>
-                                {c.ativo ? 'Ativo' : 'Inativo'}
-                              </span>
+                              {c.nome || '-'}
                               {c.vinculo_ativo === false && (
-                                <span className="badge badge-danger" style={{ marginLeft: 4 }} title="Vínculo desativado no contrato — RTM contabilizado porque ocorreu no mês">
+                                <span className="badge badge-danger" style={{ marginLeft: 6 }} title="Vínculo desativado no contrato — RTM contabilizado porque ocorreu no mês">
                                   Vínculo off
                                 </span>
                               )}
                             </td>
-                            <td style={{ textAlign: 'right' }}>{c.rtm_horas_50}h</td>
-                            <td style={{ textAlign: 'right' }}>{c.rtm_horas_100}h</td>
                             <td style={{ textAlign: 'right' }}>{formatCurrency(c.rtm_total_geral)}</td>
                           </tr>
                         ))}
                       <tr className="contract-gastos-table-footer">
-                        <td colSpan="4"><strong>Total RTM</strong></td>
+                        <td><strong>Total horas extras</strong></td>
                         <td style={{ textAlign: 'right' }}>
                           <strong>{formatCurrency(contractMetrics.rtm_valor_total_geral)}</strong>
                         </td>
