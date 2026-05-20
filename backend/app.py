@@ -3659,23 +3659,31 @@ def create_app():
 
         # ────────────────────────────────────────────────────────────────
         # Bulk-load RTM horas extras do mês (para aba Variável do contrato)
+        # Também coleta meses disponíveis (qualquer período) por colaborador
         # ────────────────────────────────────────────────────────────────
         rtm_by_colaborador = {}
+        rtm_meses_por_colaborador = {}  # colaborador_id -> set(mes_prefix)
         try:
             mes_ref_prefix = month_reference.strftime('%Y-%m')
-            rtm_query = supabase.table('horas_extras_rtm_registros').select(
+            rtm_query_all = supabase.table('horas_extras_rtm_registros').select(
                 'colaborador_id, funcionario_nome, filial_id, mes_referencia, '
                 'total_50, total_100, total_geral, horas_normais, horas_extra_100, '
                 'valor_hora_50, valor_hora_100, tipo_hora'
-            ).like('mes_referencia', f'{mes_ref_prefix}%')
+            )
             if filial_id:
-                rtm_query = rtm_query.eq('filial_id', filial_id)
-            rtm_resp = rtm_query.execute()
-            for reg in (rtm_resp.data or []):
+                rtm_query_all = rtm_query_all.eq('filial_id', filial_id)
+            rtm_resp_all = rtm_query_all.execute()
+            for reg in (rtm_resp_all.data or []):
                 cid = reg.get('colaborador_id')
                 if cid is None:
                     continue
                 key = int(cid)
+                mes_reg = (reg.get('mes_referencia') or '')[:7]
+                if mes_reg:
+                    rtm_meses_por_colaborador.setdefault(key, set()).add(mes_reg)
+                # Só agrega ao total quando casa com o mês selecionado
+                if not mes_reg.startswith(mes_ref_prefix):
+                    continue
                 cur = rtm_by_colaborador.setdefault(key, {
                     'total_50': 0.0, 'total_100': 0.0, 'total_geral': 0.0,
                     'horas_50': 0.0, 'horas_100': 0.0,
@@ -3878,6 +3886,7 @@ def create_app():
             rtm_total_horas_50 = 0.0
             rtm_total_horas_100 = 0.0
             colaboradores_inativos_count = 0
+            rtm_meses_set = set()
             seen_cids_detalhe = set()
             for link in linked_rows:
                 cid_link = link.get('colaborador_id')
@@ -3913,12 +3922,15 @@ def create_app():
                     'rtm_horas_100': round(rtm['horas_100'], 2) if rtm else 0.0,
                 })
                 # Totais variáveis: somente colaboradores fixos do contrato (não-fora) entram
-                if not is_fora2 and rtm:
-                    rtm_total_50_valor += rtm['total_50']
-                    rtm_total_100_valor += rtm['total_100']
-                    rtm_total_geral_valor += rtm['total_geral']
-                    rtm_total_horas_50 += rtm['horas_50']
-                    rtm_total_horas_100 += rtm['horas_100']
+                if not is_fora2:
+                    if rtm:
+                        rtm_total_50_valor += rtm['total_50']
+                        rtm_total_100_valor += rtm['total_100']
+                        rtm_total_geral_valor += rtm['total_geral']
+                        rtm_total_horas_50 += rtm['horas_50']
+                        rtm_total_horas_100 += rtm['horas_100']
+                    # Meses com qualquer dado RTM para os colab fixos (sugestões UI)
+                    rtm_meses_set.update(rtm_meses_por_colaborador.get(cid_int, set()))
 
             contracts_enriched.append({
                 'id': contract.get('id'),
@@ -3971,6 +3983,12 @@ def create_app():
                 # Detalhe por colaborador (com ativo/inativo + RTM individual)
                 'colaboradores_detalhe': colaboradores_detalhe,
                 'colaboradores_inativos_count': colaboradores_inativos_count,
+                # Meses (YYYY-MM) com dados RTM para colab fixos deste contrato
+                # (Excluindo o mês atualmente selecionado — só sugestões)
+                'rtm_meses_disponiveis': sorted(
+                    [m for m in rtm_meses_set if m != month_reference.strftime('%Y-%m')],
+                    reverse=True,
+                )[:6],
             })
 
         avg_headcount_accuracy = round(sum(acuracidade_headcount_values) / len(acuracidade_headcount_values), 2) if acuracidade_headcount_values else None
