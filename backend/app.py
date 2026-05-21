@@ -3609,16 +3609,19 @@ def create_app():
         for link in contract_links:
             collaborator_id = link.get('colaborador_id')
             contract_id = link.get('contrato_operacional_id')
-            if collaborator_id is None or contract_id is None:
+            if contract_id is None:
                 continue
 
-            collaborator_id = int(collaborator_id)
             contract_id = int(contract_id)
+            # Itens sem colaborador (veiculo_proprio, caminhao, outro) ainda
+            # entram no contrato pra somar valor_cobrado e listar a frota.
             links_by_contract.setdefault(contract_id, []).append(link)
 
-            contract_name = contract_names_by_id.get(contract_id)
-            if contract_name:
-                links_by_collaborator.setdefault(collaborator_id, set()).add(contract_name)
+            if collaborator_id is not None:
+                collaborator_id = int(collaborator_id)
+                contract_name = contract_names_by_id.get(contract_id)
+                if contract_name:
+                    links_by_collaborator.setdefault(collaborator_id, set()).add(contract_name)
 
         for row in collaborator_rows:
             collaborator_id = row.get('id')

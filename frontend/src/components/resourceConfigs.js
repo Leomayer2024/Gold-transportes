@@ -205,7 +205,15 @@ export const resourceConfigs = {
         ],
       },
       { name: 'cliente_nome', label: 'Cliente', type: 'select-text', relation: 'clientes', optionLabel: 'nome', placeholder: 'Nome do cliente contratante' },
-      { name: 'valor_mensal_contrato', label: 'Valor mensal do contrato', type: 'number', required: false, defaultValue: 0, placeholder: '0,00' },
+      {
+        name: 'valor_mensal_contrato',
+        label: 'Valor mensal de referência (R$)',
+        type: 'number',
+        required: false,
+        defaultValue: 0,
+        placeholder: '0,00',
+        tooltip: 'Apenas referência inicial. O valor real do contrato é calculado automaticamente pela soma do "Valor cobrado" de cada linha em "Equipe e valores". Pode deixar 0 e preencher os valores nas linhas.',
+      },
       { name: 'qtd_colaboradores_contratados', label: 'Qtd. colaboradores contratados', type: 'number', defaultValue: 0, placeholder: '0' },
       { name: 'cargos_contrato', label: 'Cargos previstos no contrato', type: 'textarea', placeholder: 'Ex.: 2 motoristas, 4 ajudantes, 1 líder' },
       
