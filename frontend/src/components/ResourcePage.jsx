@@ -1333,32 +1333,53 @@ export default function ResourcePage({
                 )}
               </p>
               {config.importer.mapping ? (
-                <div className="import-mapping" style={{ marginTop: 8, marginBottom: 12 }}>
-                  <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
-                    <thead>
-                      <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border-color, #d0d7de)' }}>
-                        <th style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>Coluna no Excel/CSV</th>
-                        <th style={{ padding: '6px 8px', whiteSpace: 'nowrap' }}>Campo no sistema</th>
-                        <th style={{ padding: '6px 8px' }}>Formato esperado</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {config.importer.mapping.map((item) => (
-                        <tr key={item.csv} style={{ borderBottom: '1px solid var(--border-color, #eaecef)' }}>
-                          <td style={{ padding: '6px 8px', fontFamily: 'monospace', fontWeight: 600 }}>{item.csv}</td>
-                          <td style={{ padding: '6px 8px' }}>{item.field}</td>
-                          <td style={{ padding: '6px 8px', color: 'var(--muted, #57606a)' }}>{item.help}</td>
+                <details className="import-mapping-details" style={{ marginTop: 8, marginBottom: 12 }}>
+                  <summary
+                    style={{
+                      cursor: 'pointer',
+                      padding: '8px 12px',
+                      background: '#f1f5f9',
+                      border: '1px solid var(--border-light, #e2e8f0)',
+                      borderRadius: 6,
+                      fontWeight: 600,
+                      fontSize: 13,
+                      userSelect: 'none',
+                    }}
+                  >
+                    Ver mapeamento de colunas (clique para abrir)
+                  </summary>
+                  <div style={{ marginTop: 8, overflow: 'auto', border: '1px solid var(--border-light, #e2e8f0)', borderRadius: 6 }}>
+                    <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr style={{ background: '#edf2f7', textAlign: 'left' }}>
+                          <th style={{ padding: '8px 10px', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border-light, #cbd5e0)' }}>Coluna no Excel/CSV</th>
+                          <th style={{ padding: '8px 10px', whiteSpace: 'nowrap', borderBottom: '1px solid var(--border-light, #cbd5e0)' }}>Campo no sistema</th>
+                          <th style={{ padding: '8px 10px', borderBottom: '1px solid var(--border-light, #cbd5e0)' }}>Formato esperado</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {config.importer.mapping.map((item, idx) => (
+                          <tr key={item.csv} style={{ background: idx % 2 ? '#fafbfc' : 'transparent', borderBottom: '1px solid var(--border-light, #eaecef)' }}>
+                            <td style={{ padding: '8px 10px', fontFamily: 'monospace', fontWeight: 600 }}>{item.csv}</td>
+                            <td style={{ padding: '8px 10px' }}>{item.field}</td>
+                            <td style={{ padding: '8px 10px', color: 'var(--muted, #57606a)' }}>{item.help}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </details>
               ) : (
-                <div className="import-columns-list">
-                  {(config.importer.columns || []).map((columnName) => (
-                    <span className="permission-badge" key={columnName}>{columnName}</span>
-                  ))}
-                </div>
+                <details style={{ marginTop: 8, marginBottom: 12 }}>
+                  <summary style={{ cursor: 'pointer', padding: '8px 12px', background: '#f1f5f9', borderRadius: 6, fontWeight: 600, fontSize: 13 }}>
+                    Ver colunas esperadas
+                  </summary>
+                  <div className="import-columns-list" style={{ marginTop: 8 }}>
+                    {(config.importer.columns || []).map((columnName) => (
+                      <span className="permission-badge" key={columnName}>{columnName}</span>
+                    ))}
+                  </div>
+                </details>
               )}
               <div className="button-row">
                 <a className="button-secondary import-template-link" download href={config.importer.templateUrl}>
