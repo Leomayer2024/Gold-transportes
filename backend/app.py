@@ -2015,8 +2015,8 @@ def create_app():
                 sanitized['tipo_item'] = 'colaborador'
 
             item_type = (sanitized.get('tipo_item') or 'colaborador').strip().lower()
-            if item_type not in {'colaborador', 'colaborador_fora_contrato', 'caminhao', 'veiculo_proprio', 'outro'}:
-                return None, 'Tipo de item inválido para contrato. Use colaborador, colaborador_fora_contrato, caminhao, veiculo_proprio ou outro.'
+            if item_type not in {'colaborador', 'colaborador_fora_contrato', 'caminhao', 'veiculo_proprio', 'pacote_motorista_veiculo', 'outro'}:
+                return None, 'Tipo de item inválido para contrato. Use colaborador, colaborador_fora_contrato, caminhao, veiculo_proprio, pacote_motorista_veiculo ou outro.'
 
             if item_type in {'colaborador', 'colaborador_fora_contrato'} and not sanitized.get('colaborador_id'):
                 return None, 'Para tipo colaborador, selecione o colaborador.'
@@ -2024,6 +2024,11 @@ def create_app():
                 return None, 'Para tipo caminhão terceiro, selecione o veículo de carregamento.'
             if item_type == 'veiculo_proprio' and not sanitized.get('veiculo_proprio_id'):
                 return None, 'Para tipo veículo próprio, selecione o veículo da frota.'
+            if item_type == 'pacote_motorista_veiculo':
+                if not sanitized.get('colaborador_id'):
+                    return None, 'Para pacote motorista+veículo, selecione o motorista (colaborador).'
+                if not sanitized.get('veiculo_proprio_id'):
+                    return None, 'Para pacote motorista+veículo, selecione o veículo da frota.'
             if item_type == 'outro' and not sanitized.get('nome_item'):
                 return None, 'Para tipo outro, informe o nome/descrição do item.'
 
