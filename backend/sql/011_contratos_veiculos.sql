@@ -1,7 +1,8 @@
 -- ============================================================
--- Complementa contratos: adiciona `tipo_contrato` em
--- contratos_operacionais e libera tipo_item =
--- 'pacote_motorista_veiculo' em contratos_colaboradores.
+-- Complementa contratos:
+--  1. Adiciona `tipo_contrato` em contratos_operacionais.
+--  2. Adiciona valores 'veiculo_proprio' e 'pacote_motorista_veiculo'
+--     ao enum tipo_item_enum usado por contratos_colaboradores.
 --
 -- A coluna veiculo_proprio_id já foi criada em
 -- 008_contratos_colaboradores_veiculo_proprio.sql.
@@ -9,6 +10,7 @@
 -- Idempotente.
 -- ============================================================
 
+-- 1. tipo_contrato (text + check) — coluna nova
 ALTER TABLE contratos_operacionais
     ADD COLUMN IF NOT EXISTS tipo_contrato TEXT DEFAULT 'rtm';
 
@@ -26,31 +28,8 @@ UPDATE contratos_operacionais
 ALTER TABLE contratos_operacionais
     ALTER COLUMN tipo_contrato SET NOT NULL;
 
--- Recria constraint de tipo_item incluindo veiculo_proprio +
--- pacote_motorista_veiculo, preservando valores históricos.
-DO $$
-DECLARE
-    cname TEXT;
-BEGIN
-    SELECT conname INTO cname
-    FROM pg_constraint
-    WHERE conrelid = 'contratos_colaboradores'::regclass
-      AND contype = 'c'
-      AND pg_get_constraintdef(oid) ILIKE '%tipo_item%'
-    LIMIT 1;
-
-    IF cname IS NOT NULL THEN
-        EXECUTE format('ALTER TABLE contratos_colaboradores DROP CONSTRAINT %I', cname);
-    END IF;
-
-    ALTER TABLE contratos_colaboradores
-        ADD CONSTRAINT contratos_colaboradores_tipo_item_check
-        CHECK (tipo_item IN (
-            'colaborador',
-            'colaborador_fora_contrato',
-            'caminhao',
-            'outro',
-            'veiculo_proprio',
-            'pacote_motorista_veiculo'
-        ));
-END $$;
+-- 2. Enum tipo_item_enum — adiciona valores novos sem quebrar existentes.
+-- ALTER TYPE ADD VALUE precisa rodar fora de transação em alguns clientes,
+-- mas no Supabase SQL Editor cada statement é commitado isoladamente.
+ALTER TYPE tipo_item_enum ADD VALUE IF NOT EXISTS 'veiculo_proprio';
+ALTER TYPE tipo_item_enum ADD VALUE IF NOT EXISTS 'pacote_motorista_veiculo';
