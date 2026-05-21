@@ -2044,7 +2044,13 @@ def create_app():
                 sanitized['colaborador_id'] = None
                 sanitized['veiculo_carregamento_id'] = None
                 sanitized['nome_item'] = None
+            elif item_type == 'pacote_motorista_veiculo':
+                # Mantém colaborador_id (motorista) + veiculo_proprio_id (carro).
+                # Limpa só o que não se aplica.
+                sanitized['veiculo_carregamento_id'] = None
+                sanitized['nome_item'] = None
             else:
+                # tipo_item == 'outro'
                 sanitized['colaborador_id'] = None
                 sanitized['veiculo_carregamento_id'] = None
                 sanitized['veiculo_proprio_id'] = None
