@@ -1023,6 +1023,7 @@ TIPO_ITEM_VALID_VALUES = {
     'colaborador_fora_contrato',
     'veiculo',
     'veiculo_proprio',
+    'pacote_motorista_veiculo',
     'caminhao',
     'outro',
 }
@@ -6387,6 +6388,13 @@ def create_app():
                 response = supabase.table(config['table']).insert(payload).execute()
             created = response.data[0] if response.data else {}
 
+            # Invalida cache do dashboard quando muda algo que afeta cálculo de custo do contrato
+            if resource_name in {
+                'contratos_operacionais', 'contratos_colaboradores', 'contratos_gastos_extras',
+                'colaboradores', 'colaborador_beneficios', 'colaborador_contratos',
+            }:
+                invalidate_dashboard_cache(created.get('filial_id'))
+
             write_audit_event(
                 profile,
                 action='create',
@@ -6503,6 +6511,13 @@ def create_app():
                     except Exception as cascade_exc:
                         app.logger.warning('Falha ao arquivar colaborador_documentos (colaborador %s): %s', item_id, cascade_exc)
 
+            # Invalida cache do dashboard quando muda algo que afeta cálculo de custo do contrato
+            if resource_name in {
+                'contratos_operacionais', 'contratos_colaboradores', 'contratos_gastos_extras',
+                'colaboradores', 'colaborador_beneficios', 'colaborador_contratos',
+            }:
+                invalidate_dashboard_cache(updated.get('filial_id') or payload.get('filial_id'))
+
             write_audit_event(
                 profile,
                 action='update',
@@ -6556,6 +6571,13 @@ def create_app():
             item_filial_id = item_response.data[0].get('filial_id') if item_response.data else None
 
             supabase.table(config['table']).delete().eq('id', item_id).execute()
+
+            if resource_name in {
+                'contratos_operacionais', 'contratos_colaboradores', 'contratos_gastos_extras',
+                'colaboradores', 'colaborador_beneficios', 'colaborador_contratos',
+            }:
+                invalidate_dashboard_cache(item_filial_id)
+
             write_audit_event(profile, 'delete', resource_name, item_id, filial_id=item_filial_id)
             return jsonify({'status': 'ok'})
         except Exception as exc:
