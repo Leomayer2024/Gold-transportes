@@ -11116,9 +11116,10 @@ def create_app():
                 # Compare by month only — a contract starting mid-month still counts for that month.
                 if iv is not None and iv[:7] > mes_prefix:
                     continue
-                ti = cc.get('tipo_item', '')
+                ti = (cc.get('tipo_item') or '').lower()
                 cid_str = str(cid_cc)
-                if ti.lower() == 'colaborador':
+                # Motorista do pacote também é fixo no contrato.
+                if ti in ('colaborador', 'pacote_motorista_veiculo'):
                     tipo_hora_map[cid_str] = 'fixo'
                     if cc.get('contrato_operacional_id'):
                         colab_contrato_map[cid_str] = cc['contrato_operacional_id']
@@ -11530,9 +11531,10 @@ def create_app():
                 # Compare by month only — a contract starting mid-month still counts for that month.
                 if iv is not None and iv[:7] > mes_prefix:
                     continue
-                ti = cc.get('tipo_item', '')
+                ti = (cc.get('tipo_item') or '').lower()
                 cid_str = str(cid)
-                if ti.lower() == 'colaborador':
+                # Motorista do pacote também é fixo no contrato.
+                if ti in ('colaborador', 'pacote_motorista_veiculo'):
                     tipo_hora_map[cid_str] = 'fixo'
                     if cc.get('contrato_operacional_id'):
                         colab_contrato[cid_str] = cc['contrato_operacional_id']
