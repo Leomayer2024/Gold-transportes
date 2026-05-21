@@ -396,7 +396,7 @@ export const resourceConfigs = {
         name: 'data_inicio_vinculo',
         label: 'Início do vínculo operacional',
         type: 'date',
-        visibleWhen: { field: 'tipo_item', in: ['colaborador', 'colaborador_fora_contrato'] },
+        visibleWhen: { field: 'tipo_item', in: ['colaborador', 'colaborador_fora_contrato', 'pacote_motorista_veiculo'] },
         autoFill: {
           triggerField: 'colaborador_id',
           relation: 'colaboradores',
