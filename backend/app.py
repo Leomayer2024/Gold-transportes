@@ -83,9 +83,10 @@ RESOURCE_DEFINITIONS = {
             'data_admissao',
             'data_desligamento',
             'email_recuperacao',
+            'veiculo_padrao_id',
             'ativo',
         ],
-        'nullable_fields': ['data_desligamento', 'horario_padrao_inicio', 'horario_padrao_fim', 'telefone', 'email_recuperacao'],
+        'nullable_fields': ['data_desligamento', 'horario_padrao_inicio', 'horario_padrao_fim', 'telefone', 'email_recuperacao', 'veiculo_padrao_id'],
         'partial_match_fields': ['nome_completo', 'cargo', 'cpf'],
         'view_scope': 'menu.colaboradores',
         'view_scope_any': [
@@ -1287,6 +1288,9 @@ def create_app():
     @app.before_request
     def _supabase_keepalive():
         nonlocal supabase
+        # Pula keepalive em endpoints de assets estáticos para reduzir overhead.
+        if request.path.startswith(('/assets/', '/static/')) or request.path in ('/sw.js', '/manifest.webmanifest', '/icon.png'):
+            return
         now = time.time()
         if now - _sb_last_check[0] < _sb_check_interval:
             return
@@ -1716,8 +1720,22 @@ def create_app():
             'resource temporarily unavailable', 'eagain',
         ))
 
+    def _force_recreate_supabase():
+        """Recria o cliente Supabase (chamado quando detectamos conexão morta)."""
+        nonlocal supabase
+        with _sb_lock:
+            try:
+                supabase = create_client(supabase_url, supabase_server_key)
+                _sb_last_check[0] = time.time()
+                app.logger.info('Supabase: cliente recriado após disconnect.')
+            except Exception as rc_exc:
+                app.logger.error('Supabase: falha ao recriar cliente: %s', rc_exc)
+
     def supabase_retry(fn, attempts=3, base_delay=0.5):
-        """Call fn() with exponential-backoff retry on transient network errors."""
+        """Call fn() with exponential-backoff retry on transient network errors.
+        Em disconnect (server disconnected / connection reset / remoteprotocol),
+        força recriação do cliente antes do próximo retry — caso contrário a
+        próxima chamada reaproveita o mesmo socket morto."""
         last_exc = None
         for i in range(attempts):
             try:
@@ -1725,6 +1743,8 @@ def create_app():
             except Exception as exc:
                 last_exc = exc
                 if is_transient_disconnect_error(exc):
+                    if _is_disconnect_err(exc):
+                        _force_recreate_supabase()
                     time.sleep(base_delay * (2 ** i))
                     continue
                 raise
@@ -11136,29 +11156,27 @@ def create_app():
         
         try:
             from_date = (datetime.now() - timedelta(days=days)).isoformat()
-            
-            query = (
-                supabase.table('auditoria_movimentacoes')
-                .select('*')
-                .in_('acao', ['approve', 'reject'])
-                .gte('criado_em', from_date)
-                .order('criado_em', desc=True)
-                .limit(limit)
-            )
-            
-            if resource_type:
-                query = query.eq('recurso', resource_type)
-            
-            if status_acao == 'approve':
-                query = query.eq('acao', 'approve')
-            elif status_acao == 'reject':
-                query = query.eq('acao', 'reject')
-            
-            # Aplicar escopo de filial
-            if profile_has_filial_scope(profile):
-                query = query.in_('filial_id', profile.get('allowed_filial_ids') or [])
-            
-            response = query.execute()
+
+            def _build_and_exec():
+                query = (
+                    supabase.table('auditoria_movimentacoes')
+                    .select('*')
+                    .in_('acao', ['approve', 'reject'])
+                    .gte('criado_em', from_date)
+                    .order('criado_em', desc=True)
+                    .limit(limit)
+                )
+                if resource_type:
+                    query = query.eq('recurso', resource_type)
+                if status_acao == 'approve':
+                    query = query.eq('acao', 'approve')
+                elif status_acao == 'reject':
+                    query = query.eq('acao', 'reject')
+                if profile_has_filial_scope(profile):
+                    query = query.in_('filial_id', profile.get('allowed_filial_ids') or [])
+                return query.execute()
+
+            response = supabase_retry(_build_and_exec)
             items = response.data or []
             
             return jsonify({
