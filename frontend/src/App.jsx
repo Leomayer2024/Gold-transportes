@@ -5,6 +5,7 @@ import ColaboradoresPage from './components/ColaboradoresPage'
 import ColaboradorDocumentosPage from './components/ColaboradorDocumentosPage'
 import DiariasPage from './components/DiariasPage'
 import ContratosOperacionaisPage from './components/ContratosOperacionaisPage'
+import TesteContratoPage from './components/TesteContratoPage'
 import CustosRhPage from './components/CustosRhPage'
 import AuditoriaPage from './components/AuditoriaPage'
 import BonificacaoPage from './components/BonificacaoPage'
@@ -37,6 +38,7 @@ import FrotaDashboardPage from './components/FrotaDashboardPage'
 import AbastecimentosPage from './components/AbastecimentosPage'
 import PneusPage from './components/PneusPage'
 import ManutencoesPage from './components/ManutencoesPage'
+import OrdensServicoMotoristaPage from './components/OrdensServicoMotoristaPage'
 import VeiculosDocumentosPage from './components/VeiculosDocumentosPage'
 import HorasExtrasPage from './components/HorasExtrasPage'
 import AcompanhamentoPage from './components/AcompanhamentoPage'
@@ -91,6 +93,9 @@ export default function App() {
           <Route element={<AccessRoute requiredScope="menu.contratos_operacionais" />}>
             <Route path="/contratos-operacionais" element={<ContratosOperacionaisPage />} />
           </Route>
+          <Route element={<AccessRoute requiredScope="menu.contratos_operacionais" />}>
+            <Route path="/teste-contrato" element={<TesteContratoPage />} />
+          </Route>
           <Route element={<AccessRoute requiredScope="menu.colaborador_documentos" />}>
             <Route path="/rh-documentos" element={<ColaboradorDocumentosPage />} />
           </Route>
@@ -123,6 +128,9 @@ export default function App() {
           </Route>
           <Route element={<AccessRoute requiredScope="menu.manutencoes" />}>
             <Route path="/manutencoes" element={<ManutencoesPage />} />
+          </Route>
+          <Route element={<AccessRoute requiredScope="menu.ordens_servico" />}>
+            <Route path="/ordens-servico" element={<OrdensServicoMotoristaPage />} />
           </Route>
           <Route element={<AccessRoute requiredScope="menu.veiculos_documentos" />}>
             <Route path="/veiculos-documentos" element={<VeiculosDocumentosPage />} />

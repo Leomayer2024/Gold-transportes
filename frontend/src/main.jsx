@@ -3,12 +3,14 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import { AuthProvider } from './context/AuthContext'
+import UpdatePrompt from './components/UpdatePrompt'
 import './styles.css'
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <BrowserRouter>
     <AuthProvider>
       <App />
+      <UpdatePrompt />
     </AuthProvider>
   </BrowserRouter>,
 )

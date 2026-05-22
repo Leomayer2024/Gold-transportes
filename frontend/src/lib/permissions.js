@@ -11,6 +11,7 @@ export const navigationGroups = [
     items: [
       { to: '/colaboradores', label: 'Colaboradores', scope: 'menu.colaboradores' },
       { to: '/contratos-operacionais', label: 'Contratos operacionais', scope: 'menu.contratos_operacionais' },
+      { to: '/teste-contrato', label: 'Teste Contrato (preview)', scope: 'menu.contratos_operacionais' },
       { to: '/rh-documentos', label: 'Documentos RH', scope: 'menu.colaborador_documentos' },
       { to: '/diarias', label: 'Diárias / Hotelaria', scope: 'menu.diarias' },
       { to: '/rh-planejamento', label: 'Planejamento RH', scope: 'menu.eventos_rh' },
@@ -79,6 +80,7 @@ export const navigationGroups = [
       { to: '/presenca', label: 'Presença', scope: 'menu.presenca' },
       { to: '/carregamento', label: 'Carregamento', scope: 'menu.carregamento' },
       { to: '/horas-extras-rtm', label: 'Calc. Horas Extras', scope: 'menu.horas_extras_rtm' },
+      { to: '/ordens-servico', label: 'Ordens de Serviço (motorista)', scope: 'menu.ordens_servico' },
     ],
   },
 ]
@@ -89,16 +91,16 @@ export function hasScopePermission(profile, scope) {
   }
 
   // Profile ainda não carregou (ex.: logo após login) → não libera nada.
-  // Evita o "flash" de botões/menus enquanto o backend devolve os escopos.
   if (!profile) {
     return false
   }
 
-  // Compat: usuário antigo sem nenhum escopo configurado libera tudo.
-  if (!profile.has_scope_permissions) {
+  if (profile.is_super_admin) {
     return true
   }
 
+  // SEGURANÇA: usuário sem nenhum escopo = SEM ACESSO.
+  // Antes liberava tudo — vetor de escalada de privilégio.
   return (profile.permission_scopes || []).includes(scope)
 }
 
@@ -142,15 +144,15 @@ export function canCreateResource(profile, resourceName, createScope) {
  */
 export function hasActionPermission(profile, actionName) {
   if (!actionName) return true
-  // Profile ainda não carregou → não vaza botões.
   if (!profile) return false
-  if (!profile.has_scope_permissions) return true
+  if (profile.is_super_admin) return true
   const scopes = profile.permission_scopes || []
 
   // Se já tem o escopo explícito, libera.
   if (scopes.includes(actionName)) return true
 
-  // Compat: usuário sem NENHUM action.* configurado -> tudo liberado.
+  // Compat: usuário sem NENHUM action.* configurado -> tudo liberado para
+  // ações granulares (apenas action.*; menus/criação continuam exigindo escopo).
   const hasAnyAction = scopes.some((s) => s.startsWith('action.'))
   if (!hasAnyAction) return true
 

@@ -56,6 +56,7 @@ const CAMPOS_MODAL = {
   ],
   abastecimentos: [
     { k: 'numero_solicitacao', l: 'N° Solicitação' },
+    { k: 'os_motorista_id',    l: 'Vinc. à OS (ID)' },
     { k: 'veiculo_id',         l: 'ID Veículo' },
     { k: 'tipo_combustivel',   l: 'Combustível' },
     { k: 'litros',             l: 'Litros' },
@@ -83,6 +84,7 @@ const CAMPOS_MODAL = {
   ],
   horas_extras: [
     { k: 'numero_solicitacao',   l: 'N° Solicitação' },
+    { k: 'os_motorista_id',      l: 'Vinc. à OS (ID)' },
     { k: 'colaborador_nome',     l: 'Colaborador' },
     { k: 'data_hora_inicio',     l: 'Início', datetime: true },
     { k: 'data_hora_fim',        l: 'Fim',    datetime: true },
@@ -105,6 +107,7 @@ const CAMPOS_MODAL = {
   ],
   diarias_solicitacoes: [
     { k: 'numero_solicitacao', l: 'N° Solicitação' },
+    { k: 'os_motorista_id',    l: 'Vinc. à OS (ID)' },
     { k: 'cidade_destino',     l: 'Cidade destino' },
     { k: 'uf_destino',         l: 'UF' },
     { k: 'data_inicio',        l: 'Início', date: true },

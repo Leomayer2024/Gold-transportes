@@ -1,7 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://vwqldtjjtkdzvkdirmam.supabase.co'
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ3cWxkdGpqdGtkenZrZGlybWFtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ4Nzc4MjQsImV4cCI6MjA5MDQ1MzgyNH0.bAJZYfU9oVnt4ibgHRYBGgpb4NwPL9nl0vXYR9rtlY8'
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error(
+    'VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY são obrigatórios. ' +
+    'Defina em frontend/.env antes do build — não hardcode no fonte.'
+  )
+}
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
@@ -57,4 +64,71 @@ export async function uploadRhDocumentFile(file, options = {}) {
     path: objectPath,
     url: data.publicUrl,
   }
+}
+
+// Extrai bucket + path de uma URL do Supabase Storage.
+// Suporta tanto URLs públicas (/object/public/<bucket>/<path>) quanto
+// URLs já assinadas (/object/sign/<bucket>/<path>?token=...).
+export function parseStorageUrl(url) {
+  if (!url || typeof url !== 'string') return null
+  try {
+    const u = new URL(url)
+    const match = u.pathname.match(/\/storage\/v1\/object\/(?:public|sign)\/([^/]+)\/(.+)$/)
+    if (!match) return null
+    return { bucket: decodeURIComponent(match[1]), path: decodeURIComponent(match[2]) }
+  } catch {
+    return null
+  }
+}
+
+// Abre o arquivo em uma nova aba. Estratégia em cascata:
+//   1) Signed URL (funciona em bucket privado se anon tem policy SELECT).
+//   2) Proxy backend /api/storage/file (usa service_role, sempre funciona).
+//   3) URL pública direta (último recurso — só funciona em bucket Public).
+export async function abrirDocumentoStorage(url, options = {}) {
+  if (!url) return
+  const parsed = parseStorageUrl(url)
+  const download = Boolean(options.download)
+
+  // 1) Tenta signed URL
+  if (parsed) {
+    try {
+      const { data, error } = await supabase.storage
+        .from(parsed.bucket)
+        .createSignedUrl(parsed.path, 3600, download ? { download: true } : undefined)
+      if (!error && data?.signedUrl) {
+        window.open(data.signedUrl, '_blank', 'noopener,noreferrer')
+        return
+      }
+    } catch {
+      // ignora, cai pro próximo
+    }
+  }
+
+  // 2) Proxy backend (precisa de token)
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    const token = session?.access_token
+    if (token) {
+      const qs = new URLSearchParams()
+      qs.set('url', url)
+      if (download) qs.set('download', '1')
+      const resp = await fetch(`/api/storage/file?${qs.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (resp.ok) {
+        const blob = await resp.blob()
+        const objectUrl = URL.createObjectURL(blob)
+        window.open(objectUrl, '_blank', 'noopener,noreferrer')
+        // Libera depois de 60s — tempo suficiente do browser carregar.
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 60000)
+        return
+      }
+    }
+  } catch {
+    // ignora, último fallback
+  }
+
+  // 3) Último fallback — URL pública direta.
+  window.open(url, '_blank', 'noopener,noreferrer')
 }

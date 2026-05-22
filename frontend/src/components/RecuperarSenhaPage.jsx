@@ -19,7 +19,6 @@ export default function RecuperarSenhaPage() {
 
   const [etapa, setEtapa] = useState(1)
   const [emailLogin, setEmailLogin] = useState('')
-  const [emailDestino, setEmailDestino] = useState('')
   const [codigo, setCodigo] = useState('')
   const [resetToken, setResetToken] = useState('')
   const [novaSenha, setNovaSenha] = useState('')
@@ -39,19 +38,14 @@ export default function RecuperarSenhaPage() {
       setErro('Informe seu e-mail de login válido.')
       return
     }
-    if (!emailDestino.trim() || !emailDestino.includes('@')) {
-      setErro('Informe um Gmail válido para receber o código.')
-      return
-    }
     setAguardando(true)
     setErro('')
     setAviso('')
     try {
-      await api.post('/recuperar-senha/enviar-codigo', {
+      const res = await api.post('/recuperar-senha/enviar-codigo', {
         email_login: emailLogin.trim().toLowerCase(),
-        email_destino: emailDestino.trim(),
       })
-      setAviso(`Código enviado para ${emailDestino}. Cheque sua caixa (e o spam).`)
+      setAviso(res?.message || 'Se o e-mail estiver cadastrado, um código foi enviado para o endereço de recuperação registrado.')
       setEtapa(2)
     } catch (e) {
       setErro(e.message || 'Falha ao enviar código.')
@@ -85,8 +79,12 @@ export default function RecuperarSenhaPage() {
 
   async function redefinirSenha(event) {
     event.preventDefault()
-    if (!novaSenha || novaSenha.length < 6) {
-      setErro('A senha precisa ter pelo menos 6 caracteres.')
+    if (!novaSenha || novaSenha.length < 10) {
+      setErro('A senha precisa ter pelo menos 10 caracteres.')
+      return
+    }
+    if (!/[A-Za-z]/.test(novaSenha) || !/[0-9\W_]/.test(novaSenha)) {
+      setErro('A senha deve conter ao menos uma letra e um número ou símbolo.')
       return
     }
     if (novaSenha !== confirmacao) {
@@ -114,11 +112,10 @@ export default function RecuperarSenhaPage() {
     setAviso('')
     setAguardando(true)
     try {
-      await api.post('/recuperar-senha/enviar-codigo', {
+      const res = await api.post('/recuperar-senha/enviar-codigo', {
         email_login: emailLogin.trim().toLowerCase(),
-        email_destino: emailDestino.trim(),
       })
-      setAviso(`Novo código enviado para ${emailDestino}.`)
+      setAviso(res?.message || 'Novo código enviado para o endereço de recuperação registrado.')
     } catch (e) {
       setErro(e.message || 'Falha ao reenviar.')
     } finally {
@@ -158,6 +155,11 @@ export default function RecuperarSenhaPage() {
 
           {etapa === 1 && (
             <form onSubmit={enviarCodigo}>
+              <p style={{ fontSize: 12, color: 'var(--text-muted, #666)', marginBottom: 10 }}>
+                Informe o e-mail que você usa pra entrar. O código será enviado para o endereço de
+                recuperação que o administrador cadastrou para a sua conta. Se ainda não tiver
+                um cadastrado, peça ao administrador.
+              </p>
               <label className="field">
                 <span>E-mail de login (o que você usa pra entrar)</span>
                 <input
@@ -167,16 +169,6 @@ export default function RecuperarSenhaPage() {
                   placeholder="usuario@empresa.com"
                   type="email"
                   value={emailLogin}
-                />
-              </label>
-              <label className="field">
-                <span>Gmail pessoal (onde quer receber o código)</span>
-                <input
-                  autoComplete="email"
-                  onChange={(e) => setEmailDestino(e.target.value)}
-                  placeholder="seunome@gmail.com"
-                  type="email"
-                  value={emailDestino}
                 />
               </label>
               {erro && <div className="alert-error">{erro}</div>}
@@ -198,8 +190,8 @@ export default function RecuperarSenhaPage() {
           {etapa === 2 && (
             <form onSubmit={validarCodigo}>
               <p style={{ fontSize: 12, color: 'var(--text-muted, #666)', marginBottom: 10 }}>
-                Enviamos um código de 6 dígitos para <strong>{emailDestino}</strong>.
-                Cheque a caixa de entrada e a pasta de spam.
+                Se o e-mail estiver cadastrado, enviamos um código de 6 dígitos para o endereço de
+                recuperação registrado. Cheque a caixa de entrada e a pasta de spam.
               </p>
               <label className="field">
                 <span>Código (6 dígitos)</span>
@@ -248,14 +240,14 @@ export default function RecuperarSenhaPage() {
           {etapa === 3 && (
             <form onSubmit={redefinirSenha}>
               <p style={{ fontSize: 12, color: 'var(--text-muted, #666)', marginBottom: 10 }}>
-                Código validado. Defina uma nova senha — pelo menos 6 caracteres.
+                Código validado. Defina uma nova senha — pelo menos 10 caracteres com letra e número (ou símbolo).
               </p>
               <label className="field">
                 <span>Nova senha</span>
                 <input
                   autoComplete="new-password"
                   autoFocus
-                  minLength={6}
+                  minLength={10}
                   onChange={(e) => setNovaSenha(e.target.value)}
                   placeholder="••••••••"
                   type="password"
@@ -266,7 +258,7 @@ export default function RecuperarSenhaPage() {
                 <span>Confirmar nova senha</span>
                 <input
                   autoComplete="new-password"
-                  minLength={6}
+                  minLength={10}
                   onChange={(e) => setConfirmacao(e.target.value)}
                   placeholder="••••••••"
                   type="password"

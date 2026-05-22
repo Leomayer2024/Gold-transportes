@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { api } from '../../services/api'
-import { uploadRhDocumentFile } from '../../lib/supabase'
+import { uploadRhDocumentFile, abrirDocumentoStorage } from '../../lib/supabase'
 import {
   CATEGORIAS,
   TIPOS_DOCUMENTOS,
@@ -485,9 +485,13 @@ export default function DocumentoModal({
               />
               {uploading && <small>Enviando…</small>}
               {form.arquivo_url && (
-                <a href={form.arquivo_url} target="_blank" rel="noreferrer" className="button-link">
+                <button
+                  type="button"
+                  className="button-link"
+                  onClick={() => abrirDocumentoStorage(form.arquivo_url)}
+                >
                   Ver arquivo atual
-                </a>
+                </button>
               )}
             </div>
           </label>
@@ -508,7 +512,11 @@ export default function DocumentoModal({
               <ul className="rh-doc-extras-list">
                 {form.arquivos_extras.map((arq, idx) => (
                   <li key={idx}>
-                    <a href={arq.url} target="_blank" rel="noreferrer">📎 {arq.nome || `arquivo ${idx + 1}`}</a>
+                    <button
+                      type="button"
+                      className="button-link"
+                      onClick={() => abrirDocumentoStorage(arq.url)}
+                    >📎 {arq.nome || `arquivo ${idx + 1}`}</button>
                     <small>{arq.enviado_em}</small>
                     <button type="button" className="button-link danger" onClick={() => removerArquivoExtra(idx)}>✕</button>
                   </li>

@@ -18,6 +18,7 @@ import {
 import { enriquecerDocumento, contarAlertas, formatarDataBr } from './rhDocumentos/helpers'
 import DocumentoModal from './rhDocumentos/DocumentoModal'
 import ImportExcelModal from './rhDocumentos/ImportExcelModal'
+import { abrirDocumentoStorage } from '../lib/supabase'
 import SensitiveField from './rhDocumentos/SensitiveField'
 import FichaColaboradorDrawer from './rhDocumentos/FichaColaboradorDrawer'
 import {
@@ -800,7 +801,12 @@ function VisaoPlanilha({
     return (
       <span className="rh-doc-files-cell">
         {doc.arquivo_url && (
-          <a href={doc.arquivo_url} target="_blank" rel="noreferrer" className="button-link" title="Arquivo principal">📄</a>
+          <button
+            type="button"
+            className="button-link"
+            title="Arquivo principal (assina URL se bucket for privado)"
+            onClick={() => abrirDocumentoStorage(doc.arquivo_url)}
+          >📄</button>
         )}
         {extras.length > 0 && (
           <span className="rh-doc-extras-badge" title={extras.map((a) => a.nome || a.url).join('\n')}>

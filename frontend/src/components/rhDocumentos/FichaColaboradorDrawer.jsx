@@ -9,6 +9,7 @@ import {
 import { formatarDataBr } from './helpers'
 import SensitiveField from './SensitiveField'
 import VinculoColaboradorSection from '../rhContratos/VinculoColaboradorSection'
+import { abrirDocumentoStorage } from '../../lib/supabase'
 
 // Drawer lateral que mostra TODOS os documentos de um colaborador agrupados
 // por categoria, com chips de status e acesso rápido aos arquivos.
@@ -117,7 +118,7 @@ export default function FichaColaboradorDrawer({
     if (arquivos.length === 0) return
     if (!window.confirm(`Abrir ${arquivos.length} arquivo(s) em novas abas para visualizar/baixar?`)) return
     arquivos.forEach((a, i) => {
-      setTimeout(() => window.open(a.url, '_blank', 'noopener,noreferrer'), i * 150)
+      setTimeout(() => abrirDocumentoStorage(a.url), i * 150)
     })
   }
 
@@ -229,7 +230,12 @@ export default function FichaColaboradorDrawer({
                     <li key={`${a.url}-${i}`}>
                       <span className="rh-ficha-arquivo-tipo">{a.tipo}</span>
                       <span className="rh-ficha-arquivo-nome">{a.nome}</span>
-                      <a href={a.url} target="_blank" rel="noreferrer" className="button-link" title="Visualizar em nova aba">👁</a>
+                      <button
+                        type="button"
+                        className="button-link"
+                        title="Visualizar em nova aba (assina URL se bucket for privado)"
+                        onClick={() => abrirDocumentoStorage(a.url)}
+                      >👁</button>
                       <a href={a.url} download className="button-link" title="Baixar arquivo">⬇</a>
                     </li>
                   ))}
@@ -305,16 +311,14 @@ function DocItem({ doc, onEditarDoc }) {
       <span className={`rh-status-badge ${status}`}>{STATUS_LABELS[status] || status}</span>
       <div className="rh-ficha-doc-files">
         {doc.arquivo_url && (
-          <a
-            href={doc.arquivo_url}
-            target="_blank"
-            rel="noreferrer"
+          <button
+            type="button"
             className="button-link"
-            title="Abrir arquivo principal"
-            onClick={(e) => e.stopPropagation()}
+            title="Abrir arquivo principal (assina URL se bucket for privado)"
+            onClick={(e) => { e.stopPropagation(); abrirDocumentoStorage(doc.arquivo_url) }}
           >
             📄
-          </a>
+          </button>
         )}
         {extras.length > 0 && (
           <span title={extras.map((a) => a.nome || a.url).join('\n')} style={{ fontSize: 11 }}>

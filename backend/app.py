@@ -31,7 +31,11 @@ load_dotenv(Path(__file__).with_name('.env'))
 
 BACKEND_DIR = Path(__file__).resolve().parent
 FRONTEND_DIST_DIR = BACKEND_DIR.parent / 'frontend' / 'dist'
-SUPER_ADMIN_EMAIL = 'admin@admin'
+
+# SUPER_ADMIN_EMAIL via env. Antes era hardcoded ('admin@admin') no fonte —
+# qualquer um com acesso ao repositório conhecia o e-mail privilegiado.
+# Fallback existe só para compat; em produção defina via .env.
+SUPER_ADMIN_EMAIL = (os.getenv('SUPER_ADMIN_EMAIL') or 'admin@admin').strip().lower()
 # AVISO: nunca adicionar aliases por local-part de e-mail ou por cargo — gera escalada de privilégio.
 
 
@@ -78,9 +82,10 @@ RESOURCE_DEFINITIONS = {
             'foto_url',
             'data_admissao',
             'data_desligamento',
+            'email_recuperacao',
             'ativo',
         ],
-        'nullable_fields': ['data_desligamento', 'horario_padrao_inicio', 'horario_padrao_fim', 'telefone'],
+        'nullable_fields': ['data_desligamento', 'horario_padrao_inicio', 'horario_padrao_fim', 'telefone', 'email_recuperacao'],
         'partial_match_fields': ['nome_completo', 'cargo', 'cpf'],
         'view_scope': 'menu.colaboradores',
         'view_scope_any': [
@@ -647,9 +652,10 @@ RESOURCE_DEFINITIONS = {
             'observacoes',
             'status',
             'ativo',
+            'os_motorista_id',
         ],
         'partial_match_fields': ['fornecedor', 'numero_nota', 'observacoes'],
-        'nullable_fields': ['fornecedor', 'numero_nota', 'motorista_id', 'registrado_por', 'observacoes'],
+        'nullable_fields': ['fornecedor', 'numero_nota', 'motorista_id', 'registrado_por', 'observacoes', 'os_motorista_id'],
         'view_scope': 'menu.abastecimentos',
         'create_scope': 'create.abastecimentos',
         'filial_scope_field': 'filial_id',
@@ -786,11 +792,48 @@ RESOURCE_DEFINITIONS = {
             'justificativa_gestor',
             'data_aprovacao',
             'aprovado_por',
+            'os_motorista_id',
         ],
         'partial_match_fields': ['motivo', 'status', 'justificativa_gestor'],
-        'nullable_fields': ['servico_id', 'jornada_id', 'status', 'justificativa_gestor', 'data_aprovacao', 'aprovado_por'],
+        'nullable_fields': ['servico_id', 'jornada_id', 'status', 'justificativa_gestor', 'data_aprovacao', 'aprovado_por', 'os_motorista_id'],
         'view_scope': 'menu.horas_extras',
         'create_scope': 'create.horas_extras',
+        'filial_scope_field': 'filial_id',
+    },
+    'ordens_servico_motorista': {
+        'table': 'ordens_servico_motorista',
+        'order': 'created_at',
+        'required_fields': ['filial_id', 'motorista_id', 'origem', 'destino'],
+        'allowed_fields': [
+            'filial_id',
+            'motorista_id',
+            'veiculo_id',
+            'origem',
+            'destino',
+            'motivo',
+            'data_prevista_inicio',
+            'data_prevista_fim',
+            'data_inicio_real',
+            'data_finalizacao',
+            'km_inicial',
+            'km_final',
+            'status',
+            'observacoes',
+            'criado_por',
+            'finalizada_por',
+            'cancelada_por',
+            'motivo_cancelamento',
+            'ativo',
+        ],
+        'partial_match_fields': ['origem', 'destino', 'motivo', 'observacoes', 'status', 'numero_solicitacao'],
+        'nullable_fields': [
+            'veiculo_id', 'motivo', 'data_prevista_inicio', 'data_prevista_fim',
+            'data_inicio_real', 'data_finalizacao', 'km_inicial', 'km_final',
+            'observacoes', 'criado_por', 'finalizada_por', 'cancelada_por',
+            'motivo_cancelamento',
+        ],
+        'view_scope': 'menu.ordens_servico',
+        'create_scope': 'create.ordens_servico',
         'filial_scope_field': 'filial_id',
     },
 }
@@ -832,6 +875,9 @@ PERMISSION_SCOPE_GROUPS = [
             {'name': 'menu.horas_extras',            'label': 'Ver horas extras',                    'platforms': ['web', 'app'], 'auto_enable': [],                          'description': 'Mostra o registro e aprovação de horas extras por colaborador e filial.'},
             {'name': 'create.horas_extras',          'label': 'Lançar horas extras',                 'platforms': ['web', 'app'], 'auto_enable': ['menu.horas_extras'],        'description': 'Permite registrar solicitações de horas extras para colaboradores.'},
             {'name': 'menu.horas_extras_rtm',        'label': 'Calc. Horas Extras (RTM)',            'platforms': ['web'],        'auto_enable': [],                          'description': 'Calculadora RTM: cola dados da planilha e calcula totais de horas extras. Disponível apenas no web (usa colagem de planilha).'},
+            {'name': 'menu.ordens_servico',          'label': 'Ver ordens de serviço (motorista)',   'platforms': ['web', 'app'], 'auto_enable': [],                          'description': 'Mostra as OS de motorista (viagens) — usado pelos motoristas no app e gestores no web.'},
+            {'name': 'create.ordens_servico',        'label': 'Abrir OS de motorista',               'platforms': ['web', 'app'], 'auto_enable': ['menu.ordens_servico'],     'description': 'Permite ao motorista criar OS de viagem (origem/destino) e usá-la pra agrupar HE, combustível e diárias.'},
+            {'name': 'finalizar.ordens_servico',     'label': 'Finalizar / cancelar OS',             'platforms': ['web', 'app'], 'auto_enable': ['menu.ordens_servico'],     'description': 'Permite finalizar ou cancelar OS de motorista. Sem aprovação — é apenas registro de encerramento.'},
             {'name': 'menu.quadro_funcionarios',     'label': 'Ver quadro de funcionários',          'platforms': ['web'],        'auto_enable': [],                          'description': 'Mostra o quadro por base com totais e status da equipe.'},
             {'name': 'menu.bonificacao',             'label': 'Ver bonificação',                     'platforms': ['web'],        'auto_enable': [],                          'description': 'Mostra o controle mensal de bonificação por colaborador e os totais pagos.'},
             {'name': 'manage.bonificacao',           'label': 'Modificar bonificação',               'platforms': ['web'],        'auto_enable': ['menu.bonificacao'],         'description': 'Permite alterar lançamentos mensais de bonificação por colaborador.'},
@@ -1203,6 +1249,27 @@ def create_app():
         raise RuntimeError('Defina SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY ou SUPABASE_SECRET_KEY no backend/.env')
 
     supabase: Client = create_client(supabase_url, supabase_server_key)
+
+    # ─── Garante bucket de documentos ─────────────────────────────────────
+    # Cria 'rh-documentos' PRIVADO se não existir. Download/visualização
+    # passa pelo proxy /api/storage/file (service_role), nunca expondo
+    # arquivos ao público.
+    documents_bucket_name = os.getenv('SUPABASE_DOCUMENTS_BUCKET', 'rh-documentos')
+    try:
+        existing_buckets = supabase.storage.list_buckets() or []
+        bucket_ids = {getattr(b, 'id', None) or (b.get('id') if isinstance(b, dict) else None) for b in existing_buckets}
+        if documents_bucket_name not in bucket_ids:
+            try:
+                supabase.storage.create_bucket(
+                    documents_bucket_name,
+                    options={'public': False, 'file_size_limit': 52428800},
+                )
+                app.logger.info('Storage: bucket "%s" criado (privado).', documents_bucket_name)
+            except Exception as create_exc:
+                app.logger.warning('Storage: falha ao criar bucket "%s": %s', documents_bucket_name, create_exc)
+    except Exception as exc_buckets:
+        app.logger.warning('Storage: não foi possível listar bucket "%s": %s', documents_bucket_name, exc_buckets)
+
     auth_cache_ttl = int(os.getenv('AUTH_CACHE_TTL_SECONDS', '30'))
     auth_cache = {}
     _profile_cache = {}          # user_id → {'profile': ..., 'expires_at': float}
@@ -2666,15 +2733,25 @@ def create_app():
         """
         Verifica se um colaborador estava ativo em uma data específica.
         Retorna True se:
+        - data_admissao <= target_date (já tinha entrado na empresa)
         - É ativo (ativo = True) E (sem data_desligamento OU data_desligamento > target_date)
         - OU tem registro de presença/evento naquela data (é garantido pela chamadora)
         """
         if not target_date:
             return collaborator.get('ativo', False)
-        
+
+        admissao_date_str = collaborator.get('data_admissao')
+        if admissao_date_str:
+            try:
+                admissao_date = datetime.strptime(admissao_date_str, '%Y-%m-%d').date() if isinstance(admissao_date_str, str) else admissao_date_str
+                if admissao_date > target_date:
+                    return False
+            except (ValueError, TypeError):
+                pass
+
         is_active = collaborator.get('ativo', False)
         desligamento_date_str = collaborator.get('data_desligamento')
-        
+
         if not is_active:
             # Se inativo, só mostra se tem data de desligamento futura à data alvo
             if not desligamento_date_str:
@@ -2779,7 +2856,7 @@ def create_app():
     def list_active_collaborators_for_presence(filial_id=None, target_date=None, ensure_ids=None):
         query = (
             supabase.table('colaboradores')
-            .select('id, filial_id, nome_completo, cargo, turno, escala_servico, horario_padrao_inicio, horario_padrao_fim, ativo, data_desligamento')
+            .select('id, filial_id, nome_completo, cargo, turno, escala_servico, horario_padrao_inicio, horario_padrao_fim, ativo, data_admissao, data_desligamento')
             .order('nome_completo')
         )
         if filial_id:
@@ -5087,10 +5164,9 @@ def create_app():
         if not scope_name:
             return True
 
+        # SEGURANÇA: usuário sem nenhum escopo configurado = SEM ACESSO.
+        # Anteriormente liberava tudo (backdoor de privilégio).
         known_scopes = set(profile.get('permission_scopes') or [])
-        if not profile.get('has_scope_permissions'):
-            return True
-
         return scope_name in known_scopes
 
     def build_profile(collaborator, user):
@@ -5326,6 +5402,12 @@ def create_app():
             response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
             response.headers['Pragma'] = 'no-cache'
             response.headers['Expires'] = '0'
+            # PWA — service worker precisa ser servido como JS e poder controlar o root.
+            if path == 'sw.js':
+                response.headers['Content-Type'] = 'application/javascript'
+                response.headers['Service-Worker-Allowed'] = '/'
+            elif path == 'manifest.webmanifest':
+                response.headers['Content-Type'] = 'application/manifest+json'
             return response
 
         return serve_frontend_index()
@@ -5337,6 +5419,122 @@ def create_app():
     @app.get('/api/health')
     def health():
         return jsonify({'status': 'ok'})
+
+    # ─── Proxy de arquivos do Storage ─────────────────────────────────────
+    # Permite baixar/visualizar arquivos mesmo quando o bucket é privado ou
+    # quando o anon key não tem policy de SELECT. Usa o cliente do backend
+    # (service role) para baixar o objeto e devolve em streaming. Aceita
+    # tanto ?url=<storage-url-pública> quanto ?bucket=<nome>&path=<caminho>.
+    @app.get('/api/storage/file')
+    @rate_limit_endpoint(max_requests=120)
+    @require_auth
+    def storage_file_proxy(profile):
+        import re as _re
+        from urllib.parse import urlparse, unquote
+        from flask import Response
+
+        url_param = request.args.get('url', type=str)
+        bucket_name = request.args.get('bucket', type=str)
+        object_path = request.args.get('path', type=str)
+
+        if url_param and not (bucket_name and object_path):
+            try:
+                parsed = urlparse(url_param)
+                match = _re.match(r'/storage/v1/object/(?:public|sign)/([^/]+)/(.+)$', parsed.path)
+                if match:
+                    bucket_name = unquote(match.group(1))
+                    object_path = unquote(match.group(2))
+            except Exception:
+                pass
+
+        if not bucket_name or not object_path:
+            return jsonify({'error': 'Informe ?url= ou ?bucket=&path='}), 400
+
+        # ─── Authorização por escopo (deduzido pelo prefixo do path) ──────
+        # documentos-rh/...        → menu.colaborador_documentos
+        # documentos-veiculos/...  → menu.veiculos_documentos
+        # outros prefixos          → bloqueia (não tem escopo mapeado)
+        path_lower = object_path.lower()
+        if path_lower.startswith('documentos-rh/'):
+            required_scope = 'menu.colaborador_documentos'
+            resource_for_audit = 'colaborador_documentos'
+        elif path_lower.startswith('documentos-veiculos/'):
+            required_scope = 'menu.veiculos_documentos'
+            resource_for_audit = 'veiculos_documentos'
+        else:
+            write_audit_event(
+                profile,
+                action='storage_download_denied',
+                resource_name='storage',
+                status='error',
+                details={'bucket': bucket_name, 'path': object_path[:300], 'reason': 'prefixo_nao_mapeado'},
+            )
+            return jsonify({'error': 'Caminho de arquivo não permitido.'}), 403
+
+        scope_error = require_scope_permission(profile, required_scope, 'Sem permissão para acessar este arquivo.')
+        if scope_error:
+            write_audit_event(
+                profile,
+                action='storage_download_denied',
+                resource_name=resource_for_audit,
+                status='error',
+                details={'bucket': bucket_name, 'path': object_path[:300], 'reason': 'sem_escopo'},
+            )
+            return scope_error
+
+        try:
+            blob = supabase.storage.from_(bucket_name).download(object_path)
+        except Exception as exc:
+            msg = str(exc).lower()
+            write_audit_event(
+                profile,
+                action='storage_download',
+                resource_name=resource_for_audit,
+                status='error',
+                details={'bucket': bucket_name, 'path': object_path[:300], 'error': str(exc)[:200]},
+            )
+            if 'not found' in msg or 'no such' in msg or '404' in msg:
+                return jsonify({'error': f'Arquivo não encontrado no bucket "{bucket_name}".'}), 404
+            return jsonify({'error': f'Falha ao baixar do Storage: {exc}'}), 500
+
+        write_audit_event(
+            profile,
+            action='storage_download',
+            resource_name=resource_for_audit,
+            status='ok',
+            details={
+                'bucket': bucket_name,
+                'path': object_path[:300],
+                'bytes': len(blob) if blob is not None else 0,
+                'mode': 'download' if request.args.get('download') in ('1', 'true') else 'inline',
+            },
+        )
+
+        # Inferir content-type pela extensão
+        ext = (object_path.rsplit('.', 1)[-1] or '').lower()
+        mime_map = {
+            'pdf': 'application/pdf',
+            'png': 'image/png', 'jpg': 'image/jpeg', 'jpeg': 'image/jpeg',
+            'webp': 'image/webp', 'gif': 'image/gif', 'svg': 'image/svg+xml',
+            'txt': 'text/plain', 'csv': 'text/csv',
+            'doc': 'application/msword',
+            'docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'xls': 'application/vnd.ms-excel',
+            'xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        }
+        content_type = mime_map.get(ext, 'application/octet-stream')
+
+        filename = object_path.rsplit('/', 1)[-1]
+        disposition = 'attachment' if request.args.get('download') in ('1', 'true') else 'inline'
+
+        return Response(
+            blob,
+            mimetype=content_type,
+            headers={
+                'Content-Disposition': f'{disposition}; filename="{filename}"',
+                'Cache-Control': 'private, max-age=300',
+            },
+        )
 
     # ─── Recuperação de senha (público) ───────────────────────────────────────
     # Fluxo OTP de 6 dígitos enviado por SMTP para o Gmail informado na hora.
@@ -5426,15 +5624,52 @@ def create_app():
     def _ip_origem():
         return (request.headers.get('X-Forwarded-For', '') or request.remote_addr or '').split(',')[0].strip()
 
+    def _resolver_email_destino_para_reset(email_login, auth_user):
+        """Resolve o e-mail seguro de destino para envio do OTP.
+
+        SEGURANÇA: o destino NÃO pode vir do request. Caso contrário, qualquer um
+        que saiba o e-mail de login de outro usuário consegue redirecionar o
+        código para sua própria caixa e tomar a conta.
+
+        Ordem de preferência:
+          1) colaboradores.email_recuperacao (campo dedicado, cadastrado por admin).
+          2) email_login se for um endereço válido e roteável (contém ponto no domínio).
+          3) None → bloquear envio.
+        """
+        # 1) tenta o e-mail cadastrado no colaborador
+        user_id = None
+        if auth_user is not None:
+            user_id = getattr(auth_user, 'id', None) or (auth_user.get('id') if isinstance(auth_user, dict) else None)
+        if user_id:
+            try:
+                resp = (
+                    supabase.table('colaboradores')
+                    .select('email_recuperacao')
+                    .eq('user_id', str(user_id))
+                    .limit(1)
+                    .execute()
+                )
+                row = (resp.data or [None])[0]
+                if row:
+                    candidato = (row.get('email_recuperacao') or '').strip()
+                    if candidato and re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', candidato):
+                        return candidato.lower()
+            except Exception as exc:
+                app.logger.warning('Falha ao buscar email_recuperacao: %s', exc)
+
+        # 2) fallback: o próprio email_login, se for endereço público válido
+        if email_login and re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email_login):
+            return email_login
+
+        # 3) sem destino confiável
+        return None
+
     @app.post('/api/recuperar-senha/enviar-codigo')
     def recuperar_senha_enviar_codigo():
         data = request.get_json(silent=True) or {}
         email_login = (data.get('email_login') or '').strip().lower()
-        email_destino = (data.get('email_destino') or '').strip()
         if not email_login or '@' not in email_login:
             return jsonify({'error': 'Informe o e-mail de login válido.'}), 400
-        if not email_destino or '@' not in email_destino:
-            return jsonify({'error': 'Informe um Gmail válido para receber o código.'}), 400
 
         # Rate limit por email_login (máx 3 pedidos em 1h) e por IP (máx 10 em 1h)
         try:
@@ -5457,6 +5692,13 @@ def create_app():
             app.logger.info('Pedido de reset para e-mail não cadastrado: %s', email_login)
             return jsonify({'ok': True, 'message': 'Se o e-mail estiver cadastrado, um código será enviado.'})
 
+        # SEGURANÇA: destino é determinado pelo servidor, NUNCA pelo request.
+        email_destino = _resolver_email_destino_para_reset(email_login, user)
+        if not email_destino:
+            app.logger.warning('Reset bloqueado: sem email_recuperacao cadastrado para %s', email_login)
+            # Mesma resposta de sucesso para preservar privacidade.
+            return jsonify({'ok': True, 'message': 'Se o e-mail estiver cadastrado, um código será enviado.'})
+
         codigo = ''.join([_secrets.choice('0123456789') for _ in range(6)])
         expira_em = (datetime.utcnow() + timedelta(minutes=15)).isoformat()
         try:
@@ -5471,14 +5713,15 @@ def create_app():
             app.logger.error('Falha ao gravar password_reset_codes: %s', exc)
             return jsonify({'error': 'Falha temporária. Tente novamente em alguns minutos.'}), 500
 
-        # Envia o e-mail. Se SMTP falhar, retorna erro com diagnóstico.
+        # Envia o e-mail. Se SMTP falhar, retorna mensagem genérica para não
+        # revelar a existência do cadastro.
         try:
             _send_email_otp(email_destino, codigo)
         except Exception as exc:
-            app.logger.error('Falha ao enviar e-mail OTP para %s: %s', email_destino, exc)
-            return jsonify({'error': 'Não conseguimos enviar o e-mail agora. Verifique o endereço e tente novamente.'}), 500
+            app.logger.error('Falha ao enviar e-mail OTP: %s', exc)
+            return jsonify({'error': 'Falha temporária ao enviar o código. Tente novamente em alguns minutos.'}), 500
 
-        return jsonify({'ok': True, 'message': 'Código enviado.'})
+        return jsonify({'ok': True, 'message': 'Se o e-mail estiver cadastrado, um código será enviado para o endereço de recuperação registrado.'})
 
     @app.post('/api/recuperar-senha/validar-codigo')
     def recuperar_senha_validar_codigo():
@@ -5545,8 +5788,14 @@ def create_app():
         nova_senha = data.get('nova_senha') or ''
         if not reset_token:
             return jsonify({'error': 'Sessão inválida. Recomece o processo.'}), 400
-        if not isinstance(nova_senha, str) or len(nova_senha) < 6:
-            return jsonify({'error': 'A senha precisa ter pelo menos 6 caracteres.'}), 400
+        if not isinstance(nova_senha, str) or len(nova_senha) < 10:
+            return jsonify({'error': 'A senha precisa ter pelo menos 10 caracteres.'}), 400
+        if len(nova_senha) > 128:
+            return jsonify({'error': 'A senha não pode exceder 128 caracteres.'}), 400
+        if re.search(r'[\x00-\x1f\x7f]', nova_senha):
+            return jsonify({'error': 'A senha contém caracteres inválidos.'}), 400
+        if not re.search(r'[A-Za-z]', nova_senha) or not re.search(r'[0-9\W_]', nova_senha):
+            return jsonify({'error': 'A senha deve conter ao menos uma letra e um número ou símbolo.'}), 400
 
         try:
             agora = datetime.utcnow().isoformat()
@@ -5669,6 +5918,83 @@ def create_app():
             profile['assinatura_dias_trial'] = assinatura.get('dias_restantes_trial')
             profile['assinatura_period_end'] = assinatura.get('current_period_end')
         return jsonify(profile)
+
+    # ── Veículo padrão do motorista logado (via pacote_motorista_veiculo) ─────
+    @app.get('/api/me/veiculo-padrao')
+    @require_auth
+    def me_veiculo_padrao(profile):
+        colaborador_id = profile.get('id')
+        if not colaborador_id:
+            return jsonify({'veiculo': None}), 200
+        try:
+            res = supabase.rpc('get_veiculo_padrao_motorista', {'p_colaborador_id': colaborador_id}).execute()
+            row = (res.data or [None])[0] if isinstance(res.data, list) else None
+            return jsonify({'veiculo': row}), 200
+        except Exception as exc:
+            app.logger.warning('veiculo_padrao falhou: %s', exc)
+            return jsonify({'veiculo': None}), 200
+
+    # ── OS de motorista: transições de status (sem aprovação) ─────────────────
+    def _osm_transition(profile, item_id, novo_status, motivo=None):
+        config = RESOURCE_DEFINITIONS['ordens_servico_motorista']
+        scope_err = require_scope_permission(profile, config['view_scope'])
+        if scope_err:
+            return scope_err
+        try:
+            cur = supabase.table('ordens_servico_motorista').select('*').eq('id', item_id).limit(1).execute().data or []
+        except Exception as exc:
+            return jsonify({'error': translate_database_error(exc)}), 500
+        if not cur:
+            return jsonify({'error': 'OS não encontrada.'}), 404
+        os_row = cur[0]
+        if not ensure_profile_can_access_filial(profile, os_row.get('filial_id')):
+            return jsonify({'error': 'Sem permissão para esta filial.'}), 403
+
+        update = {'status': novo_status}
+        now_iso = datetime.utcnow().isoformat()
+        if novo_status == 'em_andamento' and not os_row.get('data_inicio_real'):
+            update['data_inicio_real'] = now_iso
+        if novo_status == 'finalizada':
+            update['data_finalizacao'] = now_iso
+            update['finalizada_por'] = profile.get('id')
+        if novo_status == 'cancelada':
+            update['cancelada_por'] = profile.get('id')
+            if motivo:
+                update['motivo_cancelamento'] = motivo
+
+        try:
+            resp = supabase.table('ordens_servico_motorista').update(update).eq('id', item_id).execute()
+            updated = resp.data[0] if resp.data else os_row
+        except Exception as exc:
+            return jsonify({'error': translate_database_error(exc)}), 400
+
+        write_audit_event(
+            profile, action='update', resource_name='ordens_servico_motorista',
+            entity_id=item_id, details={'novo_status': novo_status, 'motivo': motivo},
+            filial_id=os_row.get('filial_id'),
+        )
+        return jsonify(updated), 200
+
+    @app.post('/api/ordens_servico_motorista/<int:item_id>/abrir')
+    @require_auth
+    def osm_abrir(profile, item_id):
+        return _osm_transition(profile, item_id, 'aberta')
+
+    @app.post('/api/ordens_servico_motorista/<int:item_id>/iniciar')
+    @require_auth
+    def osm_iniciar(profile, item_id):
+        return _osm_transition(profile, item_id, 'em_andamento')
+
+    @app.post('/api/ordens_servico_motorista/<int:item_id>/finalizar')
+    @require_auth
+    def osm_finalizar(profile, item_id):
+        return _osm_transition(profile, item_id, 'finalizada')
+
+    @app.post('/api/ordens_servico_motorista/<int:item_id>/cancelar')
+    @require_auth
+    def osm_cancelar(profile, item_id):
+        body = request.get_json(silent=True) or {}
+        return _osm_transition(profile, item_id, 'cancelada', motivo=body.get('motivo'))
 
     @app.get('/api/assinatura')
     @require_auth
@@ -6359,6 +6685,7 @@ def create_app():
         _SOLICITACAO_TIPO_MAP = {
             'manutencoes': 'manutencoes',
             'veiculos_abastecimentos': 'abastecimentos',
+            'ordens_servico_motorista': 'ordens_servico_motorista',
             'pedidos_compra': 'pedidos_compra',
             'horas_extras': 'horas_extras',
             'veiculos_pneus': 'pneus',
@@ -7084,6 +7411,15 @@ def create_app():
             return jsonify({'error': 'colaborador_id e scope_name são obrigatórios.'}), 400
         if scope_name not in PERMISSION_SCOPE_MAP:
             return jsonify({'error': f'Escopo inválido: {scope_name}'}), 400
+
+        # SEGURANÇA: ninguém edita as próprias permissões — vide permissions_update.
+        try:
+            current_id = int(profile.get('id') or 0)
+            target_id = int(colaborador_id)
+        except (TypeError, ValueError):
+            current_id, target_id = 0, 0
+        if current_id and current_id == target_id and not profile.get('is_super_admin'):
+            return jsonify({'error': 'Você não pode alterar as próprias permissões. Peça a outro administrador.'}), 403
         try:
             if ativo:
                 existing = (
@@ -7153,6 +7489,15 @@ def create_app():
         scope_error = require_scope_permission(profile, 'menu.permissoes', 'Sem permissão para alterar permissões.')
         if scope_error:
             return scope_error
+
+        # SEGURANÇA: ninguém edita as próprias permissões (escalada de privilégio).
+        # Apenas o super_admin pode — pra cobrir o caso de bootstrap.
+        try:
+            current_id = int(profile.get('id') or 0)
+        except (TypeError, ValueError):
+            current_id = 0
+        if current_id and current_id == int(collaborator_id) and not profile.get('is_super_admin'):
+            return jsonify({'error': 'Você não pode alterar as próprias permissões. Peça a outro administrador.'}), 403
 
         payload = request.get_json(silent=True)
         if not isinstance(payload, dict):
