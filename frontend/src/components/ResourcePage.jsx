@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link } from 'react-router-dom'
 import * as XLSX from 'xlsx'
 import { useAuth } from '../context/AuthContext'
 import { canCreateResource } from '../lib/permissions'
@@ -1504,7 +1505,7 @@ export default function ResourcePage({
                       const isForcedField = Object.prototype.hasOwnProperty.call(normalizedForcedFormValues, field.name)
                       const isLockedBonificacaoField = isBonificacaoMode && BONIFICACAO_LOCKED_FIELDS.has(field.name)
                       const isLockedProjectedField = isProjectedDailyMode && PROJECTED_DAILY_LOCKED_FIELDS.has(field.name)
-                      const isDisabled = Boolean(field.disabled || isForcedField || isLockedBonificacaoField || isLockedProjectedField)
+                      const isDisabled = Boolean(field.disabled || field.readOnly || isForcedField || isLockedBonificacaoField || isLockedProjectedField)
                       const isCheckbox = field.type === 'checkbox'
 
                       if (isCheckbox) {
@@ -1641,16 +1642,30 @@ export default function ResourcePage({
 
                       return (
                         <label className="field" key={field.name}>
-                          <span>{field.label}</span>
+                          <span>
+                            {field.label}
+                            {field.readOnly && (
+                              <span title={field.tooltip || 'Campo calculado automaticamente.'} style={{ marginLeft: 6, fontSize: 11, color: 'var(--text-muted, #888)' }}>
+                                🔒
+                              </span>
+                            )}
+                          </span>
                           <input
                             disabled={isDisabled}
                             onChange={(event) => handleChange(field, event.target.value)}
                             placeholder={field.placeholder}
+                            readOnly={field.readOnly}
                             required={isFieldRequired(field, formState)}
                             style={field.transform === 'uppercase' ? { textTransform: 'uppercase' } : undefined}
+                            title={field.tooltip || undefined}
                             type={field.type}
                             value={value}
                           />
+                          {field.helpLink && (
+                            <small className="field-help-text" style={{ fontSize: 11 }}>
+                              <Link to={field.helpLink.to}>{field.helpLink.label} →</Link>
+                            </small>
+                          )}
                         </label>
                       )
                     })}

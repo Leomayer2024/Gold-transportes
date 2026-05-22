@@ -83,10 +83,9 @@ RESOURCE_DEFINITIONS = {
             'data_admissao',
             'data_desligamento',
             'email_recuperacao',
-            'veiculo_padrao_id',
             'ativo',
         ],
-        'nullable_fields': ['data_desligamento', 'horario_padrao_inicio', 'horario_padrao_fim', 'telefone', 'email_recuperacao', 'veiculo_padrao_id'],
+        'nullable_fields': ['data_desligamento', 'horario_padrao_inicio', 'horario_padrao_fim', 'telefone', 'email_recuperacao'],
         'partial_match_fields': ['nome_completo', 'cargo', 'cpf'],
         'view_scope': 'menu.colaboradores',
         'view_scope_any': [
@@ -799,6 +798,20 @@ RESOURCE_DEFINITIONS = {
         'nullable_fields': ['servico_id', 'jornada_id', 'status', 'justificativa_gestor', 'data_aprovacao', 'aprovado_por', 'os_motorista_id'],
         'view_scope': 'menu.horas_extras',
         'create_scope': 'create.horas_extras',
+        'filial_scope_field': 'filial_id',
+    },
+    'motorista_veiculo': {
+        'table': 'motorista_veiculo',
+        'order': 'created_at',
+        'required_fields': ['filial_id', 'motorista_id', 'veiculo_id'],
+        'allowed_fields': [
+            'filial_id', 'motorista_id', 'veiculo_id',
+            'principal', 'ativo', 'observacoes',
+        ],
+        'partial_match_fields': ['observacoes'],
+        'nullable_fields': ['observacoes'],
+        'view_scope': 'menu.veiculos',
+        'create_scope': 'menu.veiculos',
         'filial_scope_field': 'filial_id',
     },
     'ordens_servico_motorista': {
@@ -2807,6 +2820,123 @@ def create_app():
 
     def collaborator_documents_table_ready():
         return table_exists_ready('colaborador_documentos')
+
+    def enrich_veiculos_with_derived(rows):
+        """Sobrescreve data_vencimento_crlv, data_vencimento_seguro e
+        data_ultima_revisao com valores derivados dos módulos-fonte:
+
+          - CRLV / Seguro → próxima validade futura cadastrada em
+            veiculos_documentos (tipo_documento ILIKE '%crlv%' / '%seguro%').
+            Se não houver validade futura, usa a mais recente já vencida.
+          - Última revisão → data_conclusao da manutenção concluída mais
+            recente (manutencoes.status='concluida' ou data_conclusao NOT NULL).
+
+        Mantém o campo editável manualmente como fallback quando não houver
+        registro nas fontes — assim cadastros antigos não perdem o valor.
+        """
+        if not rows:
+            return rows
+        veiculo_ids = sorted({int(r['id']) for r in rows if isinstance(r, dict) and r.get('id') is not None})
+        if not veiculo_ids:
+            return rows
+
+        hoje_iso = date_class.today().isoformat()
+        crlv_por_veiculo = {}
+        seguro_por_veiculo = {}
+        revisao_por_veiculo = {}
+
+        # ─── Documentos (CRLV + Seguro) ─────────────────────────────────────
+        try:
+            docs = (
+                supabase.table('veiculos_documentos')
+                .select('veiculo_id, tipo_documento, data_validade')
+                .in_('veiculo_id', veiculo_ids)
+                .execute()
+                .data or []
+            )
+            for d in docs:
+                vid = d.get('veiculo_id')
+                tipo = (d.get('tipo_documento') or '').strip().lower()
+                validade = d.get('data_validade')
+                if vid is None or not validade:
+                    continue
+                vid = int(vid)
+                # Próxima validade FUTURA tem prioridade; senão a mais recente vencida.
+                target = None
+                if 'crlv' in tipo:
+                    target = crlv_por_veiculo
+                elif 'seguro' in tipo:
+                    target = seguro_por_veiculo
+                if target is None:
+                    continue
+                current = target.get(vid)
+                # Critério: validade >= hoje vence o "vencida". Entre futuras, pega a MENOR
+                # (mais próxima a vencer). Entre vencidas, pega a MAIOR (mais recente).
+                if current is None:
+                    target[vid] = validade
+                else:
+                    cur_future = current >= hoje_iso
+                    new_future = validade >= hoje_iso
+                    if new_future and not cur_future:
+                        target[vid] = validade
+                    elif new_future and cur_future:
+                        if validade < current:
+                            target[vid] = validade
+                    elif (not new_future) and (not cur_future):
+                        if validade > current:
+                            target[vid] = validade
+        except Exception as exc:
+            app.logger.warning('enrich_veiculos: falha ao ler veiculos_documentos: %s', exc)
+
+        # ─── Última revisão (manutenções concluídas) ────────────────────────
+        try:
+            manuts = (
+                supabase.table('manutencoes')
+                .select('veiculo_id, data_conclusao, status, ativo')
+                .in_('veiculo_id', veiculo_ids)
+                .not_.is_('data_conclusao', 'null')
+                .execute()
+                .data or []
+            )
+            for m in manuts:
+                vid = m.get('veiculo_id')
+                concl = m.get('data_conclusao')
+                if vid is None or not concl:
+                    continue
+                if m.get('ativo') is False:
+                    continue
+                vid = int(vid)
+                # Aceita qualquer status com data_conclusao preenchida; prioriza 'concluida'.
+                # Apenas guarda a MAIOR.
+                concl_iso = str(concl).split('T')[0]
+                current = revisao_por_veiculo.get(vid)
+                if current is None or concl_iso > current:
+                    revisao_por_veiculo[vid] = concl_iso
+        except Exception as exc:
+            app.logger.warning('enrich_veiculos: falha ao ler manutencoes: %s', exc)
+
+        # ─── Aplica nos rows (sobrescreve apenas se houver valor derivado) ──
+        for row in rows:
+            if not isinstance(row, dict) or row.get('id') is None:
+                continue
+            vid = int(row['id'])
+            if vid in crlv_por_veiculo:
+                row['data_vencimento_crlv'] = crlv_por_veiculo[vid]
+                row['data_vencimento_crlv_origem'] = 'veiculos_documentos'
+            else:
+                row['data_vencimento_crlv_origem'] = 'manual'
+            if vid in seguro_por_veiculo:
+                row['data_vencimento_seguro'] = seguro_por_veiculo[vid]
+                row['data_vencimento_seguro_origem'] = 'veiculos_documentos'
+            else:
+                row['data_vencimento_seguro_origem'] = 'manual'
+            if vid in revisao_por_veiculo:
+                row['data_ultima_revisao'] = revisao_por_veiculo[vid]
+                row['data_ultima_revisao_origem'] = 'manutencoes'
+            else:
+                row['data_ultima_revisao_origem'] = 'manual'
+
+        return rows
 
     def enrich_collaborator_document(row, reference_date=None):
         if not isinstance(row, dict):
@@ -6645,6 +6775,8 @@ def create_app():
                     atual = parse_float_or_default(row.get('estoque_atual'), 0.0)
                     minimo = parse_float_or_default(row.get('estoque_minimo'), 0.0)
                     row['alerta_estoque_baixo'] = minimo > 0 and atual <= minimo
+            if resource_name == 'veiculos':
+                rows = enrich_veiculos_with_derived(rows)
             if paginated:
                 total_pages = max(1, -(-total_count // per_page)) if total_count else 1
                 return jsonify({
@@ -6696,6 +6828,9 @@ def create_app():
 
         if resource_name == 'veiculos':
             payload['created_by'] = profile['user_id']
+            # Campos derivados de outras telas — não aceitar no create direto.
+            for derived_field in ('data_vencimento_crlv', 'data_vencimento_seguro', 'data_ultima_revisao'):
+                payload.pop(derived_field, None)
 
         filial_scope_field = config.get('filial_scope_field')
         if filial_scope_field and not ensure_profile_can_access_filial(profile, payload.get(filial_scope_field)):
@@ -6799,6 +6934,11 @@ def create_app():
 
         if resource_name == 'colaboradores' and 'data_desligamento' in payload:
             payload['ativo'] = not bool(payload.get('data_desligamento'))
+
+        if resource_name == 'veiculos':
+            # Campos derivados de outras telas — não aceitar update direto.
+            for derived_field in ('data_vencimento_crlv', 'data_vencimento_seguro', 'data_ultima_revisao'):
+                payload.pop(derived_field, None)
 
         filial_scope_field = config.get('filial_scope_field')
         if filial_scope_field and filial_scope_field in payload and not ensure_profile_can_access_filial(profile, payload.get(filial_scope_field)):
