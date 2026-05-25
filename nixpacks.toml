@@ -21,4 +21,3 @@ cmd = "cd backend && /opt/venv/bin/gunicorn app:app --bind 0.0.0.0:$PORT --worke
 
 [variables]
 PYTHON_VERSION = "3.11"
-NODE_VERSION = "20"
