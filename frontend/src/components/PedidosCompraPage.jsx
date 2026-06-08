@@ -63,8 +63,12 @@ const STATUS_OPTS = [
   { value: 'reprovado',          label: 'Reprovado' },
   { value: 'em_compra',          label: 'Em compra' },
   { value: 'recebido',           label: 'Recebido' },
+  { value: 'finalizado',         label: 'Finalizado' },
   { value: 'cancelado',          label: 'Cancelado' },
-  // Legado — exibição de pedidos antigos
+]
+
+// Legado — só para resolver label de pedidos antigos; não aparece nos selects
+const STATUS_LEGADO = [
   { value: 'pendente_aprovacao', label: 'Pendente' },
   { value: 'em_analise',         label: 'Em análise' },
 ]
@@ -73,10 +77,11 @@ const STATUS_NEXT = {
   rascunho:  { status: 'pendente', label: 'Enviar p/ aprovação' },
   aprovado:  { status: 'em_compra', label: 'Iniciar compra' },
   em_compra: { status: 'recebido', label: 'Marcar recebido' },
+  recebido:  { status: 'finalizado', label: 'Finalizar' },
 }
 const CAN_CANCEL = new Set(['rascunho', 'pendente', 'analise', 'aprovado', 'em_compra', 'pendente_aprovacao', 'em_analise'])
 
-const STATUS_LABELS = Object.fromEntries(STATUS_OPTS.map((o) => [o.value, o.label]))
+const STATUS_LABELS = Object.fromEntries([...STATUS_OPTS, ...STATUS_LEGADO].map((o) => [o.value, o.label]))
 const CATEGORIA_LABELS = Object.fromEntries(CATEGORIA_OPTS.map((o) => [o.value, o.label]))
 const PAGAMENTO_LABELS = Object.fromEntries(PAGAMENTO_OPTS.map((o) => [o.value, o.label]))
 const REEMBOLSO_LABELS = Object.fromEntries(REEMBOLSO_OPTS.map((o) => [o.value, o.label]))
@@ -162,7 +167,7 @@ function formatDateTime(dt) {
 }
 
 function statusTone(status) {
-  if (status === 'aprovado' || status === 'recebido') return 'success'
+  if (status === 'aprovado' || status === 'recebido' || status === 'finalizado') return 'success'
   if (status === 'cancelado' || status === 'reprovado') return 'danger'
   if (status === 'analise' || status === 'em_analise' || status === 'em_compra') return 'warning'
   if (status === 'pendente' || status === 'pendente_aprovacao') return 'neutral'

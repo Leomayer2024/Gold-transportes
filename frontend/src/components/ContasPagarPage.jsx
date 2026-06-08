@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, useCallback } from 'rea
 import { api } from '../services/api'
 
 const TIPOS = ['HORAS EXTRAS', 'FORNECEDOR', 'COLABORADOR', 'HOSPEDAGEM', 'KM', 'PEDAGIO', 'DESPESAS EXTRAS', 'COMPRAS', 'OUTRO']
-const STATUS_OPTS = ['PENDENTE', 'PAGO', 'VENCIDO', 'CANCELADO']
+const STATUS_OPTS = ['PENDENTE', 'PAGO', 'VENCIDO', 'FINALIZADO', 'CANCELADO']
 const TIPO_DOCS = ['NF', 'BOLETO', 'RECIBO', 'PIX', 'TED', 'OUTRO']
 
 const XL = { border: '1px solid #d1d5db' }
@@ -23,7 +23,7 @@ function diasAbertos(data_vencimento, hoje) {
 function pct(a, b) { return b > 0 ? ((a / b) * 100).toFixed(1) + '%' : '—' }
 
 function StatusChip({ v }) {
-  const map = { PAGO: ['#059669', '#f0fdf4'], PENDENTE: ['#d97706', '#fffbeb'], VENCIDO: ['#dc2626', '#fef2f2'], CANCELADO: ['#64748b', '#f8fafc'] }
+  const map = { PAGO: ['#059669', '#f0fdf4'], PENDENTE: ['#d97706', '#fffbeb'], VENCIDO: ['#dc2626', '#fef2f2'], FINALIZADO: ['#4338ca', '#eef2ff'], CANCELADO: ['#64748b', '#f8fafc'] }
   const [c, bg] = map[v] || ['#64748b', '#f8fafc']
   return <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: bg, color: c, border: `1px solid ${c}44`, whiteSpace: 'nowrap' }}>{v || '—'}</span>
 }
@@ -469,6 +469,7 @@ export default function ContasPagarPage() {
             null,
             ctxMenu.row.status !== 'PAGO' ? { label: '✔ Marcar como Pago', action: () => quickStatus(ctxMenu.row.id, 'PAGO'), color: '#059669' } : null,
             ctxMenu.row.status !== 'PENDENTE' ? { label: '→ Marcar como Pendente', action: () => quickStatus(ctxMenu.row.id, 'PENDENTE'), color: '#d97706' } : null,
+            ctxMenu.row.status !== 'FINALIZADO' ? { label: '⚑ Finalizar', action: () => quickStatus(ctxMenu.row.id, 'FINALIZADO'), color: '#4338ca' } : null,
             ctxMenu.row.status !== 'CANCELADO' ? { label: '⊘ Cancelar', action: () => quickStatus(ctxMenu.row.id, 'CANCELADO'), color: '#64748b' } : null,
             null,
             { label: '✕ Excluir', action: () => deletar(ctxMenu.row.id), color: '#dc2626' },

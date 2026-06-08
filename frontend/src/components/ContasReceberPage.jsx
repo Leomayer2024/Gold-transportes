@@ -3,7 +3,7 @@ import { api } from '../services/api'
 
 const OBRIGACOES = ['HORA EXTRA', 'KM RODADO', 'HOSPEDAGEM', 'PEDAGIO', 'DESPESAS EXTRAS', 'OUTRO']
 const STATUS_FAT = ['NÃO FATURADO', 'FATURADO', 'PARCIAL']
-const STATUS_OPTS = ['AGUARDANDO', 'AGUARDANDO PEDIDO DO CLIENTE', 'COBRANÇA REALIZADA', 'FALTA COBRAR', 'RECEBIDO']
+const STATUS_OPTS = ['AGUARDANDO', 'AGUARDANDO PEDIDO DO CLIENTE', 'COBRANÇA REALIZADA', 'FALTA COBRAR', 'RECEBIDO', 'FINALIZADO']
 const FERRAMENTAS = ['SISTEMA SASCAR DA WHITE', 'GW SISTEMAS - C.APAGAR', 'E-MAIL RH (ENVIO APÓS O PAG.)', 'PLANILHA DE CONTRATOS', 'OUTRO']
 const TIPO_DOC = ['ND', 'CTE']
 
@@ -30,7 +30,7 @@ function StatusFatChip({ v }) {
   return <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: bg, color: c, border: `1px solid ${c}44` }}>{v || '—'}</span>
 }
 function StatusChip({ v }) {
-  const map = { 'RECEBIDO': ['#059669', '#f0fdf4'], 'COBRANÇA REALIZADA': ['#0369a1', '#eff6ff'], 'FALTA COBRAR': ['#dc2626', '#fef2f2'], 'AGUARDANDO': ['#d97706', '#fffbeb'], 'AGUARDANDO PEDIDO DO CLIENTE': ['#7c3aed', '#f5f3ff'] }
+  const map = { 'RECEBIDO': ['#059669', '#f0fdf4'], 'COBRANÇA REALIZADA': ['#0369a1', '#eff6ff'], 'FALTA COBRAR': ['#dc2626', '#fef2f2'], 'AGUARDANDO': ['#d97706', '#fffbeb'], 'AGUARDANDO PEDIDO DO CLIENTE': ['#7c3aed', '#f5f3ff'], 'FINALIZADO': ['#4338ca', '#eef2ff'] }
   const [c, bg] = map[v] || ['#64748b', '#f8fafc']
   return <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 6px', borderRadius: 99, background: bg, color: c, border: `1px solid ${c}44`, whiteSpace: 'nowrap' }}>{v || '—'}</span>
 }
@@ -507,6 +507,7 @@ export default function ContasReceberPage() {
             { label: '→ Cobrança Realizada', action: () => quickStatus(ctxMenu.row.id, 'COBRANÇA REALIZADA'), color: '#0369a1' },
             { label: '⚑ Falta Cobrar', action: () => quickStatus(ctxMenu.row.id, 'FALTA COBRAR'), color: '#7c3aed' },
             { label: '⏳ Aguardando', action: () => quickStatus(ctxMenu.row.id, 'AGUARDANDO'), color: '#d97706' },
+            { label: '⚑ Finalizar', action: () => quickStatus(ctxMenu.row.id, 'FINALIZADO'), color: '#4338ca' },
             null,
             { label: '✕ Excluir', action: () => deletar(ctxMenu.row.id), color: '#dc2626' },
           ].map((item, idx) =>
