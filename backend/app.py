@@ -7223,6 +7223,201 @@ def create_app():
             'profile': profile,
         })
 
+    @app.get('/api/dashboard/andamento-filiais')
+    @require_auth
+    def dashboard_andamento_filiais(profile):
+        """Andamento financeiro por filial (apenas filiais liberadas).
+
+        Junta, por filial e mês de referência:
+          - Pedidos de compra finalizados (status recebido/finalizado);
+          - Faturamento CT-e / Nota Fiscal (separando pago vs pendente);
+          - Contas a receber (faturado vs em aberto);
+          - Horas extras (RTM): valor calculado/cobrado vs valor real
+            (salário base + periculosidade + adicional noturno do colaborador).
+        """
+        mes = (request.args.get('mes') or '').strip()
+        if not mes:
+            mes = date_class.today().strftime('%Y-%m')
+        mes_prefix = mes[:7]
+
+        filial_id_param = request.args.get('filial_id', type=int)
+        if filial_id_param and not ensure_profile_can_access_filial(profile, filial_id_param):
+            return jsonify({'error': 'Sem permissão para esta base.'}), 403
+
+        def empty_totais():
+            return {
+                'pedidos_finalizados_valor': 0.0, 'pedidos_finalizados_qtd': 0,
+                'faturamento_pago': 0.0, 'faturamento_pendente': 0.0,
+                'contas_receber_faturado': 0.0, 'contas_receber_aberto': 0.0,
+                'he_calculado': 0.0, 'he_real': 0.0, 'he_margem': 0.0, 'he_horas': 0.0,
+                'receita_total': 0.0, 'saida_total': 0.0, 'saldo': 0.0,
+            }
+
+        def he_valor_real(col, h50, h100):
+            salary = parse_float_or_default(col.get('salario_base_mensal'), 0.0)
+            weekly = parse_float_or_default(col.get('carga_horaria_semanal'), 44.0) or 44.0
+            monthly = weekly * (52.0 / 12.0)
+            if salary <= 0 or monthly <= 0:
+                return 0.0
+            pct_peric = parse_float_or_default(col.get('percentual_periculosidade'), 0.0)
+            pct_noturno = parse_float_or_default(col.get('percentual_adicional_clt'), 0.0)
+            valor_peric = salary * (pct_peric / 100.0)
+            base_hora = (salary + valor_peric) / monthly
+            fator_noturno = 1.0 + pct_noturno / 100.0
+            hora50 = base_hora * 1.5 * fator_noturno
+            hora100 = base_hora * 2.0 * fator_noturno
+            return parse_float_or_default(h50, 0.0) * hora50 + parse_float_or_default(h100, 0.0) * hora100
+
+        has_scope = profile_has_filial_scope(profile)
+        allowed_ids = profile.get('allowed_filial_ids') or []
+        if has_scope and not allowed_ids:
+            return jsonify({'mes': mes_prefix, 'filiais': [], 'totais': empty_totais()})
+
+        # Filiais visíveis (sempre filtrando pelas liberadas)
+        fq = supabase.table('filiais').select('id, cidade, uf').eq('ativo', True).order('cidade')
+        if has_scope:
+            fq = fq.in_('id', allowed_ids)
+        if filial_id_param:
+            fq = fq.eq('id', filial_id_param)
+        try:
+            filiais_rows = fq.execute().data or []
+        except Exception as exc:
+            app.logger.error('andamento_filiais filiais: %s', exc)
+            filiais_rows = []
+        filial_ids = [int(f['id']) for f in filiais_rows]
+        if not filial_ids:
+            return jsonify({'mes': mes_prefix, 'filiais': [], 'totais': empty_totais()})
+
+        agg = {}
+        for f in filiais_rows:
+            fid = int(f['id'])
+            agg[fid] = {
+                'filial_id': fid,
+                'filial_nome': f"{f.get('cidade', '')}/{f.get('uf', '')}",
+                'pedidos_finalizados_valor': 0.0, 'pedidos_finalizados_qtd': 0,
+                'faturamento_pago': 0.0, 'faturamento_pendente': 0.0,
+                'contas_receber_faturado': 0.0, 'contas_receber_aberto': 0.0,
+                'he_calculado': 0.0, 'he_real': 0.0, 'he_horas': 0.0,
+            }
+
+        # 1) Pedidos de compra finalizados no mês
+        try:
+            pq = (supabase.table('pedidos_compra')
+                  .select('filial_id, valor_total, status, data_pedido')
+                  .eq('ativo', True)
+                  .in_('status', ['recebido', 'finalizado'])
+                  .in_('filial_id', filial_ids))
+            for row in (pq.execute().data or []):
+                fid = row.get('filial_id')
+                if fid is None or int(fid) not in agg:
+                    continue
+                if (row.get('data_pedido') or '')[:7] != mes_prefix:
+                    continue
+                agg[int(fid)]['pedidos_finalizados_valor'] += parse_float_or_default(row.get('valor_total'), 0.0)
+                agg[int(fid)]['pedidos_finalizados_qtd'] += 1
+        except Exception as exc:
+            app.logger.warning('andamento_filiais pedidos: %s', exc)
+
+        # 2) Notas CT-e / Nota Fiscal — pago vs pendente
+        try:
+            nq = (supabase.table('notas_cte')
+                  .select('filial_id, tipo, status, valor_total, data_emissao, data_vencimento')
+                  .eq('ativo', True)
+                  .in_('tipo', ['cte', 'nota_fiscal'])
+                  .in_('filial_id', filial_ids))
+            for row in (nq.execute().data or []):
+                fid = row.get('filial_id')
+                if fid is None or int(fid) not in agg:
+                    continue
+                ref = (row.get('data_emissao') or row.get('data_vencimento') or '')[:7]
+                if ref != mes_prefix:
+                    continue
+                valor = parse_float_or_default(row.get('valor_total'), 0.0)
+                status = (row.get('status') or '').lower()
+                if status == 'pago':
+                    agg[int(fid)]['faturamento_pago'] += valor
+                elif status not in ('cancelado',):
+                    agg[int(fid)]['faturamento_pendente'] += valor
+        except Exception as exc:
+            app.logger.warning('andamento_filiais notas: %s', exc)
+
+        # 3) Contas a receber — faturado vs em aberto
+        try:
+            cq = (supabase.table('contas_a_receber')
+                  .select('filial_id, status_fat, cobrado_wm, competencia')
+                  .in_('filial_id', filial_ids))
+            for row in (cq.execute().data or []):
+                fid = row.get('filial_id')
+                if fid is None or int(fid) not in agg:
+                    continue
+                if (row.get('competencia') or '')[:7] != mes_prefix:
+                    continue
+                valor = parse_float_or_default(row.get('cobrado_wm'), 0.0)
+                if (row.get('status_fat') or '').upper() == 'FATURADO':
+                    agg[int(fid)]['contas_receber_faturado'] += valor
+                else:
+                    agg[int(fid)]['contas_receber_aberto'] += valor
+        except Exception as exc:
+            app.logger.warning('andamento_filiais contas_receber: %s', exc)
+
+        # 4) Horas extras (RTM) — valor calculado (cobrado) vs valor real (custo colaborador)
+        try:
+            colab_fin = {}
+            try:
+                cresp = (supabase.table('colaboradores')
+                         .select('id, salario_base_mensal, carga_horaria_semanal, '
+                                 'percentual_periculosidade, percentual_adicional_clt')
+                         .in_('filial_id', filial_ids)
+                         .execute())
+                for c in (cresp.data or []):
+                    colab_fin[int(c['id'])] = c
+            except Exception:
+                colab_fin = {}
+
+            rq = (supabase.table('horas_extras_rtm_registros')
+                  .select('filial_id, colaborador_id, mes_referencia, total_geral, '
+                          'horas_normais, horas_extra_100')
+                  .in_('filial_id', filial_ids))
+            for row in (rq.execute().data or []):
+                fid = row.get('filial_id')
+                if fid is None or int(fid) not in agg:
+                    continue
+                if (row.get('mes_referencia') or '')[:7] != mes_prefix:
+                    continue
+                bucket = agg[int(fid)]
+                h50 = row.get('horas_normais')
+                h100 = row.get('horas_extra_100')
+                bucket['he_calculado'] += parse_float_or_default(row.get('total_geral'), 0.0)
+                bucket['he_horas'] += parse_float_or_default(h50, 0.0) + parse_float_or_default(h100, 0.0)
+                cid = row.get('colaborador_id')
+                col = colab_fin.get(int(cid)) if cid is not None else None
+                if col:
+                    bucket['he_real'] += he_valor_real(col, h50, h100)
+        except Exception as exc:
+            app.logger.warning('andamento_filiais HE: %s', exc)
+
+        filiais_out = []
+        totais = empty_totais()
+        for fid in filial_ids:
+            bucket = agg[fid]
+            receita = (bucket['faturamento_pago'] + bucket['faturamento_pendente']
+                       + bucket['contas_receber_faturado'] + bucket['contas_receber_aberto'])
+            saida = bucket['pedidos_finalizados_valor']
+            bucket['he_margem'] = round(bucket['he_calculado'] - bucket['he_real'], 2)
+            bucket['receita_total'] = round(receita, 2)
+            bucket['saida_total'] = round(saida, 2)
+            bucket['saldo'] = round(receita - saida, 2)
+            for key in ('pedidos_finalizados_valor', 'faturamento_pago', 'faturamento_pendente',
+                        'contas_receber_faturado', 'contas_receber_aberto',
+                        'he_calculado', 'he_real', 'he_horas'):
+                bucket[key] = round(bucket[key], 2)
+            for key in totais:
+                totais[key] = round(totais[key] + bucket.get(key, 0.0), 2)
+            filiais_out.append(bucket)
+
+        filiais_out.sort(key=lambda x: x['filial_nome'])
+        return jsonify({'mes': mes_prefix, 'filiais': filiais_out, 'totais': totais})
+
     @app.get('/api/alertas')
     @require_auth
     def alerts_list(profile):

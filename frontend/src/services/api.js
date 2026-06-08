@@ -230,6 +230,12 @@ export const api = {
     ).toString()
     return request(`/dashboard/frota${qs ? `?${qs}` : ''}`)
   },
+  getDashboardAndamento: (params = {}) => {
+    const qs = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null))
+    ).toString()
+    return request(`/dashboard/andamento-filiais${qs ? `?${qs}` : ''}`)
+  },
 
   // ─── Pedidos de Compra ────────────────────────────────────────────────────
   preAlocarNumeroPedido: () => request('/pedidos_compra/pre-alocar-numero'),

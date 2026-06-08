@@ -16,6 +16,15 @@ const TIPO_FERIADO_LABELS = {
   interno: 'Ponto facultativo',
 }
 
+const MES_ATUAL = new Date().toISOString().slice(0, 7)
+
+function formatBRL(value) {
+  return Number(value || 0).toLocaleString('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  })
+}
+
 function readDashboardCache(cacheKey) {
   if (!cacheKey) {
     return null
@@ -68,6 +77,12 @@ export default function DashboardPage() {
   const [errorMessage, setErrorMessage] = useState('')
   const [dashboardLoading, setDashboardLoading] = useState(!cachedDashboard)
   const [refreshing, setRefreshing] = useState(false)
+
+  // Estado da aba "Andamento por filial"
+  const [andamento, setAndamento] = useState(null)
+  const [andamentoMes, setAndamentoMes] = useState(MES_ATUAL)
+  const [andamentoLoading, setAndamentoLoading] = useState(false)
+  const [andamentoError, setAndamentoError] = useState('')
 
   const allowedBasesText = profile?.has_filial_scope
     ? (profile.allowed_filial_labels || []).join(', ')
@@ -133,6 +148,38 @@ export default function DashboardPage() {
     }
   }, [cacheKey])
 
+  useEffect(() => {
+    if (activeTab !== 'andamento') {
+      return
+    }
+
+    let active = true
+    setAndamentoLoading(true)
+    setAndamentoError('')
+
+    api
+      .getDashboardAndamento({ mes: andamentoMes, filial_id: selectedFilialId || undefined })
+      .then((response) => {
+        if (active) {
+          setAndamento(response)
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setAndamentoError(error.message)
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setAndamentoLoading(false)
+        }
+      })
+
+    return () => {
+      active = false
+    }
+  }, [activeTab, andamentoMes, selectedFilialId])
+
   const showGeneralSkeleton = dashboardLoading && stats.length === 0 && baseStats.length === 0
   const showLoadingHighlights = refreshing || profileLoading
 
@@ -193,6 +240,9 @@ export default function DashboardPage() {
         </button>
         <button className={`button-secondary dashboard-tab-button${activeTab === 'graficos' ? ' active' : ''}`} onClick={() => setActiveTab('graficos')} type="button">
           Análise com gráficos
+        </button>
+        <button className={`button-secondary dashboard-tab-button${activeTab === 'andamento' ? ' active' : ''}`} onClick={() => setActiveTab('andamento')} type="button">
+          Andamento por filial
         </button>
         {loadingSummary.available && (
           <button
@@ -538,6 +588,115 @@ export default function DashboardPage() {
               </strong>
             </article>
           </div>
+        </>
+      ) : null}
+
+      {/* ===== TAB: ANDAMENTO POR FILIAL ===== */}
+      {activeTab === 'andamento' ? (
+        <>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
+            <label className="field filter-field" style={{ minWidth: 180, marginBottom: 0 }}>
+              <span>Mês de referência</span>
+              <input type="month" value={andamentoMes} onChange={(e) => setAndamentoMes(e.target.value || MES_ATUAL)} />
+            </label>
+            {andamentoLoading && <div className="profile-chip">Carregando andamento...</div>}
+          </div>
+
+          {andamentoError && <div className="alert-error">{andamentoError}</div>}
+
+          {!andamentoLoading && andamento && (andamento.filiais?.length ?? 0) === 0 && (
+            <div className="empty-state">Nenhuma filial liberada com dados neste mês.</div>
+          )}
+
+          {andamento && (andamento.filiais?.length ?? 0) > 0 && (
+            <>
+              <div className="stats-grid" style={{ marginBottom: 24 }}>
+                <article className="surface-card panel-card" style={{ textAlign: 'center' }}>
+                  <small style={{ color: '#556371' }}>Receita total (faturamento + a receber)</small>
+                  <strong style={{ fontSize: 24, color: '#10b981', display: 'block' }}>{formatBRL(andamento.totais?.receita_total)}</strong>
+                </article>
+                <article className="surface-card panel-card" style={{ textAlign: 'center' }}>
+                  <small style={{ color: '#556371' }}>Saída (pedidos finalizados)</small>
+                  <strong style={{ fontSize: 24, color: '#ef4444', display: 'block' }}>{formatBRL(andamento.totais?.saida_total)}</strong>
+                </article>
+                <article className="surface-card panel-card" style={{ textAlign: 'center' }}>
+                  <small style={{ color: '#556371' }}>Saldo</small>
+                  <strong style={{ fontSize: 24, color: (andamento.totais?.saldo || 0) >= 0 ? '#10b981' : '#ef4444', display: 'block' }}>{formatBRL(andamento.totais?.saldo)}</strong>
+                </article>
+                <article className="surface-card panel-card" style={{ textAlign: 'center' }}>
+                  <small style={{ color: '#556371' }}>Margem hora extra (cobrado − real)</small>
+                  <strong style={{ fontSize: 24, color: (andamento.totais?.he_margem || 0) >= 0 ? '#10b981' : '#ef4444', display: 'block' }}>{formatBRL(andamento.totais?.he_margem)}</strong>
+                </article>
+              </div>
+
+              <div className="workforce-summary-grid dashboard-base-grid">
+                {andamento.filiais.map((f) => (
+                  <article className="surface-card workforce-summary-card" key={`andamento-${f.filial_id}`}>
+                    <div className="section-title">
+                      <span className="eyebrow">Andamento · {andamento.mes}</span>
+                      <h2>{f.filial_nome}</h2>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 12 }}>
+                      <div className="workforce-kpi">
+                        <span>Faturamento pago</span>
+                        <strong style={{ color: '#10b981' }}>{formatBRL(f.faturamento_pago)}</strong>
+                      </div>
+                      <div className="workforce-kpi">
+                        <span>Faturamento pendente</span>
+                        <strong style={{ color: '#d97706' }}>{formatBRL(f.faturamento_pendente)}</strong>
+                      </div>
+                      <div className="workforce-kpi">
+                        <span>A receber faturado</span>
+                        <strong>{formatBRL(f.contas_receber_faturado)}</strong>
+                      </div>
+                      <div className="workforce-kpi">
+                        <span>A receber em aberto</span>
+                        <strong style={{ color: '#d97706' }}>{formatBRL(f.contas_receber_aberto)}</strong>
+                      </div>
+                      <div className="workforce-kpi">
+                        <span>Pedidos finalizados</span>
+                        <strong style={{ color: '#ef4444' }}>{formatBRL(f.pedidos_finalizados_valor)}</strong>
+                      </div>
+                      <div className="workforce-kpi">
+                        <span>Qtd. pedidos</span>
+                        <strong>{f.pedidos_finalizados_qtd}</strong>
+                      </div>
+                    </div>
+
+                    <div className="section-title" style={{ marginTop: 4 }}>
+                      <span className="eyebrow">Hora extra</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
+                      <div className="workforce-kpi">
+                        <span>Calculado (cobrado)</span>
+                        <strong>{formatBRL(f.he_calculado)}</strong>
+                      </div>
+                      <div className="workforce-kpi">
+                        <span>Real (custo)</span>
+                        <strong>{formatBRL(f.he_real)}</strong>
+                      </div>
+                      <div className="workforce-kpi">
+                        <span>Margem</span>
+                        <strong style={{ color: (f.he_margem || 0) >= 0 ? '#10b981' : '#ef4444' }}>{formatBRL(f.he_margem)}</strong>
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e5e7eb', paddingTop: 10 }}>
+                      <div>
+                        <small style={{ color: '#556371', display: 'block' }}>Saldo do mês</small>
+                        <strong style={{ fontSize: 18, color: (f.saldo || 0) >= 0 ? '#10b981' : '#ef4444' }}>{formatBRL(f.saldo)}</strong>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <small style={{ color: '#556371', display: 'block' }}>Receita · Saída</small>
+                        <strong style={{ fontSize: 14 }}>{formatBRL(f.receita_total)} · {formatBRL(f.saida_total)}</strong>
+                      </div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </>
+          )}
         </>
       ) : null}
 
