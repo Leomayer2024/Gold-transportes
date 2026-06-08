@@ -78,6 +78,7 @@ export const navigationGroups = [
     title: 'Operação RTM',
     items: [
       { to: '/presenca', label: 'Presença', scope: 'menu.presenca' },
+      { to: '/ponto', label: 'Ponto (batidas faciais)', scope: 'menu.ponto' },
       { to: '/carregamento', label: 'Carregamento', scope: 'menu.carregamento' },
       { to: '/horas-extras-rtm', label: 'Calc. Horas Extras', scope: 'menu.horas_extras_rtm' },
       { to: '/ordens-servico', label: 'Ordens de Serviço (motorista)', scope: 'menu.ordens_servico' },

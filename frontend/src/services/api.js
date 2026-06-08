@@ -192,6 +192,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+  criarMovimentoEstoqueBatch: (payload) =>
+    request('/estoque_movimentos/batch', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
 
   // ─── Gestão de acessos (somente super admin) ───────────────────────────────
   adminListarAcessos: () => request('/admin/acessos'),
@@ -265,10 +270,44 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ resource_type: resourceType, comentario: comentario || '' }),
     }),
+  aprovarLider: (id, resourceType, comentario) =>
+    request(`/approvals/${id}/aprovar-lider`, {
+      method: 'POST',
+      body: JSON.stringify({ resource_type: resourceType, comentario: comentario || '' }),
+    }),
   rejectRequest: (id, resourceType, motivo) =>
     request(`/approvals/${id}/reject`, {
       method: 'POST',
       body: JSON.stringify({ resource_type: resourceType, motivo }),
+    }),
+  // ─── Portal Cliente (sem auth Supabase, usa Bearer token próprio) ──────────
+  clienteLogin: async (email, senha) => {
+    const resp = await fetch(`${import.meta.env.VITE_API_URL || ''}/api/cliente/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, senha }),
+    })
+    const data = await resp.json()
+    if (!resp.ok) throw new Error(data.error || 'Erro no login')
+    return data
+  },
+  clienteRequest: async (path, token, opts = {}) => {
+    const resp = await fetch(`${import.meta.env.VITE_API_URL || ''}/api${path}`, {
+      ...opts,
+      headers: {
+        'Content-Type': 'application/json',
+        ...(opts.headers || {}),
+        Authorization: `Bearer ${token}`,
+      },
+    })
+    const data = await resp.json().catch(() => ({}))
+    if (!resp.ok) throw new Error(data.error || 'Erro')
+    return data
+  },
+  adminSetSenhaCliente: (clienteId, senha) =>
+    request(`/clientes/${clienteId}/set-senha`, {
+      method: 'POST',
+      body: JSON.stringify({ senha }),
     }),
   // RTM — Horas Extras fechamentos
   post: (path, payload) => request(path, { method: 'POST', body: JSON.stringify(payload) }),
@@ -317,4 +356,33 @@ export const api = {
   deletarBancoLancamento: (id) => request(`/banco/lancamentos/${id}`, { method: 'DELETE' }),
   conciliarLancamento: (id, payload) => request(`/banco/lancamentos/${id}/conciliar`, { method: 'POST', body: JSON.stringify(payload) }),
   bancoSaldos: () => request('/banco/saldos'),
+
+  // ─── Ponto (batidas faciais) ───────────────────────────────────────────────
+  pontoBatidas: (params = {}) => {
+    const search = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))
+    )
+    const suffix = search.toString() ? `?${search.toString()}` : ''
+    return request(`/ponto/batidas${suffix}`)
+  },
+  pontoResumo: (params = {}) => {
+    const search = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))
+    )
+    const suffix = search.toString() ? `?${search.toString()}` : ''
+    return request(`/ponto/resumo${suffix}`)
+  },
+  pontoCriarBatida: (payload) =>
+    request('/ponto/batida', { method: 'POST', body: JSON.stringify(payload) }),
+  pontoEditarBatida: (id, payload) =>
+    request(`/ponto/batida/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  pontoExcluirBatida: (id) =>
+    request(`/ponto/batida/${id}`, { method: 'DELETE' }),
+  pontoExportUrl: (params = {}) => {
+    const search = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))
+    )
+    const suffix = search.toString() ? `?${search.toString()}` : ''
+    return `${API_URL}/ponto/export-xlsx${suffix}`
+  },
 }

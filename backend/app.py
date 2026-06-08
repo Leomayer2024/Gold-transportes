@@ -10,6 +10,7 @@ import unicodedata
 from datetime import date as date_class
 from datetime import datetime
 from datetime import timedelta
+from datetime import timezone
 from functools import wraps
 from pathlib import Path
 from urllib import error as urllib_error
@@ -24,6 +25,7 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, make_response, request, send_from_directory
 from flask_cors import CORS
 from supabase import Client, create_client
+from werkzeug.security import generate_password_hash, check_password_hash
 
 
 load_dotenv(Path(__file__).with_name('.env'))
@@ -83,9 +85,10 @@ RESOURCE_DEFINITIONS = {
             'data_admissao',
             'data_desligamento',
             'email_recuperacao',
+            'email',
             'ativo',
         ],
-        'nullable_fields': ['data_desligamento', 'horario_padrao_inicio', 'horario_padrao_fim', 'telefone', 'email_recuperacao'],
+        'nullable_fields': ['data_desligamento', 'horario_padrao_inicio', 'horario_padrao_fim', 'telefone', 'email_recuperacao', 'email'],
         'partial_match_fields': ['nome_completo', 'cargo', 'cpf'],
         'view_scope': 'menu.colaboradores',
         'view_scope_any': [
@@ -492,9 +495,9 @@ RESOURCE_DEFINITIONS = {
         'table': 'clientes',
         'order': 'nome',
         'required_fields': ['nome'],
-        'allowed_fields': ['filial_id', 'nome', 'cnpj', 'telefone', 'email', 'contato_nome', 'endereco', 'observacoes', 'ativo'],
+        'allowed_fields': ['filial_id', 'nome', 'cnpj', 'telefone', 'email', 'contato_nome', 'endereco', 'observacoes', 'ativo', 'email_login', 'ativo_login'],
         'partial_match_fields': ['nome', 'cnpj', 'contato_nome', 'observacoes'],
-        'nullable_fields': ['filial_id', 'cnpj', 'telefone', 'email', 'contato_nome', 'endereco', 'observacoes'],
+        'nullable_fields': ['filial_id', 'cnpj', 'telefone', 'email', 'contato_nome', 'endereco', 'observacoes', 'email_login'],
         'create_scope': 'create.clientes',
         'filial_scope_field': 'filial_id',
         'filial_scope_include_null': True,
@@ -793,9 +796,15 @@ RESOURCE_DEFINITIONS = {
             'data_aprovacao',
             'aprovado_por',
             'os_motorista_id',
+            'tipo_pagador',
+            'cliente_id',
+            'aprovado_lider_por',
+            'aprovado_lider_em',
+            'aprovado_cliente_por',
+            'aprovado_cliente_em',
         ],
         'partial_match_fields': ['motivo', 'status', 'justificativa_gestor'],
-        'nullable_fields': ['servico_id', 'jornada_id', 'status', 'justificativa_gestor', 'data_aprovacao', 'aprovado_por', 'os_motorista_id'],
+        'nullable_fields': ['servico_id', 'jornada_id', 'status', 'justificativa_gestor', 'data_aprovacao', 'aprovado_por', 'os_motorista_id', 'tipo_pagador', 'cliente_id', 'aprovado_lider_por', 'aprovado_lider_em', 'aprovado_cliente_por', 'aprovado_cliente_em'],
         'view_scope': 'menu.horas_extras',
         'create_scope': 'create.horas_extras',
         'filial_scope_field': 'filial_id',
@@ -861,10 +870,17 @@ PERMISSION_SCOPE_GROUPS = [
             {'name': 'menu.acompanhamento',     'label': 'Ver tela de acompanhamento',   'platforms': ['web', 'app'], 'auto_enable': [],                                             'description': 'Mostra a tela centralizada de aprovação de manutenções, pedidos de compra e horas extras.'},
             {'name': 'aprovar.pedidos_compra',  'label': 'Aprovar pedidos de compra',    'platforms': ['web', 'app'], 'auto_enable': ['menu.acompanhamento', 'menu.pedidos_compra'], 'description': 'Permite aprovar ou reprovar pedidos de compra.'},
             {'name': 'analisar.pedidos_compra', 'label': 'Analisar pedidos de compra',   'platforms': ['web', 'app'], 'auto_enable': ['menu.acompanhamento', 'menu.pedidos_compra'], 'description': 'Permite colocar um pedido em análise (pendente → analise) e rejeitá-lo nesta etapa.'},
-            {'name': 'aprovar.horas_extras',    'label': 'Aprovar horas extras',         'platforms': ['web', 'app'], 'auto_enable': ['menu.acompanhamento', 'menu.horas_extras'],   'description': 'Permite aprovar ou reprovar solicitações de horas extras.'},
-            {'name': 'aprovar.manutencoes',     'label': 'Aprovar OS de manutenção',     'platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.manutencoes'],    'description': 'Permite aprovar ou reprovar ordens de serviço de manutenção.'},
-            {'name': 'aprovar.abastecimentos',  'label': 'Aprovar abastecimentos',       'platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.abastecimentos'], 'description': 'Permite aprovar ou reprovar lançamentos de abastecimento.'},
-            {'name': 'aprovar.pneus',           'label': 'Aprovar controle de pneus',    'platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.pneus'],          'description': 'Permite aprovar ou reprovar lançamentos de controle de pneus.'},
+            {'name': 'aprovar.horas_extras',         'label': 'Aprovar horas extras (legado)','platforms': ['web', 'app'], 'auto_enable': ['menu.acompanhamento', 'menu.horas_extras'],   'description': 'Mantido por compatibilidade. Fluxo novo usa aprovar.horas_extras.lider (etapa 1) e portal cliente (etapa 2).'},
+            {'name': 'aprovar.horas_extras.lider',   'label': 'Aprovar HE — Líder base',      'platforms': ['web', 'app'], 'auto_enable': ['menu.acompanhamento', 'menu.horas_extras'],   'description': 'Etapa 1 do fluxo de HE — líder da base Gold aprova HE dos colaboradores da sua filial. Etapa 2 fica com o cliente via portal externo.'},
+            {'name': 'aprovar.manutencoes',          'label': 'Aprovar manutenção (final)',   'platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.manutencoes'],    'description': 'Etapa final do fluxo de manutenção — responsável de frota dá aprovação final após líder.'},
+            {'name': 'aprovar.manutencoes.lider',    'label': 'Aprovar manut. — Líder base',  'platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.manutencoes'],    'description': 'Etapa 1 do fluxo de manutenção — líder da base envia para responsável.'},
+            {'name': 'aprovar.manutencoes.responsavel','label':'Aprovar manut. — Responsável','platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.manutencoes'],    'description': 'Etapa final — responsável de frota.'},
+            {'name': 'aprovar.abastecimentos',       'label': 'Aprovar combustível (final)',  'platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.abastecimentos'], 'description': 'Etapa final do fluxo de combustível.'},
+            {'name': 'aprovar.abastecimentos.lider', 'label': 'Aprovar comb. — Líder base',   'platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.abastecimentos'], 'description': 'Etapa 1 — líder da base.'},
+            {'name': 'aprovar.abastecimentos.responsavel','label':'Aprovar comb. — Responsável','platforms':['web'],       'auto_enable': ['menu.acompanhamento', 'menu.abastecimentos'], 'description': 'Etapa final — responsável de frota.'},
+            {'name': 'aprovar.diarias.lider',        'label': 'Aprovar diárias — Líder base', 'platforms': ['web', 'app'], 'auto_enable': ['menu.acompanhamento', 'menu.diarias'],        'description': 'Etapa 1 — líder da base.'},
+            {'name': 'aprovar.diarias.responsavel',  'label': 'Aprovar diárias — Responsável','platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.diarias'],        'description': 'Etapa final — responsável de frota.'},
+            {'name': 'aprovar.pneus',                'label': 'Aprovar controle de pneus',    'platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.pneus'],          'description': 'Permite aprovar ou reprovar lançamentos de controle de pneus.'},
         ],
     },
     # ── RH ────────────────────────────────────────────────────────────────────
@@ -965,6 +981,8 @@ PERMISSION_SCOPE_GROUPS = [
         'items': [
             {'name': 'menu.presenca',                    'label': 'Ver presença',                    'platforms': ['web', 'app'], 'auto_enable': [],                      'description': 'Mostra o controle diário de presença.'},
             {'name': 'manage.presenca',                  'label': 'Modificar presença',              'platforms': ['web', 'app'], 'auto_enable': ['menu.presenca'],        'description': 'Permite alterar e salvar o quadro diário de presença.'},
+            {'name': 'menu.ponto',                       'label': 'Ver ponto',                       'platforms': ['web'],        'auto_enable': [],                      'description': 'Mostra a tela de Ponto (batidas faciais): histórico do dia, horas trabalhadas, filtros e exportação.'},
+            {'name': 'manage.ponto',                     'label': 'Ajustar ponto',                   'platforms': ['web'],        'auto_enable': ['menu.ponto'],          'description': 'Permite adicionar, corrigir e remover batidas de ponto manualmente (registra auditoria e notifica o colaborador).'},
             {'name': 'menu.carregamento',                'label': 'Ver carregamento',                'platforms': ['web', 'app'], 'auto_enable': [],                      'description': 'Mostra o painel de carregamento por turno, caminhão, referência operacional e eventos.'},
             {'name': 'manage.programacao_carregamento',  'label': 'Programar carregamento',          'platforms': ['web', 'app'], 'auto_enable': ['menu.carregamento'],    'description': 'Permite abrir jornadas e definir quais caminhões vão operar no turno.'},
             {'name': 'manage.operacao_carregamento',     'label': 'Operar carregamento',             'platforms': ['web', 'app'], 'auto_enable': ['menu.carregamento'],    'description': 'Permite registrar carga, paradas, ocorrências e fechamento do caminhão.'},
@@ -1007,6 +1025,7 @@ PERMISSION_SCOPE_GROUPS = [
             {'name': 'action.pedidos_compra.editar_analise', 'label': 'Editar pedido em análise',         'platforms': ['web'], 'auto_enable': ['menu.pedidos_compra'],         'description': 'Permite alterar campos do pedido enquanto ele está no status "em análise" (antes de aprovar).'},
             {'name': 'action.global.bulk_export',     'label': 'Exportar listas em massa (genérico)',      'platforms': ['web'], 'auto_enable': [],                              'description': 'Mostra botões "Exportar selecionados" e "Exportar tudo" em listas que suportam exportação.'},
             {'name': 'action.global.bulk_delete',     'label': 'Excluir em massa (genérico)',              'platforms': ['web'], 'auto_enable': [],                              'description': 'Permite seleção múltipla + exclusão em lote em listas que suportam (ação destrutiva).'},
+            {'name': 'action.ponto.exportar',         'label': 'Exportar ponto para Excel',                'platforms': ['web'], 'auto_enable': ['menu.ponto'],                  'description': 'Mostra o botão "Exportar Excel" na tela de Ponto e habilita o download da planilha de batidas.'},
         ],
     },
 ]
@@ -2421,7 +2440,7 @@ def create_app():
             PEDIDO_STATUS_OPTIONS = {
                 'rascunho', 'pendente', 'analise',
                 'pendente_aprovacao', 'em_analise',   # legado
-                'aprovado', 'reprovado', 'em_compra', 'recebido', 'cancelado',
+                'aprovado', 'reprovado', 'em_compra', 'recebido', 'finalizado', 'cancelado',
             }
             PEDIDO_FORMA_PAGAMENTO_OPTIONS = {
                 'dinheiro', 'pix', 'cartao_debito', 'cartao_credito', 'boleto', 'credito_fornecedor',
@@ -5748,6 +5767,687 @@ def create_app():
             smtp.login(user, password)
             smtp.sendmail(from_addr, [destination], msg.as_string())
 
+    # ─── Notificação de ponto batido por e-mail ───────────────────────────────
+    # O app facial bate ponto sem login (RPC anon no Supabase). Após registrar,
+    # ele chama /api/ponto/notificar-email com o batida_id para o colaborador
+    # receber um e-mail com a batida + o histórico do dia. O mesmo helper de
+    # corpo é reusado pela tela admin do SEG ao ajustar ponto manualmente.
+    # America/Sao_Paulo não tem horário de verão desde 2019 → offset fixo -3h.
+    _SP_OFFSET = timedelta(hours=-3)
+
+    def _parse_pg_timestamp(value):
+        """Converte timestamptz do PostgREST em datetime aware (UTC)."""
+        if isinstance(value, datetime):
+            dt = value
+        elif isinstance(value, str):
+            raw = value.strip().replace('Z', '+00:00')
+            try:
+                dt = datetime.fromisoformat(raw)
+            except ValueError:
+                # microssegundos com mais de 6 dígitos quebram o fromisoformat
+                raw = re.sub(r'(\.\d{6})\d+', r'\1', raw)
+                try:
+                    dt = datetime.fromisoformat(raw)
+                except ValueError:
+                    return None
+        else:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+
+    def _fmt_sp_hora(value):
+        dt = _parse_pg_timestamp(value)
+        return (dt + _SP_OFFSET).strftime('%H:%M') if dt else '--:--'
+
+    def _fmt_sp_data(value):
+        dt = _parse_pg_timestamp(value)
+        return (dt + _SP_OFFSET).strftime('%d/%m/%Y') if dt else ''
+
+    def _calcular_horas_dia(batidas_ordenadas):
+        """Soma os pares entrada→saída. Retorna (texto 'XhYY', segundos)."""
+        total = timedelta()
+        abertura = None
+        for b in batidas_ordenadas:
+            tipo = (b.get('tipo') or '').lower()
+            ts = _parse_pg_timestamp(b.get('registrado_em'))
+            if ts is None:
+                continue
+            if tipo == 'entrada':
+                abertura = ts
+            elif tipo == 'saida' and abertura is not None:
+                total += (ts - abertura)
+                abertura = None
+        secs = max(0, int(total.total_seconds()))
+        texto = f'{secs // 3600}h{(secs % 3600) // 60:02d}' if secs > 0 else '—'
+        return texto, secs
+
+    def _send_email_ponto(destino, nome, batida_atual, batidas_dia):
+        """E-mail HTML com a batida recém-registrada + histórico do dia."""
+        host, port, user, password, from_addr, from_name = _smtp_config()
+        if not user or not password or not from_addr:
+            raise RuntimeError('SMTP não configurado no servidor. Defina SMTP_USER/SMTP_PASS/SMTP_FROM no .env.')
+
+        tipo_atual = (batida_atual.get('tipo') or '').lower()
+        tipo_label = 'Entrada' if tipo_atual == 'entrada' else 'Saída'
+        cor_atual = '#15803d' if tipo_atual == 'entrada' else '#b91c1c'
+        hora_atual = _fmt_sp_hora(batida_atual.get('registrado_em'))
+        data_atual = _fmt_sp_data(batida_atual.get('registrado_em'))
+
+        linhas = []
+        for b in batidas_dia:
+            tipo = (b.get('tipo') or '').lower()
+            label = 'Entrada' if tipo == 'entrada' else 'Saída'
+            cor_l = '#15803d' if tipo == 'entrada' else '#b91c1c'
+            ajustado = bool(b.get('ajustado_por'))
+            tag = ' <span style="font-size:11px;color:#92400e;background:#fef3c7;padding:1px 6px;border-radius:4px">ajuste manual</span>' if ajustado else ''
+            linhas.append(
+                f'<tr>'
+                f'<td style="padding:8px 12px;border-bottom:1px solid #eee;font-family:monospace">{_fmt_sp_hora(b.get("registrado_em"))}</td>'
+                f'<td style="padding:8px 12px;border-bottom:1px solid #eee;color:{cor_l};font-weight:600">{label}{tag}</td>'
+                f'</tr>'
+            )
+        rows_html = ''.join(linhas) or '<tr><td colspan="2" style="padding:10px 12px;color:#999">Nenhuma batida registrada hoje.</td></tr>'
+        horas_txt, _ = _calcular_horas_dia(batidas_dia)
+
+        text = (
+            f'Olá, {nome}!\n\n'
+            f'Ponto registrado: {tipo_label} às {hora_atual} em {data_atual}.\n\n'
+            f'Horas trabalhadas no dia (pares entrada/saída): {horas_txt}\n\n'
+            f'Histórico do dia:\n'
+            + '\n'.join(
+                f'  {_fmt_sp_hora(b.get("registrado_em"))}  {("Entrada" if (b.get("tipo") or "").lower() == "entrada" else "Saída")}'
+                for b in batidas_dia
+            )
+            + '\n\n— SEG, Gold Transportes'
+        )
+        html = f"""
+        <div style="font-family:Arial,Helvetica,sans-serif;max-width:520px;margin:0 auto;padding:20px;color:#1a1a1a">
+          <h2 style="color:#c49512;margin:0 0 4px">Ponto registrado</h2>
+          <p style="margin:0 0 16px;color:#555">Olá, <strong>{nome}</strong>!</p>
+          <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:16px;margin-bottom:18px">
+            <div style="font-size:13px;color:#64748b;text-transform:uppercase;letter-spacing:1px">Batida registrada</div>
+            <div style="font-size:26px;font-weight:700;color:{cor_atual};margin:4px 0">{tipo_label} · {hora_atual}</div>
+            <div style="font-size:13px;color:#64748b">{data_atual}</div>
+          </div>
+          <div style="font-size:14px;color:#334155;margin-bottom:6px">
+            <strong>Histórico do dia</strong>
+            <span style="float:right;color:#64748b">Horas: <strong>{horas_txt}</strong></span>
+          </div>
+          <table style="width:100%;border-collapse:collapse;font-size:14px;border:1px solid #eee;border-radius:6px;overflow:hidden">
+            <thead>
+              <tr style="background:#f1f5f9;text-align:left">
+                <th style="padding:8px 12px;font-size:12px;color:#64748b">HORA</th>
+                <th style="padding:8px 12px;font-size:12px;color:#64748b">TIPO</th>
+              </tr>
+            </thead>
+            <tbody>{rows_html}</tbody>
+          </table>
+          <hr style="border:none;border-top:1px solid #ddd;margin:20px 0"/>
+          <p style="color:#999;font-size:11px">Mensagem automática do SEG — Sistema de Gestão (Gold Transportes). Não responda este e-mail.</p>
+        </div>
+        """
+        msg = _MIMEMultipart('alternative')
+        msg['Subject'] = f'Ponto registrado: {tipo_label} às {hora_atual} ({data_atual})'
+        msg['From'] = f'{from_name} <{from_addr}>'
+        msg['To'] = destino
+        msg.attach(_MIMEText(text, 'plain', 'utf-8'))
+        msg.attach(_MIMEText(html, 'html', 'utf-8'))
+        with _smtplib.SMTP(host, port, timeout=15) as smtp:
+            smtp.ehlo()
+            smtp.starttls()
+            smtp.login(user, password)
+            smtp.sendmail(from_addr, [destino], msg.as_string())
+
+    def _batidas_do_dia(colaborador_id, ref_dt):
+        """Batidas do colaborador no mesmo dia local (SP) de ref_dt (aware UTC)."""
+        dia_local = (ref_dt + _SP_OFFSET).date()
+        inicio_utc = datetime(dia_local.year, dia_local.month, dia_local.day, tzinfo=timezone.utc) - _SP_OFFSET
+        fim_utc = inicio_utc + timedelta(days=1)
+        resp = (
+            supabase.table('batidas_ponto')
+            .select('id, tipo, registrado_em, ajustado_por')
+            .eq('colaborador_id', colaborador_id)
+            .gte('registrado_em', inicio_utc.isoformat())
+            .lt('registrado_em', fim_utc.isoformat())
+            .order('registrado_em', desc=False)
+            .execute()
+        )
+        return resp.data or []
+
+    @app.post('/api/ponto/notificar-email')
+    @rate_limit_endpoint(max_requests=30)
+    def ponto_notificar_email():
+        # Endpoint ABERTO (o app de ponto não tem login). Protegido por:
+        #   * rate-limit por IP;
+        #   * só aceita batida registrada nos últimos 10 min (anti-replay);
+        #   * destino vem SEMPRE do cadastro do colaborador, nunca do request.
+        # Best-effort: nunca retorna erro que quebre o fluxo do app (HTTP 200).
+        data = request.get_json(silent=True) or {}
+        raw_id = data.get('batida_id')
+        if not str(raw_id).isdigit():
+            return jsonify({'ok': False, 'error': 'batida_id inválido'}), 400
+        batida_id = int(raw_id)
+
+        try:
+            resp = (
+                supabase.table('batidas_ponto')
+                .select('id, colaborador_id, tipo, registrado_em')
+                .eq('id', batida_id)
+                .limit(1)
+                .execute()
+            )
+            batida = (resp.data or [None])[0]
+        except Exception as exc:
+            app.logger.error('Falha ao buscar batida p/ notificação: %s', exc)
+            return jsonify({'ok': False, 'error': 'falha temporária'}), 200
+
+        if not batida:
+            return jsonify({'ok': False, 'error': 'batida não encontrada'}), 404
+
+        ts = _parse_pg_timestamp(batida.get('registrado_em'))
+        if ts is None or (datetime.now(timezone.utc) - ts) > timedelta(minutes=10):
+            return jsonify({'ok': False, 'error': 'batida fora da janela de notificação'}), 200
+
+        colaborador_id = batida.get('colaborador_id')
+        try:
+            cresp = (
+                supabase.table('colaboradores')
+                .select('nome_completo, email')
+                .eq('id', colaborador_id)
+                .limit(1)
+                .execute()
+            )
+            colab = (cresp.data or [None])[0] or {}
+        except Exception as exc:
+            app.logger.error('Falha ao buscar colaborador p/ notificação: %s', exc)
+            return jsonify({'ok': False, 'error': 'falha temporária'}), 200
+
+        email_destino = (colab.get('email') or '').strip()
+        if not email_destino or not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email_destino):
+            return jsonify({'ok': True, 'sent': False, 'reason': 'sem-email'})
+
+        try:
+            batidas_dia = _batidas_do_dia(colaborador_id, ts)
+        except Exception as exc:
+            app.logger.warning('Falha ao buscar histórico do dia p/ notificação: %s', exc)
+            batidas_dia = [batida]
+
+        try:
+            _send_email_ponto(email_destino, colab.get('nome_completo') or 'Colaborador', batida, batidas_dia)
+        except Exception as exc:
+            app.logger.error('Falha ao enviar e-mail de ponto: %s', exc)
+            return jsonify({'ok': False, 'sent': False, 'error': 'falha ao enviar e-mail'}), 200
+
+        return jsonify({'ok': True, 'sent': True})
+
+    # ─── Administração de ponto (SEG, autenticado) ─────────────────────────────
+    # Tela admin: filtros, horas/dia, ajuste manual (add/editar/excluir) e export.
+    # As batidas vêm do mesmo Supabase do app facial; service_role lê/escreve
+    # direto em batidas_ponto. Datas de filtro/lançamento são tratadas em horário
+    # local de São Paulo (offset fixo -3h) e convertidas para UTC nas queries.
+    _SP_TZ = timezone(_SP_OFFSET)
+
+    def _parse_iso_date(value):
+        if not isinstance(value, str) or not value.strip():
+            return None
+        try:
+            return date_class.fromisoformat(value.strip()[:10])
+        except ValueError:
+            return None
+
+    def _sp_date_bounds_utc(inicio_date, fim_date):
+        """[inicio 00:00 SP, (fim+1d) 00:00 SP) convertido para ISO UTC."""
+        ini = datetime(inicio_date.year, inicio_date.month, inicio_date.day, tzinfo=_SP_TZ)
+        fim_excl = datetime(fim_date.year, fim_date.month, fim_date.day, tzinfo=_SP_TZ) + timedelta(days=1)
+        return ini.astimezone(timezone.utc).isoformat(), fim_excl.astimezone(timezone.utc).isoformat()
+
+    def _parse_sp_datetime_to_utc(value):
+        """'AAAA-MM-DD HH:MM[:SS]' (hora local SP) -> datetime aware UTC, ou None."""
+        if not isinstance(value, str) or not value.strip():
+            return None
+        raw = re.sub(r'(Z|[+-]\d{2}:?\d{2})$', '', value.strip().replace(' ', 'T'))
+        for fmt in ('%Y-%m-%dT%H:%M:%S', '%Y-%m-%dT%H:%M'):
+            try:
+                return datetime.strptime(raw, fmt).replace(tzinfo=_SP_TZ).astimezone(timezone.utc)
+            except ValueError:
+                continue
+        return None
+
+    def _fetch_filial_map(filial_ids):
+        ids = sorted({int(f) for f in filial_ids if f is not None})
+        if not ids:
+            return {}
+        resp = supabase.table('filiais').select('id, cidade, uf, parceira').in_('id', ids).execute()
+        out = {}
+        for f in (resp.data or []):
+            label = f"{(f.get('cidade') or '').strip()}/{(f.get('uf') or '').strip()}".strip('/')
+            out[int(f['id'])] = label or (f.get('parceira') or f"Filial {f['id']}")
+        return out
+
+    def _fetch_colaborador_map(colab_ids):
+        ids = sorted({int(c) for c in colab_ids if c is not None})
+        if not ids:
+            return {}
+        resp = supabase.table('colaboradores').select('id, nome_completo, cargo, email').in_('id', ids).execute()
+        return {int(c['id']): c for c in (resp.data or [])}
+
+    def _decorate_batida(row, colab_map, filial_map):
+        colab = colab_map.get(int(row['colaborador_id'])) if row.get('colaborador_id') is not None else None
+        dt = _parse_pg_timestamp(row.get('registrado_em'))
+        local = (dt + _SP_OFFSET) if dt else None
+        fid = row.get('filial_id')
+        return {
+            'id': row.get('id'),
+            'colaborador_id': row.get('colaborador_id'),
+            'colaborador_nome': (colab or {}).get('nome_completo') or '—',
+            'cargo': (colab or {}).get('cargo'),
+            'filial_id': fid,
+            'filial_label': filial_map.get(int(fid)) if fid is not None else None,
+            'tipo': row.get('tipo'),
+            'registrado_em': row.get('registrado_em'),
+            'data': local.strftime('%Y-%m-%d') if local else None,
+            'hora': local.strftime('%H:%M') if local else None,
+            'origem': row.get('origem'),
+            'dispositivo': row.get('dispositivo'),
+            'confianca': row.get('confianca'),
+            'ajustado_por': row.get('ajustado_por'),
+            'ajuste_motivo': row.get('ajuste_motivo'),
+            'editado_em': row.get('editado_em'),
+        }
+
+    def _ponto_apply_filters(query, profile, args):
+        inicio = _parse_iso_date(args.get('inicio'))
+        fim = _parse_iso_date(args.get('fim'))
+        if inicio:
+            ini_iso, _ = _sp_date_bounds_utc(inicio, inicio)
+            query = query.gte('registrado_em', ini_iso)
+        if fim:
+            _, fim_iso = _sp_date_bounds_utc(fim, fim)
+            query = query.lt('registrado_em', fim_iso)
+        cid = args.get('colaborador_id')
+        if str(cid).isdigit():
+            query = query.eq('colaborador_id', int(cid))
+        tipo = (args.get('tipo') or '').strip().lower()
+        if tipo in ('entrada', 'saida'):
+            query = query.eq('tipo', tipo)
+        fid = args.get('filial_id')
+        if str(fid).isdigit():
+            query = query.eq('filial_id', int(fid))
+        elif profile_has_filial_scope(profile):
+            query = query.in_('filial_id', profile.get('allowed_filial_ids') or [])
+        return query
+
+    def _ponto_filial_guard(profile, args):
+        fid = args.get('filial_id')
+        if str(fid).isdigit() and not ensure_profile_can_access_filial(profile, int(fid)):
+            return jsonify({'error': 'Sem permissão para consultar esta base.'}), 403
+        return None
+
+    def _ponto_notificar_se_possivel(colab, batida_row, ref_dt_utc, notificar):
+        """Best-effort: envia e-mail ao colaborador após ajuste manual."""
+        if not notificar or not colab or ref_dt_utc is None:
+            return
+        email = (colab.get('email') or '').strip()
+        if not email or not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+            return
+        try:
+            batidas_dia = _batidas_do_dia(colab['id'], ref_dt_utc)
+            _send_email_ponto(email, colab.get('nome_completo') or 'Colaborador', batida_row, batidas_dia)
+        except Exception as exc:
+            app.logger.warning('Falha ao notificar ajuste de ponto por e-mail: %s', exc)
+
+    @app.get('/api/ponto/batidas')
+    @rate_limit_endpoint(max_requests=120)
+    @require_auth
+    def ponto_listar_batidas(profile):
+        scope_error = require_scope_permission(profile, 'menu.ponto', 'Sem permissão para ver o ponto.')
+        if scope_error:
+            return scope_error
+        guard = _ponto_filial_guard(profile, request.args)
+        if guard:
+            return guard
+        if not table_exists_ready('batidas_ponto'):
+            return jsonify({'database_ready': False, 'items': [], 'total': 0, 'page': 1, 'page_size': 0, 'has_more': False})
+
+        try:
+            page = max(1, int(request.args.get('page', 1)))
+        except (TypeError, ValueError):
+            page = 1
+        try:
+            page_size = min(200, max(1, int(request.args.get('page_size', 50))))
+        except (TypeError, ValueError):
+            page_size = 50
+        offset = (page - 1) * page_size
+
+        try:
+            sel = 'id, colaborador_id, filial_id, tipo, registrado_em, origem, dispositivo, confianca, ajustado_por, ajuste_motivo, editado_em'
+            query = supabase.table('batidas_ponto').select(sel, count='exact')
+            query = _ponto_apply_filters(query, profile, request.args)
+            resp = query.order('registrado_em', desc=True).range(offset, offset + page_size - 1).execute()
+            rows = resp.data or []
+            total = resp.count or 0
+            colab_map = _fetch_colaborador_map([r.get('colaborador_id') for r in rows])
+            filial_map = _fetch_filial_map([r.get('filial_id') for r in rows])
+            return jsonify({
+                'database_ready': True,
+                'items': [_decorate_batida(r, colab_map, filial_map) for r in rows],
+                'total': total,
+                'page': page,
+                'page_size': page_size,
+                'has_more': (offset + len(rows)) < total,
+            })
+        except Exception as exc:
+            app.logger.error('Erro ao listar batidas de ponto: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.get('/api/ponto/resumo')
+    @rate_limit_endpoint(max_requests=60)
+    @require_auth
+    def ponto_resumo(profile):
+        scope_error = require_scope_permission(profile, 'menu.ponto', 'Sem permissão para ver o ponto.')
+        if scope_error:
+            return scope_error
+        guard = _ponto_filial_guard(profile, request.args)
+        if guard:
+            return guard
+        if not table_exists_ready('batidas_ponto'):
+            return jsonify({'database_ready': False, 'items': []})
+
+        try:
+            sel = 'id, colaborador_id, filial_id, tipo, registrado_em, ajustado_por'
+            query = supabase.table('batidas_ponto').select(sel)
+            query = _ponto_apply_filters(query, profile, request.args)
+            rows = query.order('registrado_em', desc=False).limit(5000).execute().data or []
+            colab_map = _fetch_colaborador_map([r.get('colaborador_id') for r in rows])
+            filial_map = _fetch_filial_map([r.get('filial_id') for r in rows])
+
+            grupos = {}
+            for r in rows:
+                dt = _parse_pg_timestamp(r.get('registrado_em'))
+                if dt is None or r.get('colaborador_id') is None:
+                    continue
+                dia = (dt + _SP_OFFSET).strftime('%Y-%m-%d')
+                grupos.setdefault((int(r['colaborador_id']), dia), []).append(r)
+
+            items = []
+            for (cid, dia), batidas in grupos.items():
+                batidas.sort(key=lambda b: b.get('registrado_em') or '')
+                horas_txt, horas_seg = _calcular_horas_dia(batidas)
+                colab = colab_map.get(cid) or {}
+                fid = batidas[0].get('filial_id')
+                items.append({
+                    'colaborador_id': cid,
+                    'colaborador_nome': colab.get('nome_completo') or '—',
+                    'cargo': colab.get('cargo'),
+                    'filial_id': fid,
+                    'filial_label': filial_map.get(int(fid)) if fid is not None else None,
+                    'data': dia,
+                    'qtd_batidas': len(batidas),
+                    'primeira_entrada': _fmt_sp_hora(next((b.get('registrado_em') for b in batidas if (b.get('tipo') or '') == 'entrada'), None)),
+                    'ultima_saida': _fmt_sp_hora(next((b.get('registrado_em') for b in reversed(batidas) if (b.get('tipo') or '') == 'saida'), None)),
+                    'horas_texto': horas_txt,
+                    'horas_segundos': horas_seg,
+                    'tem_ajuste': any(b.get('ajustado_por') for b in batidas),
+                    'batidas': [
+                        {
+                            'id': b.get('id'),
+                            'tipo': b.get('tipo'),
+                            'hora': _fmt_sp_hora(b.get('registrado_em')),
+                            'registrado_em': b.get('registrado_em'),
+                            'ajustado_por': b.get('ajustado_por'),
+                        }
+                        for b in batidas
+                    ],
+                })
+            items.sort(key=lambda x: (x['data'], x['colaborador_nome']), reverse=True)
+            return jsonify({'database_ready': True, 'items': items})
+        except Exception as exc:
+            app.logger.error('Erro ao montar resumo de ponto: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.post('/api/ponto/batida')
+    @rate_limit_endpoint(max_requests=60)
+    @require_auth
+    def ponto_criar_batida(profile):
+        scope_error = require_scope_permission(profile, 'manage.ponto', 'Sem permissão para ajustar o ponto.')
+        if scope_error:
+            return scope_error
+        if not table_exists_ready('batidas_ponto'):
+            return jsonify({'error': 'A tabela de ponto ainda não existe. Rode a migration do módulo.'}), 400
+
+        data = request.get_json(silent=True) or {}
+        raw_cid = data.get('colaborador_id')
+        if not str(raw_cid).isdigit():
+            return jsonify({'error': 'Informe o colaborador.'}), 400
+        cid = int(raw_cid)
+        tipo = (data.get('tipo') or '').strip().lower()
+        if tipo not in ('entrada', 'saida'):
+            return jsonify({'error': 'Tipo deve ser "entrada" ou "saida".'}), 400
+        dt_utc = _parse_sp_datetime_to_utc(data.get('registrado_em'))
+        if dt_utc is None:
+            return jsonify({'error': 'Informe data e hora válidas (AAAA-MM-DD HH:MM).'}), 400
+        motivo = (data.get('motivo') or '').strip()
+        if not motivo:
+            return jsonify({'error': 'Informe o motivo do lançamento manual.'}), 400
+
+        colab = (supabase.table('colaboradores').select('id, nome_completo, filial_id, email').eq('id', cid).limit(1).execute().data or [None])[0]
+        if not colab:
+            return jsonify({'error': 'Colaborador não encontrado.'}), 404
+        raw_fid = data.get('filial_id')
+        filial_id = int(raw_fid) if str(raw_fid).isdigit() else colab.get('filial_id')
+        if not ensure_profile_can_access_filial(profile, filial_id):
+            return jsonify({'error': 'Sem permissão para lançar nesta base.'}), 403
+
+        ajustante = profile.get('nome_completo') or profile.get('email') or 'admin'
+        try:
+            payload = {
+                'colaborador_id': cid,
+                'filial_id': filial_id,
+                'tipo': tipo,
+                'registrado_em': dt_utc.isoformat(),
+                'origem': 'manual_admin',
+                'ajustado_por': ajustante,
+                'ajuste_motivo': motivo,
+                'editado_em': now_iso(),
+            }
+            nova = (supabase.table('batidas_ponto').insert(payload).execute().data or [None])[0] or {}
+            write_audit_event(
+                profile, 'ponto_criar', 'batidas_ponto', entity_id=nova.get('id'),
+                details={'colaborador_id': cid, 'tipo': tipo, 'registrado_em': dt_utc.isoformat(), 'motivo': motivo},
+                filial_id=filial_id,
+            )
+            _ponto_notificar_se_possivel(colab, nova, dt_utc, bool(data.get('notificar', True)))
+            return jsonify({'status': 'ok', 'id': nova.get('id')})
+        except Exception as exc:
+            app.logger.error('Erro ao criar batida manual: %s', exc)
+            write_audit_event(profile, 'ponto_criar', 'batidas_ponto', status='error', details={'error': str(exc)[:300]})
+            return jsonify({'error': translate_database_error(exc)}), 400
+
+    @app.patch('/api/ponto/batida/<int:batida_id>')
+    @rate_limit_endpoint(max_requests=60)
+    @require_auth
+    def ponto_editar_batida(profile, batida_id):
+        scope_error = require_scope_permission(profile, 'manage.ponto', 'Sem permissão para ajustar o ponto.')
+        if scope_error:
+            return scope_error
+
+        data = request.get_json(silent=True) or {}
+        motivo = (data.get('motivo') or '').strip()
+        if not motivo:
+            return jsonify({'error': 'Informe o motivo do ajuste.'}), 400
+
+        atual = (supabase.table('batidas_ponto').select('*').eq('id', batida_id).limit(1).execute().data or [None])[0]
+        if not atual:
+            return jsonify({'error': 'Batida não encontrada.'}), 404
+        if not ensure_profile_can_access_filial(profile, atual.get('filial_id')):
+            return jsonify({'error': 'Sem permissão para ajustar batida desta base.'}), 403
+
+        updates = {}
+        if data.get('tipo') is not None:
+            tipo = (data.get('tipo') or '').strip().lower()
+            if tipo not in ('entrada', 'saida'):
+                return jsonify({'error': 'Tipo deve ser "entrada" ou "saida".'}), 400
+            updates['tipo'] = tipo
+        if data.get('registrado_em'):
+            dt_utc = _parse_sp_datetime_to_utc(data.get('registrado_em'))
+            if dt_utc is None:
+                return jsonify({'error': 'Data/hora inválida (AAAA-MM-DD HH:MM).'}), 400
+            updates['registrado_em'] = dt_utc.isoformat()
+        if not updates:
+            return jsonify({'error': 'Nada para atualizar.'}), 400
+
+        ajustante = profile.get('nome_completo') or profile.get('email') or 'admin'
+        updates.update({'ajustado_por': ajustante, 'ajuste_motivo': motivo, 'editado_em': now_iso()})
+        try:
+            nova = (supabase.table('batidas_ponto').update(updates).eq('id', batida_id).execute().data or [None])[0] or {}
+            write_audit_event(
+                profile, 'ponto_editar', 'batidas_ponto', entity_id=batida_id,
+                details={
+                    'antes': {'tipo': atual.get('tipo'), 'registrado_em': atual.get('registrado_em')},
+                    'depois': {k: updates[k] for k in ('tipo', 'registrado_em') if k in updates},
+                    'motivo': motivo,
+                },
+                filial_id=atual.get('filial_id'),
+            )
+            colab = (supabase.table('colaboradores').select('id, nome_completo, email').eq('id', atual['colaborador_id']).limit(1).execute().data or [None])[0]
+            ref_dt = _parse_pg_timestamp(nova.get('registrado_em') or atual.get('registrado_em'))
+            _ponto_notificar_se_possivel(colab, nova or atual, ref_dt, bool(data.get('notificar', True)))
+            return jsonify({'status': 'ok', 'id': batida_id})
+        except Exception as exc:
+            app.logger.error('Erro ao editar batida: %s', exc)
+            write_audit_event(profile, 'ponto_editar', 'batidas_ponto', entity_id=batida_id, status='error', details={'error': str(exc)[:300]})
+            return jsonify({'error': translate_database_error(exc)}), 400
+
+    @app.delete('/api/ponto/batida/<int:batida_id>')
+    @rate_limit_endpoint(max_requests=60)
+    @require_auth
+    def ponto_excluir_batida(profile, batida_id):
+        scope_error = require_scope_permission(profile, 'manage.ponto', 'Sem permissão para ajustar o ponto.')
+        if scope_error:
+            return scope_error
+
+        atual = (supabase.table('batidas_ponto').select('*').eq('id', batida_id).limit(1).execute().data or [None])[0]
+        if not atual:
+            return jsonify({'error': 'Batida não encontrada.'}), 404
+        if not ensure_profile_can_access_filial(profile, atual.get('filial_id')):
+            return jsonify({'error': 'Sem permissão para excluir batida desta base.'}), 403
+
+        try:
+            supabase.table('batidas_ponto').delete().eq('id', batida_id).execute()
+            write_audit_event(
+                profile, 'ponto_excluir', 'batidas_ponto', entity_id=batida_id,
+                details={'colaborador_id': atual.get('colaborador_id'), 'tipo': atual.get('tipo'), 'registrado_em': atual.get('registrado_em')},
+                filial_id=atual.get('filial_id'),
+            )
+            return jsonify({'status': 'ok'})
+        except Exception as exc:
+            app.logger.error('Erro ao excluir batida: %s', exc)
+            write_audit_event(profile, 'ponto_excluir', 'batidas_ponto', entity_id=batida_id, status='error', details={'error': str(exc)[:300]})
+            return jsonify({'error': translate_database_error(exc)}), 400
+
+    @app.get('/api/ponto/export-xlsx')
+    @require_auth
+    def ponto_export_xlsx(profile):
+        scope_error = require_scope_permission(profile, 'menu.ponto', 'Sem permissão para exportar o ponto.')
+        if scope_error:
+            return scope_error
+        guard = _ponto_filial_guard(profile, request.args)
+        if guard:
+            return guard
+
+        try:
+            if not table_exists_ready('batidas_ponto'):
+                return jsonify({'error': 'A tabela de ponto ainda não existe.'}), 400
+
+            sel = 'id, colaborador_id, filial_id, tipo, registrado_em, origem, ajustado_por, ajuste_motivo'
+            query = supabase.table('batidas_ponto').select(sel)
+            query = _ponto_apply_filters(query, profile, request.args)
+            rows = query.order('registrado_em', desc=False).limit(10000).execute().data or []
+            colab_map = _fetch_colaborador_map([r.get('colaborador_id') for r in rows])
+            filial_map = _fetch_filial_map([r.get('filial_id') for r in rows])
+
+            wb = Workbook()
+            ws = wb.active
+            ws.title = 'Ponto'
+            bold = Font(bold=True)
+            white_bold = Font(bold=True, color='FFFFFFFF')
+            center = Alignment(horizontal='center', vertical='center')
+            left = Alignment(horizontal='left', vertical='center')
+            header_fill = PatternFill(start_color='FF1F4E78', end_color='FF1F4E78', fill_type='solid')
+            sub_fill = PatternFill(start_color='FFDDEBF7', end_color='FFDDEBF7', fill_type='solid')
+            thin = Side(border_style='thin', color='FFBFBFBF')
+            border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+            headers = ['Colaborador', 'Cargo', 'Base', 'Data', 'Tipo', 'Hora', 'Origem', 'Ajustado por', 'Motivo do ajuste']
+            for col, header in enumerate(headers, start=1):
+                cell = ws.cell(row=1, column=col, value=header)
+                cell.font = white_bold
+                cell.fill = header_fill
+                cell.alignment = center
+                cell.border = border
+
+            grupos = {}
+            for r in rows:
+                dt = _parse_pg_timestamp(r.get('registrado_em'))
+                if dt is None or r.get('colaborador_id') is None:
+                    continue
+                dia = (dt + _SP_OFFSET).strftime('%Y-%m-%d')
+                grupos.setdefault((int(r['colaborador_id']), dia), []).append(r)
+
+            row_idx = 2
+            for (cid, dia), batidas in sorted(grupos.items(), key=lambda kv: (kv[0][1], kv[0][0])):
+                batidas.sort(key=lambda b: b.get('registrado_em') or '')
+                colab = colab_map.get(cid) or {}
+                nome = colab.get('nome_completo') or '—'
+                cargo = colab.get('cargo') or ''
+                for b in batidas:
+                    fid = b.get('filial_id')
+                    valores = [
+                        nome,
+                        cargo,
+                        filial_map.get(int(fid)) if fid is not None else '',
+                        _fmt_sp_data(b.get('registrado_em')),
+                        'Entrada' if (b.get('tipo') or '') == 'entrada' else 'Saída',
+                        _fmt_sp_hora(b.get('registrado_em')),
+                        b.get('origem') or '',
+                        b.get('ajustado_por') or '',
+                        b.get('ajuste_motivo') or '',
+                    ]
+                    for col, valor in enumerate(valores, start=1):
+                        cell = ws.cell(row=row_idx, column=col, value=valor)
+                        cell.alignment = left
+                        cell.border = border
+                    row_idx += 1
+
+                horas_txt, _ = _calcular_horas_dia(batidas)
+                ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=5)
+                total_cell = ws.cell(row=row_idx, column=1, value=f'Total {nome} — {dia}')
+                total_cell.font = bold
+                horas_cell = ws.cell(row=row_idx, column=6, value=f'Horas: {horas_txt}')
+                horas_cell.font = bold
+                for col in range(1, len(headers) + 1):
+                    ws.cell(row=row_idx, column=col).fill = sub_fill
+                row_idx += 1
+
+            widths = [28, 18, 16, 12, 12, 10, 14, 22, 32]
+            for i, w in enumerate(widths, start=1):
+                ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
+            ws.freeze_panes = 'A2'
+
+            bio = io.BytesIO()
+            wb.save(bio)
+            bio.seek(0)
+            response_stream = make_response(bio.read())
+            filename = f'ponto_{date_class.today().isoformat()}.xlsx'
+            response_stream.headers.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+            response_stream.headers.set('Content-Disposition', f'attachment; filename="{filename}"')
+            write_audit_event(profile, 'ponto_exportar', 'batidas_ponto', details={'linhas': len(rows)})
+            return response_stream
+        except Exception as exc:
+            app.logger.error('Erro ao exportar ponto XLSX: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
     def _find_auth_user_by_email(email):
         """Busca um usuário no auth.users pelo e-mail. Retorna o objeto ou None."""
         email_norm = (email or '').strip().lower()
@@ -6311,7 +7011,9 @@ def create_app():
     @app.get('/api/dashboard/frota')
     @require_auth
     def dashboard_frota(profile):
-        require_scope(profile, 'menu.frota_dashboard')
+        scope_err = require_scope_permission(profile, 'menu.frota_dashboard')
+        if scope_err:
+            return scope_err
         filial_id = request.args.get('filial_id')
         mes = request.args.get('mes')  # YYYY-MM, default = mês atual
 
@@ -7161,6 +7863,10 @@ def create_app():
         motivo = (raw_payload.get('motivo') or '').strip() or None
         observacoes = (raw_payload.get('observacoes') or '').strip() or None
         data_movimento = (raw_payload.get('data_movimento') or '').strip() or None
+        valor_unitario_raw = raw_payload.get('valor_unitario')
+        valor_unitario = None
+        if valor_unitario_raw not in (None, '', 'null'):
+            valor_unitario = max(0.0, parse_float_or_default(valor_unitario_raw, 0.0))
 
         if not item_id:
             return jsonify({'error': 'Informe o item de estoque.'}), 400
@@ -7218,6 +7924,9 @@ def create_app():
                 movimento_payload['motivo'] = motivo
             if observacoes:
                 movimento_payload['observacoes'] = observacoes
+            if valor_unitario is not None:
+                movimento_payload['valor_unitario'] = valor_unitario
+                movimento_payload['valor_total'] = round(valor_unitario * quantidade, 2)
 
             created_mov = supabase.table('estoque_movimentos').insert(movimento_payload).execute()
             mov = created_mov.data[0] if created_mov.data else {}
@@ -7233,6 +7942,142 @@ def create_app():
         except Exception as exc:
             app.logger.error('Erro ao criar movimento de estoque: %s', exc)
             return jsonify({'error': translate_database_error(exc)}), 400
+
+    @app.post('/api/estoque_movimentos/batch')
+    @require_auth
+    def criar_movimento_estoque_batch(profile):
+        """Lança múltiplos itens em um único cabeçalho (estilo nota fiscal).
+        Payload:
+        {
+          "cabecalho": {
+            "filial_id": int, "tipo": str, "data_movimento": YYYY-MM-DD,
+            "fornecedor": str?, "numero_nota": str?, "motivo": str?, "observacoes": str?
+          },
+          "itens": [
+            { "item_id": int, "quantidade": float, "valor_unitario": float?, "colaborador_id": int? }
+          ]
+        }
+        """
+        scope_error = require_scope_permission(profile, 'menu.estoque')
+        if scope_error:
+            return scope_error
+        permission_error = require_scope_permission(profile, 'create.estoque_movimentos')
+        if permission_error:
+            return permission_error
+
+        raw = request.get_json(silent=True) or {}
+        cab = raw.get('cabecalho') or {}
+        itens = raw.get('itens') or []
+
+        ESTOQUE_TIPOS = {
+            'entrada', 'saida_colaborador', 'saida_geral',
+            'saida_fornecedor', 'troca', 'ajuste_positivo', 'ajuste_negativo',
+        }
+        TIPOS_SAEM = {'saida_colaborador', 'saida_geral', 'saida_fornecedor', 'troca', 'ajuste_negativo'}
+
+        filial_id = parse_int_or_default(cab.get('filial_id'), None)
+        tipo = (cab.get('tipo') or '').strip().lower()
+        data_movimento = (cab.get('data_movimento') or '').strip() or date_class.today().isoformat()
+        fornecedor = (cab.get('fornecedor') or '').strip() or None
+        numero_nota = (cab.get('numero_nota') or '').strip() or None
+        motivo_cab = (cab.get('motivo') or '').strip() or None
+        observacoes_cab = (cab.get('observacoes') or '').strip() or None
+        registrado_por = parse_int_or_default(cab.get('registrado_por'), None) or profile.get('id')
+
+        if not filial_id:
+            return jsonify({'error': 'Informe a filial.'}), 400
+        if tipo not in ESTOQUE_TIPOS:
+            return jsonify({'error': 'Tipo inválido.'}), 400
+        if not itens or not isinstance(itens, list):
+            return jsonify({'error': 'Adicione pelo menos 1 item.'}), 400
+        if not ensure_profile_can_access_filial(profile, filial_id):
+            return jsonify({'error': 'Sem permissão para esta base.'}), 403
+
+        # Pré-valida e normaliza linhas
+        linhas = []
+        for idx, it in enumerate(itens):
+            item_id = parse_int_or_default(it.get('item_id'), None)
+            qtd = max(0.0, parse_float_or_default(it.get('quantidade'), 0.0))
+            if not item_id or qtd <= 0:
+                return jsonify({'error': f'Linha {idx + 1}: item e quantidade são obrigatórios.'}), 400
+            val_uni_raw = it.get('valor_unitario')
+            val_uni = None
+            if val_uni_raw not in (None, '', 'null'):
+                val_uni = max(0.0, parse_float_or_default(val_uni_raw, 0.0))
+            colab_id = parse_int_or_default(it.get('colaborador_id'), None)
+            linhas.append({
+                'item_id': item_id, 'quantidade': qtd,
+                'valor_unitario': val_uni, 'colaborador_id': colab_id,
+            })
+
+        # Busca itens em lote
+        item_ids = list({l['item_id'] for l in linhas})
+        try:
+            itens_db = supabase.table('estoque_itens').select('id, filial_id, estoque_atual, nome, unidade').in_('id', item_ids).eq('ativo', True).execute().data or []
+        except Exception as exc:
+            return jsonify({'error': translate_database_error(exc)}), 500
+        itens_map = {int(r['id']): r for r in itens_db}
+
+        for idx, l in enumerate(linhas):
+            it = itens_map.get(l['item_id'])
+            if not it:
+                return jsonify({'error': f'Linha {idx + 1}: item não encontrado.'}), 404
+            if int(it.get('filial_id') or 0) != filial_id:
+                return jsonify({'error': f'Linha {idx + 1}: item pertence a outra filial.'}), 400
+
+        # Processa cada linha (saldo + insert)
+        criados = []
+        erros = []
+        for idx, l in enumerate(linhas):
+            it = itens_map[l['item_id']]
+            atual = parse_float_or_default(it.get('estoque_atual'), 0.0)
+            novo = round(atual - l['quantidade'] if tipo in TIPOS_SAEM else atual + l['quantidade'], 3)
+
+            payload = {
+                'filial_id': filial_id,
+                'item_id': l['item_id'],
+                'tipo': tipo,
+                'quantidade': l['quantidade'],
+                'saldo_apos': novo,
+                'data_movimento': data_movimento,
+                'ativo': True,
+            }
+            if l['colaborador_id']:
+                payload['colaborador_id'] = l['colaborador_id']
+            if registrado_por:
+                payload['registrado_por'] = registrado_por
+            if fornecedor:
+                payload['fornecedor'] = fornecedor
+            if numero_nota:
+                payload['numero_nota'] = numero_nota
+            if motivo_cab:
+                payload['motivo'] = motivo_cab
+            if observacoes_cab:
+                payload['observacoes'] = observacoes_cab
+            if l['valor_unitario'] is not None:
+                payload['valor_unitario'] = l['valor_unitario']
+                payload['valor_total'] = round(l['valor_unitario'] * l['quantidade'], 2)
+
+            try:
+                resp = supabase.table('estoque_movimentos').insert(payload).execute()
+                mov = resp.data[0] if resp.data else {}
+                supabase.table('estoque_itens').update({'estoque_atual': novo}).eq('id', l['item_id']).execute()
+                # atualiza estoque em cache local pra próximas linhas do mesmo item
+                it['estoque_atual'] = novo
+                mov['item_nome'] = it.get('nome', '')
+                criados.append(mov)
+            except Exception as exc:
+                erros.append({'linha': idx + 1, 'erro': str(exc)[:300]})
+
+        write_audit_event(
+            profile, 'create', 'estoque_movimentos', None,
+            details={'batch': True, 'tipo': tipo, 'qtd_itens': len(criados), 'erros': erros},
+            filial_id=filial_id,
+        )
+
+        if erros:
+            return jsonify({'criados': criados, 'erros': erros}), 207
+        return jsonify({'criados': criados}), 201
 
     @app.get('/api/estoque_movimentos/historico')
     @require_auth
@@ -7430,7 +8275,7 @@ def create_app():
         PEDIDO_STATUS_OPTIONS = {
             'rascunho', 'pendente', 'analise',
             'pendente_aprovacao', 'em_analise',   # legado
-            'aprovado', 'reprovado', 'em_compra', 'recebido', 'cancelado',
+            'aprovado', 'reprovado', 'em_compra', 'recebido', 'finalizado', 'cancelado',
         }
         body = request.get_json(silent=True) or {}
         novo_status = (body.get('status') or '').strip().lower()
@@ -8404,31 +9249,42 @@ def create_app():
                 next_month = date_class(start_date.year, start_date.month + 1, 1)
             end_date = next_month - timedelta(days=1)
 
-            # Buscar todos os colaboradores da(s) filial(is)
+            # Buscar todos os colaboradores da(s) filial(is) — inclui desligados,
+            # filtragem ocorre depois conforme registros do mês.
             colls_response = (
                 supabase.table('colaboradores')
-                .select('id, filial_id, nome_completo, cargo, turno, horario_padrao_inicio, horario_padrao_fim, ativo, data_admissao')
+                .select('id, filial_id, nome_completo, cargo, turno, horario_padrao_inicio, horario_padrao_fim, ativo, data_admissao, data_desligamento')
                 .in_('filial_id', filiais_filter)
+                .order('nome_completo')
+                .execute()
             )
-            if not incluir_desligados:
-                colls_response = colls_response.eq('ativo', True)
+            colaboradores_raw = colls_response.data or []
 
-            colls_response = colls_response.order('nome_completo').execute()
-            colaboradores = colls_response.data or []
-
-            if not colaboradores:
+            if not colaboradores_raw:
                 return jsonify({'error': 'Nenhum colaborador encontrado.'}), 404
 
             # Buscar todas as presenças do mês para todos os colaboradores
             presence_response = (
                 supabase.table('presencas_diarias')
                 .select('*')
-                .in_('colaborador_id', [c['id'] for c in colaboradores])
+                .in_('colaborador_id', [c['id'] for c in colaboradores_raw])
                 .gte('data_referencia', start_date.isoformat())
                 .lte('data_referencia', end_date.isoformat())
                 .execute()
             )
             presences_all = presence_response.data or []
+
+            # Filtrar colaboradores:
+            # - ativos: sempre incluir
+            # - desligados: incluir só se tiver registro de presença no mês
+            #   (ou se incluir_desligados=true forçar todos)
+            colab_ids_com_registro = {p['colaborador_id'] for p in presences_all if p.get('colaborador_id') is not None}
+            colaboradores = []
+            for c in colaboradores_raw:
+                if c.get('ativo', True):
+                    colaboradores.append(c)
+                elif incluir_desligados or c.get('id') in colab_ids_com_registro:
+                    colaboradores.append(c)
 
             # Mapa filial_id -> "cidade/uf"
             filiais_resp = supabase.table('filiais').select('id, cidade, uf').in_('id', filiais_filter).execute()
@@ -8462,7 +9318,16 @@ def create_app():
                 except (ValueError, TypeError):
                     admissao_date = start_date
                 colab_start = max(start_date, admissao_date)
-                colab_end = min(end_date, today)
+                # Hoje e dias futuros viram "pendente" — não contam como falta nem entram nas estatísticas
+                colab_end = min(end_date, today - timedelta(days=1))
+                # Se foi desligado, fim do período é dia anterior ao desligamento
+                raw_desligamento = colab.get('data_desligamento')
+                if raw_desligamento:
+                    try:
+                        desligamento_date = date_class.fromisoformat(str(raw_desligamento))
+                        colab_end = min(colab_end, desligamento_date - timedelta(days=1))
+                    except (ValueError, TypeError):
+                        pass
 
                 # Contar apenas dias úteis (seg-sex) dentro do período válido
                 dias_uteis = 0
@@ -8514,6 +9379,8 @@ def create_app():
             color_falta = 'FFE74C3C'
             color_atraso = 'FFF39C12'
             color_folga = 'FF95A5A6'
+            color_pendente = 'FFF1C40F'
+            color_inativo = 'FFBDC3C7'
             
             thin = Side(border_style='thin', color='FF000000')
             border = Border(left=thin, right=thin, top=thin, bottom=thin)
@@ -8687,6 +9554,12 @@ def create_app():
                 nome = colab.get('nome_completo', 'Sem Nome')
                 cal_start = stat_info['colab_start']
                 cal_end = stat_info['colab_end']
+                # data_desligamento usada pra marcar pós-desligamento como inativo
+                _raw_desl = colab.get('data_desligamento')
+                try:
+                    desligamento_date = date_class.fromisoformat(str(_raw_desl)) if _raw_desl else None
+                except (ValueError, TypeError):
+                    desligamento_date = None
                 
                 ws = wb.create_sheet(nome[:31])  # Limite de 31 caracteres no Excel
 
@@ -8724,11 +9597,15 @@ def create_app():
                     
                     is_weekend = current_date.weekday() >= 5
                     before_admission = current_date < cal_start
-                    is_future = current_date > cal_end
+                    after_desligamento = desligamento_date is not None and current_date >= desligamento_date
+                    is_today_or_future = current_date >= today
 
-                    if before_admission or is_future:
-                        status_color = color_sem_dado
+                    if before_admission or after_desligamento:
+                        status_color = color_inativo
                         status_symbol = ''
+                    elif is_today_or_future and not presence:
+                        status_color = color_pendente
+                        status_symbol = '⏳'
                     elif is_weekend:
                         status_color = color_folga
                         status_symbol = '⚫'
@@ -8834,26 +9711,34 @@ def create_app():
 
             colls_response = (
                 supabase.table('colaboradores')
-                .select('id, filial_id, nome_completo, cargo, turno, horario_padrao_inicio, horario_padrao_fim, ativo')
+                .select('id, filial_id, nome_completo, cargo, turno, horario_padrao_inicio, horario_padrao_fim, ativo, data_admissao, data_desligamento')
                 .in_('filial_id', filiais_filter)
+                .order('nome_completo')
+                .execute()
             )
-            if not incluir_desligados:
-                colls_response = colls_response.eq('ativo', True)
-            colls_response = colls_response.order('nome_completo').execute()
-            colaboradores = colls_response.data or []
+            colaboradores_raw = colls_response.data or []
 
-            if not colaboradores:
+            if not colaboradores_raw:
                 return jsonify({'error': 'Nenhum colaborador encontrado.'}), 404
 
             presence_response = (
                 supabase.table('presencas_diarias')
                 .select('*')
-                .in_('colaborador_id', [c['id'] for c in colaboradores])
+                .in_('colaborador_id', [c['id'] for c in colaboradores_raw])
                 .gte('data_referencia', start_date.isoformat())
                 .lte('data_referencia', end_date.isoformat())
                 .execute()
             )
             presences_all = presence_response.data or []
+
+            # Inclui desligados que tenham registro de presença no mês
+            colab_ids_com_registro = {p['colaborador_id'] for p in presences_all if p.get('colaborador_id') is not None}
+            colaboradores = []
+            for c in colaboradores_raw:
+                if c.get('ativo', True):
+                    colaboradores.append(c)
+                elif incluir_desligados or c.get('id') in colab_ids_com_registro:
+                    colaboradores.append(c)
 
             presences_by_colab = {}
             for p in presences_all:
@@ -8862,13 +9747,34 @@ def create_app():
                     presences_by_colab[cid] = {}
                 presences_by_colab[cid][p['data_referencia']] = p
 
+            today = date_class.today()
+
             colab_stats = []
             for colab in colaboradores:
                 colab_id = colab['id']
                 colab_presences = presences_by_colab.get(colab_id, {})
+
+                # Período válido: da admissão até ontem (hoje e futuro = pendente, não conta)
+                raw_admissao = colab.get('data_admissao')
+                try:
+                    admissao_date = date_class.fromisoformat(str(raw_admissao)) if raw_admissao else start_date
+                except (ValueError, TypeError):
+                    admissao_date = start_date
+                cal_start = max(start_date, admissao_date)
+                cal_end = min(end_date, today - timedelta(days=1))
+                # Se desligado, recorta período até dia anterior ao desligamento
+                raw_desligamento = colab.get('data_desligamento')
+                desligamento_date_stat = None
+                if raw_desligamento:
+                    try:
+                        desligamento_date_stat = date_class.fromisoformat(str(raw_desligamento))
+                        cal_end = min(cal_end, desligamento_date_stat - timedelta(days=1))
+                    except (ValueError, TypeError):
+                        desligamento_date_stat = None
+
                 dias_uteis = dias_presentes = dias_faltas = dias_atrasos = 0
-                current_date = start_date
-                while current_date <= end_date:
+                current_date = cal_start
+                while current_date <= cal_end:
                     if current_date.weekday() < 5:
                         dias_uteis += 1
                         date_str = current_date.isoformat()
@@ -8878,6 +9784,8 @@ def create_app():
                                 dias_atrasos += 1
                             elif p_status in ('presente', 'folga'):
                                 dias_presentes += 1
+                            elif p_status == 'falta':
+                                dias_faltas += 1
                         else:
                             dias_faltas += 1
                     current_date += timedelta(days=1)
@@ -8890,6 +9798,8 @@ def create_app():
                     'dias_faltas': dias_faltas,
                     'dias_atrasos': dias_atrasos,
                     'dias_uteis': dias_uteis,
+                    'cal_start': cal_start,
+                    'desligamento_date': desligamento_date_stat,
                 })
 
             employer = os.getenv('EMPREGADOR_NOME', 'GOLD TRANSPORTES')
@@ -8908,6 +9818,8 @@ def create_app():
             C_ORANGE = (243, 156, 18)
             C_GRAY = (149, 165, 166)
             C_LIGHT = (220, 220, 220)
+            C_YELLOW = (241, 196, 15)
+            C_INATIVO = (189, 195, 199)
 
             def pdf_set_fill(color):
                 pdf.set_fill_color(*color)
@@ -9022,7 +9934,7 @@ def create_app():
 
                 # Legenda
                 pdf.set_font('Helvetica', '', 7)
-                legend = [(C_GREEN, 'Presente'), (C_RED, 'Falta'), (C_ORANGE, 'Atraso'), (C_GRAY, 'Folga/FDS')]
+                legend = [(C_GREEN, 'Presente'), (C_RED, 'Falta'), (C_ORANGE, 'Atraso'), (C_GRAY, 'Folga/FDS'), (C_YELLOW, 'Pendente'), (C_INATIVO, 'Inativo')]
                 for color, label in legend:
                     pdf_set_fill(color)
                     pdf.cell(4, 4, '', fill=True)
@@ -9048,13 +9960,24 @@ def create_app():
                     col += 1
 
                 # Dias do mês
+                cal_start = stat_info['cal_start']
+                desligamento_date = stat_info.get('desligamento_date')
                 current_date = start_date
                 while current_date <= end_date:
                     date_str = current_date.isoformat()
                     presence = colab_presences.get(date_str)
                     is_weekend = current_date.weekday() >= 5
+                    before_admission = current_date < cal_start
+                    after_desligamento = desligamento_date is not None and current_date >= desligamento_date
+                    is_today_or_future = current_date >= today
 
-                    if is_weekend:
+                    if before_admission or after_desligamento:
+                        pdf_set_fill(C_INATIVO)
+                        pdf_set_text((80, 80, 80))
+                    elif is_today_or_future and not presence:
+                        pdf_set_fill(C_YELLOW)
+                        pdf_set_text((60, 60, 60))
+                    elif is_weekend:
                         pdf_set_fill(C_LIGHT)
                         pdf_set_text((100, 100, 100))
                     elif not presence:
@@ -9499,6 +10422,173 @@ def create_app():
             app.logger.error('Erro ao salvar bonificação mensal: %s', exc)
             write_audit_event(profile, 'bonus_save', 'bonificacao_lancamentos', status='error', details={'error': str(exc)[:300]})
             return jsonify({'error': translate_database_error(exc)}), 400
+
+    @app.get('/api/bonificacao-pdf')
+    @require_auth
+    def bonificacao_pdf(profile):
+        scope_error = require_scope_permission(profile, 'menu.bonificacao')
+        if scope_error:
+            return scope_error
+
+        month_reference = parse_month_reference(request.args.get('mes') or request.args.get('month'))
+        if not month_reference:
+            return jsonify({'error': 'Informe um mês válido no formato YYYY-MM.'}), 400
+
+        filial_id = request.args.get('filial_id', type=int)
+        if filial_id and not ensure_profile_can_access_filial(profile, filial_id):
+            return jsonify({'error': 'Sem permissão para consultar esta base.'}), 403
+
+        if not bonificacao_tables_ready():
+            return jsonify({'error': 'Estrutura de bonificação ausente no banco.'}), 400
+
+        try:
+            board = build_bonificacao_board(profile, month_reference, filial_id)
+            metricas = board.get('metricas') or []
+            colaboradores = board.get('colaboradores') or []
+            lancamentos = board.get('lancamentos') or []
+
+            atingiu_map = {}
+            valor_map = {}
+            for lanc in lancamentos:
+                cid = lanc.get('colaborador_id')
+                mid = lanc.get('metrica_id')
+                if cid is None or mid is None:
+                    continue
+                if bool(lanc.get('atingiu')):
+                    atingiu_map[(int(cid), int(mid))] = True
+                    valor_map[(int(cid), int(mid))] = float(lanc.get('valor_aplicado') or 0)
+
+            filial_label = ''
+            if filial_id:
+                for f in (board.get('filiais') or []):
+                    if int(f.get('id', 0)) == int(filial_id):
+                        filial_label = f"{f.get('cidade', '')}/{f.get('uf', '')}"
+                        break
+
+            employer = os.getenv('EMPREGADOR_NOME', 'GOLD TRANSPORTES')
+            _month_names_pt = ['', 'Janeiro', 'Fevereiro', 'Marco', 'Abril', 'Maio', 'Junho',
+                               'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+            mes_text = f'{_month_names_pt[month_reference.month]}/{month_reference.year}'.upper()
+
+            pdf = FPDF(orientation='L', unit='mm', format='A4')
+            pdf.set_auto_page_break(auto=True, margin=10)
+            pdf.set_margins(8, 10, 8)
+            pdf.add_page()
+
+            C_DARK = (44, 62, 80)
+            C_WHITE = (255, 255, 255)
+            C_GREEN = (39, 174, 96)
+            C_LIGHT = (236, 240, 241)
+            C_GRAY_TEXT = (80, 80, 80)
+
+            # Cabeçalho
+            pdf.set_fill_color(*C_DARK)
+            pdf.set_text_color(*C_WHITE)
+            pdf.set_font('Helvetica', 'B', 14)
+            pdf.cell(0, 10, f'BONIFICACAO MENSAL - {employer}', fill=True, align='C')
+            pdf.ln(10)
+
+            pdf.set_font('Helvetica', '', 9)
+            sub = f'Mes: {mes_text}'
+            if filial_label:
+                sub += f'   |   Filial: {filial_label}'
+            sub += f'   |   Gerado em: {datetime.now().strftime("%d/%m/%Y %H:%M")}'
+            pdf.cell(0, 7, sub, fill=True, align='C')
+            pdf.ln(10)
+
+            page_w = 297 - 16  # margem 8 cada lado
+            col_nome = 55
+            col_cargo = 32
+            col_total = 22
+            metric_cols = max(1, len(metricas))
+            col_metric_w = max(18, (page_w - col_nome - col_cargo - col_total) / metric_cols)
+
+            # Cabeçalho da tabela
+            pdf.set_fill_color(*C_DARK)
+            pdf.set_text_color(*C_WHITE)
+            pdf.set_font('Helvetica', 'B', 7)
+            pdf.cell(col_nome, 12, 'COLABORADOR', border=1, fill=True, align='C')
+            pdf.cell(col_cargo, 12, 'CARGO', border=1, fill=True, align='C')
+            for m in metricas:
+                nome = (m.get('nome') or '')[:24]
+                cat = (m.get('categoria') or '').upper()
+                valor = float(m.get('valor') or 0)
+                header_txt = f"{nome}\n{cat} | R$ {valor:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+                # Multiline via multi_cell simulação simples
+                x = pdf.get_x()
+                y = pdf.get_y()
+                pdf.multi_cell(col_metric_w, 4, header_txt, border=1, fill=True, align='C')
+                pdf.set_xy(x + col_metric_w, y)
+            pdf.cell(col_total, 12, 'TOTAL', border=1, fill=True, align='C')
+            pdf.ln(12)
+
+            # Linhas
+            pdf.set_text_color(0, 0, 0)
+            pdf.set_font('Helvetica', '', 8)
+            zebra = False
+            grand_total = 0.0
+            for col in colaboradores:
+                cid = int(col.get('id'))
+                nome = (col.get('nome_completo') or '-')[:32]
+                cargo = (col.get('cargo') or '-')[:18]
+
+                row_fill = C_LIGHT if zebra else C_WHITE
+                zebra = not zebra
+                pdf.set_fill_color(*row_fill)
+
+                pdf.set_font('Helvetica', 'B', 8)
+                pdf.cell(col_nome, 7, nome, border=1, fill=True)
+                pdf.set_font('Helvetica', '', 8)
+                pdf.cell(col_cargo, 7, cargo, border=1, fill=True)
+
+                row_total = 0.0
+                for m in metricas:
+                    mid = int(m.get('id'))
+                    key = (cid, mid)
+                    atingiu = atingiu_map.get(key, False)
+                    valor_aplicado = valor_map.get(key, 0.0)
+                    if atingiu:
+                        pdf.set_fill_color(*C_GREEN)
+                        pdf.set_text_color(*C_WHITE)
+                        pdf.set_font('Helvetica', 'B', 8)
+                        label = f"R$ {valor_aplicado:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+                    else:
+                        pdf.set_fill_color(*row_fill)
+                        pdf.set_text_color(*C_GRAY_TEXT)
+                        pdf.set_font('Helvetica', '', 8)
+                        label = 'Nao'
+                    pdf.cell(col_metric_w, 7, label, border=1, fill=True, align='C')
+                    row_total += valor_aplicado
+                    # restaurar
+                    pdf.set_fill_color(*row_fill)
+                    pdf.set_text_color(0, 0, 0)
+
+                grand_total += row_total
+                pdf.set_font('Helvetica', 'B', 8)
+                total_label = f"R$ {row_total:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+                pdf.cell(col_total, 7, total_label, border=1, fill=True, align='R')
+                pdf.ln(7)
+
+            # Rodapé total
+            pdf.set_fill_color(*C_DARK)
+            pdf.set_text_color(*C_WHITE)
+            pdf.set_font('Helvetica', 'B', 10)
+            total_geral = f"R$ {grand_total:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+            pdf.cell(col_nome + col_cargo + col_metric_w * metric_cols, 9,
+                     f'TOTAL GERAL DO MES ({mes_text})', border=1, fill=True, align='R')
+            pdf.cell(col_total, 9, total_geral, border=1, fill=True, align='R')
+            pdf.ln(9)
+
+            pdf_bytes = bytes(pdf.output())
+            response_stream = make_response(pdf_bytes)
+            filial_suffix = f'_filial{filial_id}' if filial_id else ''
+            filename = f'bonificacao_{month_reference.year}-{month_reference.month:02d}{filial_suffix}.pdf'
+            response_stream.headers.set('Content-Type', 'application/pdf')
+            response_stream.headers.set('Content-Disposition', f'attachment; filename="{filename}"')
+            return response_stream
+        except Exception as exc:
+            app.logger.error('Erro ao gerar PDF de bonificacao: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
 
     @app.get('/api/auditoria/config')
     @require_auth
@@ -10807,6 +11897,11 @@ def create_app():
                 'reject_update': lambda p, m: {'reprovado_por': p.get('id'), 'reprovado_em': now_iso(), 'motivo_reprovacao': m},
                 'require_comment_on_approve': False, 'require_comment_on_reject': True, 'ativo': True,
                 '_label': 'Manutenção de Frota',
+                'two_stage': True,
+                'stage1_intermediate_status': 'aprovado_lider',
+                'stage1_scope': 'aprovar.manutencoes.lider',
+                'stage2_scope': 'aprovar.manutencoes.responsavel',
+                'stage1_update': lambda p: {'aprovado_lider_por': p.get('id'), 'aprovado_lider_em': now_iso()},
             },
             'pedidos_compra': {
                 'table': 'pedidos_compra', 'status_field': 'status',
@@ -10841,6 +11936,12 @@ def create_app():
                 'reject_update': lambda p, m: {'reprovado_por': p.get('id'), 'justificativa_gestor': m},
                 'require_comment_on_approve': False, 'require_comment_on_reject': True, 'ativo': True,
                 '_label': 'Horas Extras',
+                'two_stage': True,
+                'stage1_intermediate_status': 'aprovado_lider',
+                'stage1_scope': 'aprovar.horas_extras.lider',
+                'stage2_scope': 'cliente',
+                'stage2_external': True,  # etapa 2 fica com cliente externo via portal
+                'stage1_update': lambda p: {'aprovado_lider_por': p.get('id'), 'aprovado_lider_em': now_iso()},
             },
             'abastecimentos': {
                 'table': 'veiculos_abastecimentos', 'status_field': 'status',
@@ -10852,6 +11953,11 @@ def create_app():
                 'reject_update': lambda p, m: {},
                 'require_comment_on_approve': False, 'require_comment_on_reject': True, 'ativo': True,
                 '_label': 'Abastecimentos',
+                'two_stage': True,
+                'stage1_intermediate_status': 'aprovado_lider',
+                'stage1_scope': 'aprovar.abastecimentos.lider',
+                'stage2_scope': 'aprovar.abastecimentos.responsavel',
+                'stage1_update': lambda p: {'aprovado_lider_por': p.get('id'), 'aprovado_lider_em': now_iso()},
             },
             'pneus': {
                 'table': 'veiculos_pneus', 'status_field': 'status_aprovacao',
@@ -10874,6 +11980,11 @@ def create_app():
                 'reject_update': lambda p, m: {'observacoes': m},
                 'require_comment_on_approve': False, 'require_comment_on_reject': True, 'ativo': True,
                 '_label': 'Diárias e Hotelaria',
+                'two_stage': True,
+                'stage1_intermediate_status': 'aprovado_lider',
+                'stage1_scope': 'aprovar.diarias.lider',
+                'stage2_scope': 'aprovar.diarias.responsavel',
+                'stage1_update': lambda p: {'aprovado_lider_por': p.get('id'), 'aprovado_lider_em': now_iso()},
             },
         }
         try:
@@ -10953,11 +12064,30 @@ def create_app():
 
                 sf = config['status_field']
                 pending = config['pending_statuses']
+                two_stage = config.get('two_stage', False)
+                stage1_status = config.get('stage1_intermediate_status')
+                stage1_scope = config.get('stage1_scope')
+                stage2_scope = config.get('stage2_scope')
 
-                def _apply_pending(q):
-                    if len(pending) == 1:
-                        return q.eq(sf, pending[0])
-                    return q.in_(sf, pending)
+                # Define quais status são "pendentes" pra este usuário:
+                # - Etapa 1 (líder): status inicial (pending_statuses)
+                # - Etapa 2 (responsável): status intermediário (stage1_intermediate_status)
+                user_pending = list(pending)
+                if two_stage and stage1_status:
+                    can_stage1 = stage1_scope and profile_has_scope_permission(profile, stage1_scope)
+                    can_stage2 = stage2_scope and profile_has_scope_permission(profile, stage2_scope)
+                    if can_stage1 and not can_stage2:
+                        user_pending = list(pending)  # só vê etapa 1
+                    elif can_stage2 and not can_stage1:
+                        user_pending = [stage1_status]  # só vê etapa 2
+                    elif can_stage1 and can_stage2:
+                        user_pending = list(pending) + [stage1_status]  # vê ambas
+                    # else: cai no permission base abaixo
+
+                def _apply_pending(q, statuses=user_pending):
+                    if len(statuses) == 1:
+                        return q.eq(sf, statuses[0])
+                    return q.in_(sf, statuses)
 
                 if status_filter == 'pendente':
                     query = _apply_pending(query)
@@ -10965,10 +12095,13 @@ def create_app():
                     query = query.eq(sf, config['approved_status'])
                 elif status_filter == 'reprovado':
                     query = query.eq(sf, config['rejected_status'])
+                elif status_filter == 'aprovado_lider' and stage1_status:
+                    query = query.eq(sf, stage1_status)
                 elif status_filter == 'all':
                     pass  # sem filtro de status — retorna tudo
                 else:
                     query = _apply_pending(query)
+
                 
                 # Aplicar escopo de filial
                 if filial_id:
@@ -10991,10 +12124,22 @@ def create_app():
                             item.get('titulo') or item.get('numero_pedido') or
                             item.get('motivo') or f'{res_type}#{item.get("id")}'
                         )
+                    item_status = item.get(config['status_field'])
+                    # Define qual etapa este item está aguardando
+                    if two_stage and stage1_status:
+                        if item_status in pending:
+                            current_stage = 1
+                        elif item_status == stage1_status:
+                            current_stage = 2
+                        else:
+                            current_stage = None
+                    else:
+                        current_stage = 1 if item_status in pending else None
+
                     results.append({
                         'resource_type': res_type,
                         'id': item.get('id'),
-                        'status': item.get(config['status_field']),
+                        'status': item_status,
                         'filial_id': item.get('filial_id'),
                         'data_criacao': (
                             item.get('data_abertura') or item.get('data_pedido') or
@@ -11004,6 +12149,10 @@ def create_app():
                         'titulo': titulo_item,
                         'detalhes': {k: item.get(k) for k in config['approval_fields'] if k in item},
                         'full_item': item,
+                        'two_stage': two_stage,
+                        'current_stage': current_stage,
+                        'stage1_scope': stage1_scope,
+                        'stage2_scope': stage2_scope,
                     })
             except Exception as exc:
                 app.logger.warning('Erro ao listar %s: %s', res_type, exc)
@@ -11046,6 +12195,63 @@ def create_app():
             'supported_resources': list(SUPPORTED_RESOURCES.keys()),
         })
 
+    @app.post('/api/approvals/<int:item_id>/aprovar-lider')
+    @rate_limit_endpoint(max_requests=30)
+    @require_auth
+    def aprovar_etapa_lider(profile, item_id):
+        """
+        Aprovação etapa 1 (líder da base) — move de pending para aprovado_lider.
+        Body: { resource_type, comentario? }
+        """
+        body = request.get_json(silent=True) or {}
+        resource_type = (body.get('resource_type') or '').strip().lower()
+        comentario = (body.get('comentario') or '').strip()
+
+        SUPPORTED = _get_approval_configs()
+        if not resource_type or resource_type not in SUPPORTED:
+            return jsonify({'error': f'Tipo de recurso inválido: {resource_type}'}), 400
+        config = SUPPORTED[resource_type]
+
+        if not config.get('two_stage'):
+            return jsonify({'error': 'Este recurso não tem fluxo de 2 etapas.'}), 400
+
+        stage1_scope = config.get('stage1_scope')
+        stage1_status = config.get('stage1_intermediate_status')
+
+        if not (profile_has_scope_permission(profile, stage1_scope) or
+                profile_has_scope_permission(profile, config['permission'])):
+            return jsonify({'error': 'Sem permissão para aprovar como líder da base.'}), 403
+
+        try:
+            item_resp = supabase.table(config['table']).select('*').eq('id', item_id).limit(1).execute()
+            if not item_resp.data:
+                return jsonify({'error': 'Registro não encontrado.'}), 404
+            item = item_resp.data[0]
+
+            if not ensure_profile_can_access_filial(profile, item.get('filial_id')):
+                return jsonify({'error': 'Sem permissão para acessar dados desta base.'}), 403
+
+            current = item.get(config['status_field'])
+            if current not in config['pending_statuses']:
+                return jsonify({'error': f'Status atual "{current}" não permite aprovação de líder.'}), 400
+
+
+            update_data = {config['status_field']: stage1_status, **config['stage1_update'](profile)}
+            supabase.table(config['table']).update(update_data).eq('id', item_id).execute()
+
+            write_audit_event(profile, 'aprovar_lider', resource_type, item_id, status='ok',
+                              details={'new_status': stage1_status, 'comentario': comentario,
+                                       'aprovador': profile.get('nome_completo')})
+
+            return jsonify({
+                'status': 'ok',
+                'message': 'Etapa do líder aprovada. Aguardando etapa final.',
+                'new_status': stage1_status,
+            })
+        except Exception as exc:
+            app.logger.error('aprovar_lider %s %d: %s', resource_type, item_id, exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
     @app.post('/api/approvals/<int:item_id>/approve')
     @rate_limit_endpoint(max_requests=30)
     @require_auth
@@ -11071,20 +12277,33 @@ def create_app():
         if config.get('require_comment_on_approve') and not comentario:
             return jsonify({'error': 'Comentário é obrigatório para aprovar este tipo de solicitação.'}), 400
 
-        # Verificar permissão
-        if not profile_has_scope_permission(profile, config['permission']):
-            return jsonify({'error': 'Sem permissão para aprovar este tipo de solicitação.'}), 403
-        
+        # Verificar permissão: aceita stage2_scope (etapa final) OU permission base
+        two_stage = config.get('two_stage', False)
+        stage2_scope = config.get('stage2_scope')
+        stage1_status = config.get('stage1_intermediate_status')
+
+        if two_stage and stage2_scope and stage2_scope != 'cliente':
+            # 2 etapas internas — etapa final = responsável
+            if not (profile_has_scope_permission(profile, stage2_scope) or
+                    profile_has_scope_permission(profile, config['permission'])):
+                return jsonify({'error': 'Sem permissão para aprovar etapa final.'}), 403
+        elif two_stage and stage2_scope == 'cliente':
+            # HE: etapa 2 só pode ser aprovada via portal cliente (/api/cliente/he/:id/approve)
+            return jsonify({'error': 'Esta solicitação aguarda aprovação do cliente (portal externo). Líder Gold já aprovou.'}), 400
+        else:
+            if not profile_has_scope_permission(profile, config['permission']):
+                return jsonify({'error': 'Sem permissão para aprovar este tipo de solicitação.'}), 403
+
         try:
             # Buscar item
             item_query = supabase.table(config['table']).select('*').eq('id', item_id).limit(1)
             item_response = item_query.execute()
-            
+
             if not item_response.data:
                 return jsonify({'error': f'{resource_type}: Registro não encontrado.'}), 404
-            
+
             item = item_response.data[0]
-            
+
             # Verificar acesso à filial
             if not ensure_profile_can_access_filial(profile, item.get('filial_id')):
                 return jsonify({'error': 'Sem permissão para acessar dados desta base.'}), 403
@@ -11094,6 +12313,11 @@ def create_app():
                 analise_statuses = config.get('analise_statuses', ['analise', 'em_analise'])
                 if item.get(config['status_field']) not in analise_statuses:
                     return jsonify({'error': 'Apenas pedidos em análise podem ser aprovados. Coloque o pedido em análise primeiro.'}), 400
+
+            # Para 2 etapas: aprovação final exige status = aprovado_lider
+            if two_stage and stage1_status and resource_type != 'pedidos_compra':
+                if item.get(config['status_field']) != stage1_status:
+                    return jsonify({'error': f'Aprovação final requer status "{stage1_status}". Status atual: {item.get(config["status_field"])}.'}), 400
 
             # Atualizar status (campos base + campos específicos do schema)
             update_data = {config['status_field']: config['approved_status'], **config['approve_update'](profile)}
@@ -11371,6 +12595,246 @@ def create_app():
         except Exception as exc:
             app.logger.error('set_em_analise %d: %s', item_id, exc)
             return jsonify({'error': translate_database_error(exc)}), 500
+
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # PORTAL CLIENTE — login externo e aprovação etapa 2 de HE
+    # ═══════════════════════════════════════════════════════════════════════════════
+
+    def _fetch_cliente_by_session():
+        """Lê Bearer token de clientes_sessoes; retorna cliente ou None."""
+        auth = request.headers.get('Authorization', '')
+        if not auth.startswith('Bearer '):
+            return None
+        token = auth[7:].strip()
+        if not token:
+            return None
+        try:
+            resp = (supabase.table('clientes_sessoes')
+                    .select('cliente_id, expira_em')
+                    .eq('token', token)
+                    .limit(1).execute())
+            if not resp.data:
+                return None
+            sess = resp.data[0]
+            # Verifica expiração (parse simples ISO)
+            try:
+                exp = datetime.fromisoformat(sess['expira_em'].replace('Z', '+00:00'))
+                if exp < datetime.now(exp.tzinfo):
+                    return None
+            except Exception:
+                pass
+            cli_resp = (supabase.table('clientes')
+                        .select('*').eq('id', sess['cliente_id']).limit(1).execute())
+            if not cli_resp.data:
+                return None
+            cli = cli_resp.data[0]
+            if not cli.get('ativo_login') or not cli.get('ativo'):
+                return None
+            return cli
+        except Exception as exc:
+            app.logger.warning('fetch cliente session: %s', exc)
+            return None
+
+    def require_cliente_auth(handler):
+        @wraps(handler)
+        def wrapper(*args, **kwargs):
+            cliente = _fetch_cliente_by_session()
+            if not cliente:
+                return jsonify({'error': 'Sessão de cliente inválida ou expirada.'}), 401
+            return handler(cliente, *args, **kwargs)
+        return wrapper
+
+    @app.post('/api/cliente/login')
+    @rate_limit_endpoint(max_requests=10)
+    def cliente_login():
+        """Login cliente — body: { email, senha }. Retorna { token, cliente }."""
+        body = request.get_json(silent=True) or {}
+        email = (body.get('email') or '').strip().lower()
+        senha = body.get('senha') or ''
+        if not email or not senha:
+            return jsonify({'error': 'E-mail e senha são obrigatórios.'}), 400
+        try:
+            resp = (supabase.table('clientes')
+                    .select('*')
+                    .ilike('email_login', email)
+                    .eq('ativo_login', True)
+                    .eq('ativo', True)
+                    .limit(1).execute())
+            if not resp.data:
+                return jsonify({'error': 'Credenciais inválidas.'}), 401
+            cli = resp.data[0]
+            if not cli.get('senha_hash') or not check_password_hash(cli['senha_hash'], senha):
+                return jsonify({'error': 'Credenciais inválidas.'}), 401
+
+            # Cria sessão
+            sess = supabase.table('clientes_sessoes').insert({
+                'cliente_id': cli['id'],
+                'ip_origem': request.remote_addr,
+                'user_agent': request.headers.get('User-Agent', '')[:255],
+            }).execute()
+            token = sess.data[0]['token'] if sess.data else None
+
+            supabase.table('clientes').update({'ultimo_login': now_iso()}).eq('id', cli['id']).execute()
+
+            return jsonify({
+                'token': token,
+                'cliente': {
+                    'id': cli['id'],
+                    'nome': cli.get('nome'),
+                    'email_login': cli.get('email_login'),
+                    'contato_nome': cli.get('contato_nome'),
+                }
+            })
+        except Exception as exc:
+            app.logger.error('cliente_login: %s', exc)
+            return jsonify({'error': 'Erro ao processar login.'}), 500
+
+    @app.post('/api/cliente/logout')
+    @require_cliente_auth
+    def cliente_logout(cliente):
+        auth = request.headers.get('Authorization', '')
+        token = auth[7:].strip() if auth.startswith('Bearer ') else ''
+        try:
+            if token:
+                supabase.table('clientes_sessoes').delete().eq('token', token).execute()
+        except Exception:
+            pass
+        return jsonify({'status': 'ok'})
+
+    @app.get('/api/cliente/me')
+    @require_cliente_auth
+    def cliente_me(cliente):
+        return jsonify({
+            'id': cliente['id'],
+            'nome': cliente.get('nome'),
+            'email_login': cliente.get('email_login'),
+            'contato_nome': cliente.get('contato_nome'),
+        })
+
+    @app.get('/api/cliente/horas-extras')
+    @require_cliente_auth
+    def cliente_listar_he(cliente):
+        """Lista HE pendentes/decididas do cliente — só onde cliente_id = self."""
+        status = (request.args.get('status') or 'aprovado_lider').strip().lower()
+        try:
+            q = (supabase.table('horas_extras')
+                 .select('*, colaboradores(nome_completo, cargo)')
+                 .eq('cliente_id', cliente['id'])
+                 .eq('tipo_pagador', 'cliente'))
+            if status == 'pendente':
+                q = q.eq('status', 'aprovado_lider')
+            elif status in ('aprovado', 'reprovado'):
+                q = q.eq('status', status)
+            elif status == 'all':
+                q = q.in_('status', ['aprovado_lider', 'aprovado', 'reprovado'])
+            else:
+                q = q.eq('status', 'aprovado_lider')
+            resp = q.order('data_solicitacao', desc=True).limit(200).execute()
+            return jsonify({'items': resp.data or []})
+        except Exception as exc:
+            app.logger.error('cliente_listar_he: %s', exc)
+            return jsonify({'error': 'Erro ao carregar solicitações.'}), 500
+
+    @app.post('/api/cliente/horas-extras/<int:he_id>/aprovar')
+    @require_cliente_auth
+    def cliente_aprovar_he(cliente, he_id):
+        try:
+            r = supabase.table('horas_extras').select('*').eq('id', he_id).limit(1).execute()
+            if not r.data:
+                return jsonify({'error': 'HE não encontrada.'}), 404
+            he = r.data[0]
+            if he.get('cliente_id') != cliente['id']:
+                return jsonify({'error': 'Sem permissão para aprovar esta HE.'}), 403
+            if he.get('status') != 'aprovado_lider':
+                return jsonify({'error': f'HE não está aguardando aprovação do cliente. Status: {he.get("status")}'}), 400
+
+            supabase.table('horas_extras').update({
+                'status': 'aprovado',
+                'aprovado_cliente_por': cliente['id'],
+                'aprovado_cliente_em': now_iso(),
+                'data_aprovacao': now_iso(),
+            }).eq('id', he_id).execute()
+
+            try:
+                supabase.table('auditoria_movimentacoes').insert({
+                    'acao': 'approve',
+                    'recurso': 'horas_extras',
+                    'recurso_id': he_id,
+                    'usuario_nome': f"[Cliente] {cliente.get('nome')}",
+                    'usuario_id': None,
+                    'filial_id': he.get('filial_id'),
+                    'status': 'ok',
+                    'detalhes': json.dumps({'new_status': 'aprovado', 'aprovado_por_cliente': cliente['id']}),
+                }).execute()
+            except Exception:
+                pass
+
+            return jsonify({'status': 'ok', 'message': 'HE aprovada.'})
+        except Exception as exc:
+            app.logger.error('cliente_aprovar_he %d: %s', he_id, exc)
+            return jsonify({'error': 'Erro ao aprovar HE.'}), 500
+
+    @app.post('/api/cliente/horas-extras/<int:he_id>/reprovar')
+    @require_cliente_auth
+    def cliente_reprovar_he(cliente, he_id):
+        body = request.get_json(silent=True) or {}
+        motivo = (body.get('motivo') or '').strip()
+        if not motivo:
+            return jsonify({'error': 'Informe o motivo da reprovação.'}), 400
+        try:
+            r = supabase.table('horas_extras').select('*').eq('id', he_id).limit(1).execute()
+            if not r.data:
+                return jsonify({'error': 'HE não encontrada.'}), 404
+            he = r.data[0]
+            if he.get('cliente_id') != cliente['id']:
+                return jsonify({'error': 'Sem permissão para reprovar esta HE.'}), 403
+            if he.get('status') != 'aprovado_lider':
+                return jsonify({'error': f'HE não está aguardando aprovação do cliente. Status: {he.get("status")}'}), 400
+
+            supabase.table('horas_extras').update({
+                'status': 'reprovado',
+                'justificativa_gestor': f'[Reprovada pelo cliente] {motivo}',
+            }).eq('id', he_id).execute()
+
+            try:
+                supabase.table('auditoria_movimentacoes').insert({
+                    'acao': 'reject',
+                    'recurso': 'horas_extras',
+                    'recurso_id': he_id,
+                    'usuario_nome': f"[Cliente] {cliente.get('nome')}",
+                    'usuario_id': None,
+                    'filial_id': he.get('filial_id'),
+                    'status': 'ok',
+                    'detalhes': json.dumps({'new_status': 'reprovado', 'motivo': motivo, 'reprovado_por_cliente': cliente['id']}),
+                }).execute()
+            except Exception:
+                pass
+
+            return jsonify({'status': 'ok', 'message': 'HE reprovada.'})
+        except Exception as exc:
+            app.logger.error('cliente_reprovar_he %d: %s', he_id, exc)
+            return jsonify({'error': 'Erro ao reprovar HE.'}), 500
+
+    @app.post('/api/clientes/<int:cliente_id>/set-senha')
+    @rate_limit_endpoint(max_requests=20)
+    @require_auth
+    def admin_set_senha_cliente(profile, cliente_id):
+        """Admin define senha do cliente. Permite ativar/desativar login."""
+        if not (profile.get('is_super_admin') or profile_has_scope_permission(profile, 'create.clientes')):
+            return jsonify({'error': 'Sem permissão.'}), 403
+        body = request.get_json(silent=True) or {}
+        senha = body.get('senha') or ''
+        if len(senha) < 6:
+            return jsonify({'error': 'Senha mínima 6 caracteres.'}), 400
+        try:
+            supabase.table('clientes').update({
+                'senha_hash': generate_password_hash(senha),
+                'ativo_login': True,
+            }).eq('id', cliente_id).execute()
+            return jsonify({'status': 'ok'})
+        except Exception as exc:
+            app.logger.error('admin_set_senha_cliente: %s', exc)
+            return jsonify({'error': 'Erro ao definir senha.'}), 500
 
     @app.get('/api/pedidos-compra/metricas')
     @rate_limit_endpoint(max_requests=60)

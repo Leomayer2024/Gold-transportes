@@ -19,6 +19,7 @@ import RecuperarSenhaPage from './components/RecuperarSenhaPage'
 import MotivosParadaPage from './components/MotivosParadaPage'
 import PermissionsPage from './components/PermissionsPage'
 import PresencePage from './components/PresencePage'
+import PontoPage from './components/PontoPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import RotasCarregamentoPage from './components/RotasCarregamentoPage'
 import VeiculosPage from './components/VeiculosPage'
@@ -51,6 +52,7 @@ import BancoPage from './components/BancoPage'
 import FornecedoresPage from './components/FornecedoresPage'
 import ClientesPage from './components/ClientesPage'
 import MeuPerfilPage from './components/MeuPerfilPage'
+import PortalClientePage from './components/PortalClientePage'
 
 function PlaceholderPage({ title, text }) {
   return (
@@ -75,6 +77,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<LoginPage />} />
       <Route path="/recuperar-senha" element={<RecuperarSenhaPage />} />
+      <Route path="/portal-cliente/*" element={<PortalClientePage />} />
       <Route element={<ProtectedRoute />}>
         <Route element={<Layout />}>
           <Route index element={<Navigate to="/dashboard" replace />} />
@@ -187,6 +190,9 @@ export default function App() {
           </Route>
           <Route element={<AccessRoute requiredScope="menu.presenca" />}>
             <Route path="/presenca" element={<PresencePage />} />
+          </Route>
+          <Route element={<AccessRoute requiredScope="menu.ponto" />}>
+            <Route path="/ponto" element={<PontoPage />} />
           </Route>
           <Route element={<AccessRoute requiredScope="menu.carregamento" />}>
             <Route path="/carregamento" element={<LoadingPage />} />

@@ -78,13 +78,14 @@ function VinculosMotoristasTab() {
         api.list('filiais'),
         api.list('motorista_veiculo', { ativo: 'true', per_page: 1000 }),
       ])
-      const lista = (cs.data || []).filter((c) =>
+      const arr = (x) => (Array.isArray(x) ? x : (x?.data || []))
+      const lista = arr(cs).filter((c) =>
         String(c.cargo || '').toLowerCase().includes('motorista'),
       )
       setMotoristas(lista)
-      setVeiculos(vs.data || [])
-      setFiliais(fs.data || [])
-      setVinculos(mvs.data || [])
+      setVeiculos(arr(vs))
+      setFiliais(arr(fs))
+      setVinculos(arr(mvs))
     } catch (e) {
       setErro(e.message || 'Erro ao carregar')
     } finally {

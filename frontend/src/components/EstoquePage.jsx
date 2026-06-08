@@ -85,6 +85,22 @@ function ItemModal({ item, filiais, filialId, onSave, onClose }) {
     setForm((prev) => ({ ...prev, [field]: value }))
   }
 
+  function isDirty() {
+    if (isEdit) return false // edição: nunca confirma (usuário sabe que tá editando)
+    return Boolean(
+      form.codigo?.trim() || form.nome?.trim() || form.descricao?.trim() ||
+      form.localizacao?.trim() || form.observacoes?.trim() ||
+      (form.estoque_minimo && parseFloat(form.estoque_minimo) > 0),
+    )
+  }
+
+  function tryClose() {
+    if (isDirty()) {
+      if (!window.confirm('Você tem dados preenchidos. Deseja realmente sair sem salvar?')) return
+    }
+    onClose()
+  }
+
   async function handleSave(e) {
     e.preventDefault()
     if (!form.nome.trim()) return setError('Nome é obrigatório.')
@@ -99,8 +115,8 @@ function ItemModal({ item, filiais, filialId, onSave, onClose }) {
         descricao: form.descricao.trim() || null,
         categoria: form.categoria,
         unidade: form.unidade,
-        estoque_atual: parseFloat(String(form.estoque_atual).replace(',', '.')) || 0,
         estoque_minimo: parseFloat(String(form.estoque_minimo).replace(',', '.')) || 0,
+        ...(isEdit ? {} : { estoque_atual: 0 }),
         localizacao: form.localizacao.trim() || null,
         observacoes: form.observacoes.trim() || null,
         ativo: form.ativo,
@@ -119,14 +135,33 @@ function ItemModal({ item, filiais, filialId, onSave, onClose }) {
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" style={{ maxWidth: 560 }} onClick={(e) => e.stopPropagation()}>
+    <div
+      className="modal-overlay"
+      onClick={tryClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(15, 23, 42, 0.55)',
+        backdropFilter: 'blur(2px)',
+        display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+        padding: '40px 16px', overflowY: 'auto',
+      }}
+    >
+      <div
+        className="modal-content"
+        style={{
+          maxWidth: 560, width: '100%',
+          background: '#fff', borderRadius: 12,
+          boxShadow: '0 20px 50px rgba(0,0,0,0.25)',
+          padding: 24,
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="modal-header">
           <div>
             <span className="eyebrow">Estoque</span>
             <h2>{isEdit ? 'Editar item' : 'Novo item de estoque'}</h2>
           </div>
-          <button className="button-secondary" onClick={onClose} type="button">Fechar</button>
+          <button className="button-secondary" onClick={tryClose} type="button">Fechar</button>
         </div>
 
         <form onSubmit={handleSave} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -167,14 +202,16 @@ function ItemModal({ item, filiais, filialId, onSave, onClose }) {
             </label>
           </div>
 
-          <div className="form-row">
-            <label className="form-label">Estoque atual
-              <input className="form-input" type="number" min="0" step="0.001" value={form.estoque_atual} onChange={(e) => set('estoque_atual', e.target.value)} placeholder="0" />
-            </label>
-            <label className="form-label">Estoque mínimo
-              <input className="form-input" type="number" min="0" step="0.001" value={form.estoque_minimo} onChange={(e) => set('estoque_minimo', e.target.value)} placeholder="0" />
-            </label>
-          </div>
+          <label className="form-label">Estoque mínimo (alerta)
+            <input
+              className="form-input" type="number" min="0" step="0.001"
+              value={form.estoque_minimo} onChange={(e) => set('estoque_minimo', e.target.value)}
+              placeholder="0 (sem alerta)"
+            />
+            <small style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+              Quantidade mínima pra disparar alerta. O estoque atual é atualizado pelos lançamentos.
+            </small>
+          </label>
 
           <label className="form-label">Localização (prateleira / área)
             <input className="form-input" value={form.localizacao} onChange={(e) => set('localizacao', e.target.value)} placeholder="Ex: Almoxarifado A - Prateleira 3" />
@@ -192,7 +229,7 @@ function ItemModal({ item, filiais, filialId, onSave, onClose }) {
           )}
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
-            <button className="button-secondary" type="button" onClick={onClose}>Cancelar</button>
+            <button className="button-secondary" type="button" onClick={tryClose}>Cancelar</button>
             <button className="button-primary" type="submit" disabled={saving}>
               {saving ? 'Salvando...' : 'Salvar'}
             </button>
@@ -299,7 +336,14 @@ export default function EstoquePage() {
             type="button"
             onClick={() => navigate('/estoque/movimentos')}
           >
-            Lançar movimento
+            📋 Histórico
+          </button>
+          <button
+            className="button-secondary"
+            type="button"
+            onClick={() => navigate('/estoque/movimentos', { state: { abrirLancar: true } })}
+          >
+            ↑↓ Lançar movimento
           </button>
           {canCreate && (
             <button className="button-primary" type="button" onClick={() => setModalItem({})}>
@@ -417,22 +461,12 @@ export default function EstoquePage() {
                   <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
                     <button
                       className="button-secondary"
-                      style={{ fontSize: 12, padding: '4px 10px', marginRight: 6 }}
+                      style={{ fontSize: 12, padding: '4px 10px' }}
                       type="button"
                       onClick={() => navigate('/estoque/movimentos', { state: { itemId: item.id, itemNome: item.nome } })}
                     >
-                      Movimentos
+                      Movimentação
                     </button>
-                    {canCreate && (
-                      <button
-                        className="button-secondary"
-                        style={{ fontSize: 12, padding: '4px 10px' }}
-                        type="button"
-                        onClick={() => setModalItem(item)}
-                      >
-                        Editar
-                      </button>
-                    )}
                   </td>
                 </tr>
               ))}

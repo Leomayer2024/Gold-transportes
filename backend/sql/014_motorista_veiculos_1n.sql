@@ -1,7 +1,6 @@
 -- ============================================================
 -- Vínculo motorista ↔ veículos (1:N — vários veículos por motorista)
--- Substitui a abordagem de coluna única em colaboradores.veiculo_padrao_id.
--- A tabela motorista_veiculo guarda vínculos múltiplos e o "principal".
+-- Idempotente — segura mesmo se a 013 nunca foi aplicada.
 -- ============================================================
 
 CREATE TABLE IF NOT EXISTS motorista_veiculo (
@@ -21,7 +20,6 @@ CREATE INDEX IF NOT EXISTS idx_mv_motorista ON motorista_veiculo(motorista_id, a
 CREATE INDEX IF NOT EXISTS idx_mv_veiculo   ON motorista_veiculo(veiculo_id, ativo);
 CREATE INDEX IF NOT EXISTS idx_mv_filial    ON motorista_veiculo(filial_id, ativo);
 
--- Apenas 1 veículo principal por motorista
 CREATE UNIQUE INDEX IF NOT EXISTS uq_mv_principal
     ON motorista_veiculo(motorista_id)
     WHERE principal = TRUE AND ativo = TRUE;
@@ -35,7 +33,6 @@ CREATE TRIGGER mv_updated_at
     BEFORE UPDATE ON motorista_veiculo
     FOR EACH ROW EXECUTE FUNCTION set_mv_updated_at();
 
--- RLS — padrão simples (authenticated, backend valida escopo via API)
 ALTER TABLE motorista_veiculo ENABLE ROW LEVEL SECURITY;
 DO $$ BEGIN
     CREATE POLICY "mv_auth_select" ON motorista_veiculo FOR SELECT TO authenticated USING (true);
@@ -50,14 +47,28 @@ DO $$ BEGIN
     CREATE POLICY "mv_auth_delete" ON motorista_veiculo FOR DELETE TO authenticated USING (true);
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
--- Migra dados existentes da coluna colaboradores.veiculo_padrao_id (se houver)
-INSERT INTO motorista_veiculo (filial_id, motorista_id, veiculo_id, principal, ativo)
-SELECT c.filial_id, c.id, c.veiculo_padrao_id, TRUE, TRUE
-  FROM colaboradores c
- WHERE c.veiculo_padrao_id IS NOT NULL
-ON CONFLICT (motorista_id, veiculo_id) DO NOTHING;
+-- Migra dados legados — só roda se a coluna existir (caso 013 tenha sido aplicada antes)
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_schema = 'public'
+          AND table_name = 'colaboradores'
+          AND column_name = 'veiculo_padrao_id'
+    ) THEN
+        EXECUTE $migrate$
+            INSERT INTO motorista_veiculo (filial_id, motorista_id, veiculo_id, principal, ativo)
+            SELECT c.filial_id, c.id, c.veiculo_padrao_id, TRUE, TRUE
+              FROM colaboradores c
+             WHERE c.veiculo_padrao_id IS NOT NULL
+            ON CONFLICT (motorista_id, veiculo_id) DO NOTHING
+        $migrate$;
 
--- Atualiza RPC: retorna o principal ativo (fallback: primeiro vínculo ativo)
+        EXECUTE 'ALTER TABLE colaboradores DROP COLUMN IF EXISTS veiculo_padrao_id';
+    END IF;
+END $$;
+
+-- RPC: lê do principal ativo (fallback: primeiro ativo)
 CREATE OR REPLACE FUNCTION get_veiculo_padrao_motorista(p_colaborador_id BIGINT)
 RETURNS TABLE (
     veiculo_id  BIGINT,
@@ -76,5 +87,5 @@ LANGUAGE sql STABLE AS $$
      LIMIT 1
 $$;
 
--- Drop coluna legada — agora 100% via tabela motorista_veiculo
-ALTER TABLE colaboradores DROP COLUMN IF EXISTS veiculo_padrao_id;
+-- Recarrega schema cache do PostgREST (Supabase)
+NOTIFY pgrst, 'reload schema';

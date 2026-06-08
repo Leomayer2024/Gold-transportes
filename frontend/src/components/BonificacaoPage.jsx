@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '../services/api'
+import { supabase } from '../lib/supabase'
+
+async function getValidToken() {
+  const { data: { session } } = await supabase.auth.getSession()
+  return session?.access_token || null
+}
 
 function monthInputValue(date = new Date()) {
   const year = date.getFullYear()
@@ -48,6 +54,7 @@ export default function BonificacaoPage() {
   const [loading, setLoading] = useState(true)
   const _loaded = useRef(false)
   const [saving, setSaving] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const [feedback, setFeedback] = useState('')
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -156,6 +163,46 @@ export default function BonificacaoPage() {
     }, 0)
   }
 
+  async function handleExportPdf() {
+    setExporting(true)
+    setErrorMessage('')
+    setFeedback('')
+    try {
+      const token = await getValidToken()
+      if (!token) {
+        throw new Error('Sessão expirada. Faça login novamente.')
+      }
+
+      const params = new URLSearchParams({ mes: selectedMonth })
+      if (selectedFilial) params.set('filial_id', selectedFilial)
+
+      const response = await fetch(`/api/bonificacao-pdf?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `Erro ${response.status}: ${response.statusText}`)
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const filialSuffix = selectedFilial ? `_filial${selectedFilial}` : ''
+      a.download = `bonificacao_${selectedMonth}${filialSuffix}.pdf`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+      setFeedback('PDF baixado com sucesso.')
+    } catch (error) {
+      setErrorMessage(error.message || 'Erro ao gerar PDF.')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   async function handleSave() {
     setSaving(true)
     setFeedback('')
@@ -234,6 +281,9 @@ export default function BonificacaoPage() {
           <div className="button-row filter-actions">
             <button className="button-primary" disabled={!board.can_manage || !board.database_ready || saving} onClick={handleSave} type="button">
               {saving ? 'Salvando...' : 'Salvar bonificação'}
+            </button>
+            <button className="button-info" type="button" disabled={exporting || !board.database_ready} onClick={handleExportPdf}>
+              {exporting ? 'Exportando...' : '📄 Exportar PDF'}
             </button>
             <Link className="button-secondary bonus-link-button" to="/bonificacao-metricas">
               Gerenciar métricas

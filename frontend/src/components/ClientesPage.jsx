@@ -17,10 +17,10 @@ function Badge({ ativo }) {
   )
 }
 
-function FormModal({ title, form, setForm, filiais, onSave, onClose, saving }) {
+function FormModal({ title, form, setForm, filiais, onSave, onClose, saving, onSetSenha }) {
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ background: '#fff', borderRadius: 14, padding: 28, width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 8px 40px rgba(0,0,0,.18)' }}>
+      <div style={{ background: '#fff', borderRadius: 14, padding: 28, width: '100%', maxWidth: 620, maxHeight: '90vh', overflowY: 'auto', boxShadow: '0 8px 40px rgba(0,0,0,.18)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
           <h2 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: '#1e293b' }}>{title}</h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 20, cursor: 'pointer', color: '#94a3b8' }}>×</button>
@@ -69,6 +69,57 @@ function FormModal({ title, form, setForm, filiais, onSave, onClose, saving }) {
           <div style={{ gridColumn: '1 / -1' }}>
             <label className="field-label">Observações</label>
             <textarea className="input" rows={3} value={form.observacoes || ''} onChange={(e) => setForm((p) => ({ ...p, observacoes: e.target.value }))} placeholder="Informações adicionais" style={{ resize: 'vertical' }} />
+          </div>
+
+          {/* ── Portal Cliente — credenciais de login ─────────────────────────── */}
+          <div style={{
+            gridColumn: '1 / -1',
+            marginTop: 14, padding: 14,
+            background: 'var(--primary-light, #fef9e6)',
+            border: '1px solid var(--primary-light, #e0c76a)',
+            borderRadius: 10,
+          }}>
+            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--primary, #c49512)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.4 }}>
+              🔑 Portal do Cliente (aprovação HE)
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div>
+                <label className="field-label">E-mail de login</label>
+                <input
+                  type="email"
+                  className="input"
+                  value={form.email_login || ''}
+                  onChange={(e) => setForm((p) => ({ ...p, email_login: e.target.value }))}
+                  placeholder="contato@cliente.com"
+                />
+              </div>
+              <div>
+                <label className="field-label">Login ativo?</label>
+                <select
+                  className="input"
+                  value={form.ativo_login ? 'true' : 'false'}
+                  onChange={(e) => setForm((p) => ({ ...p, ativo_login: e.target.value === 'true' }))}
+                >
+                  <option value="false">Desativado</option>
+                  <option value="true">Ativo</option>
+                </select>
+              </div>
+              {form.id && (
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => onSetSenha && onSetSenha(form.id)}
+                    style={{ width: '100%' }}
+                  >
+                    🔑 Definir / Redefinir senha do cliente
+                  </button>
+                  <small style={{ display: 'block', marginTop: 4, color: '#5a6a7a' }}>
+                    Cliente loga em <code>/portal-cliente</code> e aprova HE da operação.
+                  </small>
+                </div>
+              )}
+            </div>
           </div>
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginTop: 20 }}>
@@ -142,6 +193,22 @@ export default function ClientesPage() {
       alert('Erro ao salvar: ' + (e.message || e))
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleSetSenha(clienteId) {
+    const senha = window.prompt('Defina a senha do cliente (mínimo 6 caracteres):')
+    if (!senha) return
+    if (senha.length < 6) {
+      alert('Senha precisa ter pelo menos 6 caracteres.')
+      return
+    }
+    try {
+      await api.adminSetSenhaCliente(clienteId, senha)
+      alert('Senha definida com sucesso. Login do cliente ativado.')
+      carregar()
+    } catch (e) {
+      alert('Erro: ' + (e.message || e))
     }
   }
 
@@ -233,6 +300,7 @@ export default function ClientesPage() {
           onSave={handleSave}
           onClose={() => setShowModal(false)}
           saving={saving}
+          onSetSenha={handleSetSenha}
         />
       )}
     </section>

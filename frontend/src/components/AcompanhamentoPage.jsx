@@ -25,7 +25,7 @@ const FORMA_PAG_LABEL = {
   boleto: 'Boleto', credito_fornecedor: 'Crédito fornecedor',
 }
 
-const STATUS_PENDENTE   = ['pendente', 'pendente_aprovacao', 'aguardando_aprovacao', 'solicitado', 'analise', 'em_analise']
+const STATUS_PENDENTE   = ['pendente', 'pendente_aprovacao', 'aguardando_aprovacao', 'solicitado', 'analise', 'em_analise', 'aprovado_lider']
 const STATUS_EM_ANALISE = ['analise', 'em_analise']
 const STATUS_APROVADO   = ['aprovado', 'aprovada']
 const STATUS_REJEITADO  = ['reprovado', 'reprovada', 'cancelado']
@@ -34,6 +34,7 @@ const STATUS_LABEL = {
   pendente: 'Pendente', pendente_aprovacao: 'Pendente',
   aguardando_aprovacao: 'Aguard. Aprovação', solicitado: 'Solicitado',
   analise: 'Em Análise', em_analise: 'Em Análise',
+  aprovado_lider: 'Aprovado p/ líder — aguardando etapa final',
   aprovado: 'Aprovado', aprovada: 'Aprovada',
   reprovado: 'Reprovado', reprovada: 'Reprovada',
   cancelado: 'Cancelado', aberta: 'Aberta',
@@ -420,7 +421,7 @@ function EditorDiaria({ itens, setItens, processando, carregando }) {
 
 // ─── Modal de atendimento ─────────────────────────────────────────────────────
 
-function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalisar, isSuperAdmin }) {
+function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalisar, podeAprovarLider, isSuperAdmin }) {
   const [acao, setAcao]         = useState(null) // 'analisar' | 'aprovar' | 'rejeitar'
   const [motivo, setMotivo]     = useState('')
   const [processando, setProc]  = useState(false)
@@ -490,6 +491,8 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
     try {
       if (_acao === 'analisar') {
         await api.emAnalise(solicitacao.id)
+      } else if (_acao === 'aprovar_lider') {
+        await api.aprovarLider(solicitacao.id, tipo, motivo)
       } else if (_acao === 'aprovar') {
         // Para diárias: salva itens com valores + valor_total na solicitação antes de aprovar
         if (isDiaria) {
@@ -685,6 +688,9 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
           {STATUS_PENDENTE.includes(statusAtual) && (() => {
             // Resolve permissão / rótulo / ação primária
             let podeFazerAlgo = false, acaoPrimaria = null, labelPrimaria = ''
+            const twoStage = solicitacao.two_stage
+            const stage = solicitacao.current_stage  // 1 = aguardando líder, 2 = aguardando responsável/cliente
+            const stage2External = (tipo === 'horas_extras') && statusAtual === 'aprovado_lider'
 
             if (isPedido) {
               if (estaPendente && podeAnalisar) {
@@ -692,7 +698,13 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
               } else if (estaEmAnalise && podeAprovar) {
                 podeFazerAlgo = true; acaoPrimaria = 'aprovar';  labelPrimaria = 'Aprovar pedido'
               }
-            } else if (podeAprovar) {
+            } else if (twoStage && stage === 1 && podeAprovarLider) {
+              podeFazerAlgo = true; acaoPrimaria = 'aprovar_lider'
+              labelPrimaria = 'Aprovar (etapa líder)'
+            } else if (twoStage && stage === 2 && !stage2External && podeAprovar) {
+              podeFazerAlgo = true; acaoPrimaria = 'aprovar'
+              labelPrimaria = isDiaria ? 'Aprovar final (preencher valores)' : 'Aprovar (etapa final)'
+            } else if (!twoStage && podeAprovar) {
               podeFazerAlgo = true; acaoPrimaria = 'aprovar'
               labelPrimaria = isDiaria ? 'Aprovar (preencher valores)' : 'Aprovar solicitação'
             }
@@ -700,10 +712,16 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
             if (!podeFazerAlgo) {
               return (
                 <div className="alert-warn" style={{ marginTop: 12 }}>
-                  {isPedido && estaPendente
+                  {stage2External
+                    ? 'HE aprovada pelo líder. Aguardando aprovação do cliente no portal externo.'
+                    : isPedido && estaPendente
                     ? 'Aguardando analista iniciar análise. Você não tem permissão para esta etapa.'
                     : isPedido && estaEmAnalise
                     ? 'Aguardando aprovação. Você não tem permissão para aprovar.'
+                    : twoStage && stage === 2
+                    ? 'Aguardando aprovação do responsável de frota. Você não tem permissão para esta etapa.'
+                    : twoStage && stage === 1
+                    ? 'Aguardando aprovação do líder da base. Você não tem permissão para esta etapa.'
                     : 'Você não tem permissão para aprovar este tipo de solicitação.'}
                 </div>
               )
@@ -730,6 +748,8 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
                       onClick={() => {
                         if (acaoPrimaria === 'analisar') {
                           confirmar('analisar')
+                        } else if (acaoPrimaria === 'aprovar_lider') {
+                          setMotivo(''); setAcao('aprovar_lider')
                         } else {
                           setMotivo(''); setAcao('aprovar')
                         }
@@ -738,6 +758,47 @@ function ModalAtender({ solicitacao, onClose, onRefresh, podeAprovar, podeAnalis
                     >
                       {processando ? 'Processando...' : labelPrimaria}
                     </button>
+                  </div>
+                )}
+
+                {/* Painel de aprovação ETAPA LÍDER */}
+                {acao === 'aprovar_lider' && (
+                  <div style={{
+                    border: '1px solid var(--primary-light, #f5e8a8)', borderRadius: 8,
+                    background: 'rgba(196,149,18,0.08)', padding: '14px 16px',
+                    display: 'grid', gap: 10, marginTop: 8,
+                  }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--primary, #c49512)' }}>
+                      👑 Aprovar como Líder da base: <em style={{ fontWeight: 400 }}>{solicitacao.titulo || `#${solicitacao.id}`}</em>
+                    </div>
+                    <div style={{ fontSize: 11, color: 'var(--muted, #5a6a7a)' }}>
+                      Após sua aprovação, a solicitação segue para a etapa final ({tipo === 'horas_extras' ? 'cliente — portal externo' : 'responsável de frota'}).
+                    </div>
+                    <label className="field" style={{ margin: 0 }}>
+                      <span>Comentário (opcional)</span>
+                      <textarea
+                        rows={2}
+                        placeholder="Comentário ao aprovar como líder..."
+                        value={motivo}
+                        onChange={(e) => setMotivo(e.target.value)}
+                        disabled={processando}
+                        style={{ resize: 'vertical' }}
+                      />
+                    </label>
+                    {erroAcao && <div className="alert-error">{erroAcao}</div>}
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                      <button type="button" className="button-secondary" onClick={cancelarAcao} disabled={processando}>
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        className="button-primary"
+                        onClick={() => confirmar('aprovar_lider')}
+                        disabled={processando}
+                      >
+                        {processando ? 'Aprovando...' : 'Confirmar etapa líder'}
+                      </button>
+                    </div>
                   </div>
                 )}
 
@@ -882,8 +943,10 @@ export default function AcompanhamentoPage() {
 
   // Alguns recursos usam um sufixo enxuto no escopo (ex.: diarias_solicitacoes -> aprovar.diarias)
   const scopeSuffix = (rt) => rt === 'diarias_solicitacoes' ? 'diarias' : rt
-  const podeAprovar  = (rt) => permissoes.includes('admin') || permissoes.includes(`aprovar.${scopeSuffix(rt)}`)
+  const podeAprovar  = (rt) => permissoes.includes('admin') || permissoes.includes(`aprovar.${scopeSuffix(rt)}`) || permissoes.includes(`aprovar.${scopeSuffix(rt)}.responsavel`)
   const podeAnalisar = (rt) => permissoes.includes('admin') || permissoes.includes(`analisar.${scopeSuffix(rt)}`)
+  // Líder de etapa 1: aprova de pending para aprovado_lider
+  const podeAprovarLider = (rt) => permissoes.includes('admin') || permissoes.includes(`aprovar.${scopeSuffix(rt)}.lider`)
 
   const stats = useMemo(() => ({
     pendentes:  solicitacoes.filter((s) => STATUS_PENDENTE.includes(s.status)).length,
@@ -1127,6 +1190,7 @@ export default function AcompanhamentoPage() {
           onRefresh={carregar}
           podeAprovar={podeAprovar(atendendo.resource_type)}
           podeAnalisar={podeAnalisar(atendendo.resource_type)}
+          podeAprovarLider={podeAprovarLider(atendendo.resource_type)}
           isSuperAdmin={profile?.is_super_admin}
         />
       )}
