@@ -161,6 +161,8 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ status }),
     }),
+  sincronizarFinanceiroPedidos: () =>
+    request('/pedidos_compra/sincronizar-financeiro', { method: 'POST' }),
   getFeriadosCalendario: (params = {}) => {
     const search = new URLSearchParams(params)
     const suffix = search.toString() ? `?${search.toString()}` : ''

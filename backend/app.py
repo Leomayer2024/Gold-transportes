@@ -8472,6 +8472,17 @@ def create_app():
         item_id = pedido.get('id')
         try:
             valor = float(pedido.get('valor_total') or 0)
+            # valor_total no cabeçalho costuma ficar 0.00 — valor real vem dos itens.
+            if valor <= 0 and item_id is not None:
+                try:
+                    itens = (supabase.table('pedidos_compra_itens')
+                             .select('valor_total')
+                             .eq('pedido_id', item_id)
+                             .eq('ativo', True)
+                             .execute().data) or []
+                    valor = round(sum(float(i.get('valor_total') or 0) for i in itens), 2)
+                except Exception:
+                    pass
             filial_id_item = pedido.get('filial_id')
             data_pedido = pedido.get('data_pedido') or _date.today().isoformat()
             data_vencimento_pedido = (
@@ -8559,6 +8570,36 @@ def create_app():
             return jsonify({'status': 'ok', 'novo_status': novo_status, 'contas_pagar_id': contas_pagar_id})
         except Exception as exc:
             app.logger.error('Erro ao atualizar status do pedido %s: %s', pedido_id, exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.post('/api/pedidos_compra/sincronizar-financeiro')
+    @require_auth
+    def sincronizar_financeiro_pedidos(profile):
+        """Backfill: gera Contas a Pagar para pedidos já aprovados/recebidos/
+        finalizados que ainda não têm contas_pagar_id. Idempotente."""
+        scope_error = require_scope_permission(profile, 'menu.pedidos_compra')
+        if scope_error:
+            return scope_error
+        try:
+            query = (supabase.table('pedidos_compra')
+                     .select('id, filial_id, valor_total, fornecedor, numero_pedido, '
+                             'data_pedido, data_vencimento, data_necessidade, prazo_pagamento, '
+                             'contas_pagar_id, status')
+                     .in_('status', ['aprovado', 'em_compra', 'recebido', 'finalizado'])
+                     .is_('contas_pagar_id', 'null'))
+            if profile_has_filial_scope(profile):
+                allowed_ids = profile.get('allowed_filial_ids') or []
+                if not allowed_ids:
+                    return jsonify({'ok': True, 'criados': 0})
+                query = query.in_('filial_id', allowed_ids)
+            pedidos = query.execute().data or []
+            criados = 0
+            for ped in pedidos:
+                if _ensure_pedido_payable(ped):
+                    criados += 1
+            return jsonify({'ok': True, 'criados': criados, 'avaliados': len(pedidos)})
+        except Exception as exc:
+            app.logger.error('sincronizar_financeiro_pedidos: %s', exc)
             return jsonify({'error': translate_database_error(exc)}), 500
 
     @app.get('/api/permissoes/config')

@@ -1526,6 +1526,22 @@ export default function PedidosCompraPage() {
           <button className="button-secondary" onClick={() => navigate('/pedidos-compra-graficos')} type="button">
             Gráficos
           </button>
+          <button
+            className="button-secondary"
+            type="button"
+            title="Gera Contas a Pagar para pedidos aprovados/recebidos/finalizados que ainda não têm lançamento."
+            onClick={async () => {
+              try {
+                const r = await api.sincronizarFinanceiroPedidos()
+                alert(`Sincronizado: ${r.criados || 0} conta(s) a pagar criada(s) de ${r.avaliados || 0} pedido(s).`)
+                setRefreshKey((k) => k + 1)
+              } catch (e) {
+                alert(e.message || 'Erro ao sincronizar financeiro.')
+              }
+            }}
+          >
+            Sincronizar Contas a Pagar
+          </button>
           <button className="button-primary" onClick={openNew} type="button">+ Novo pedido</button>
         </div>
       </div>
