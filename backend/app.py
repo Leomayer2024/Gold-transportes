@@ -7624,6 +7624,18 @@ def create_app():
                         }
                     except Exception:
                         pass
+                # Mapa contas_pagar_id -> pago? À vista exige CP quitado p/ liberar compra.
+                cp_pago_map = {}
+                cp_ids = sorted({int(row['contas_pagar_id']) for row in rows if row.get('contas_pagar_id') is not None})
+                if cp_ids:
+                    try:
+                        cps = (supabase.table('contas_a_pagar')
+                               .select('id, status')
+                               .in_('id', cp_ids)
+                               .execute().data or [])
+                        cp_pago_map = {int(c['id']): (c.get('status') == 'PAGO') for c in cps if c.get('id') is not None}
+                    except Exception:
+                        pass
                 for row in rows:
                     pid = int(row['id']) if row.get('id') is not None else None
                     row['valor_total_calculado'] = round(valor_por_pedido.get(pid, 0.0), 2) if pid is not None else 0.0
@@ -7631,6 +7643,9 @@ def create_app():
                     row['criado_por_nome'] = colaboradores_por_id.get(criado_por_id, '') if criado_por_id is not None else ''
                     filial_id_row = int(row['filial_id']) if row.get('filial_id') is not None else None
                     row['filial_nome'] = filiais_por_id.get(filial_id_row, '-') if filial_id_row is not None else '-'
+                    cpid_row = int(row['contas_pagar_id']) if row.get('contas_pagar_id') is not None else None
+                    row['eh_avista'] = _pedido_eh_avista(row.get('forma_pagamento'))
+                    row['cp_pago'] = cp_pago_map.get(cpid_row, False) if cpid_row is not None else False
             if resource_name == 'estoque_movimentos':
                 # Enriquece com nome do item e nome do colaborador
                 item_ids = sorted({int(row['item_id']) for row in rows if row.get('item_id') is not None})
@@ -8460,6 +8475,27 @@ def create_app():
             app.logger.error('Erro ao carregar detalhes do pedido %s: %s', pedido_id, exc)
             return jsonify({'error': translate_database_error(exc)}), 500
 
+    # Formas de pagamento à vista: precisam quitar o Contas a Pagar antes de liberar
+    # a compra (aí o valor real p/ a empresa já é conhecido). As demais (cartão de
+    # crédito, boleto, crédito fornecedor) seguem normal — compra liberada na aprovação.
+    PEDIDO_FORMA_AVISTA = {'dinheiro', 'pix', 'cartao_debito'}
+
+    def _pedido_eh_avista(forma_pagamento):
+        return (forma_pagamento or '').strip().lower() in PEDIDO_FORMA_AVISTA
+
+    def _contas_pagar_esta_pago(contas_pagar_id):
+        if not contas_pagar_id:
+            return False
+        try:
+            cp = (supabase.table('contas_a_pagar')
+                  .select('status')
+                  .eq('id', contas_pagar_id)
+                  .limit(1)
+                  .execute().data) or []
+            return bool(cp) and (cp[0].get('status') == 'PAGO')
+        except Exception:
+            return False
+
     def _ensure_pedido_payable(pedido):
         """Cria contas_a_pagar para um pedido_compra de forma idempotente.
         Retorna contas_pagar_id (existente ou novo), ou None se falhar/pular."""
@@ -8549,7 +8585,7 @@ def create_app():
         try:
             pedido_row = (
                 supabase.table('pedidos_compra')
-                .select('id, filial_id, valor_total, fornecedor, numero_pedido, '
+                .select('id, filial_id, valor_total, fornecedor, numero_pedido, forma_pagamento, '
                         'data_pedido, data_vencimento, data_necessidade, prazo_pagamento, contas_pagar_id')
                 .eq('id', pedido_id)
                 .limit(1)
@@ -8560,6 +8596,12 @@ def create_app():
             pedido = pedido_row[0]
             if not ensure_profile_can_access_filial(profile, pedido.get('filial_id')):
                 return jsonify({'error': 'Sem permissão para esta base.'}), 403
+
+            # À vista (pix/dinheiro/débito): só libera 'em compra' depois de quitar o
+            # Contas a Pagar. A prazo segue normal.
+            if novo_status == 'em_compra' and _pedido_eh_avista(pedido.get('forma_pagamento')):
+                if not _contas_pagar_esta_pago(pedido.get('contas_pagar_id')):
+                    return jsonify({'error': 'Pagamento à vista: quite o lançamento em Contas a Pagar antes de iniciar a compra.'}), 400
 
             supabase.table('pedidos_compra').update({'status': novo_status}).eq('id', pedido_id).execute()
             write_audit_event(profile, 'update', 'pedidos_compra', pedido_id, details={'status': novo_status})

@@ -1330,6 +1330,8 @@ function StatusBadge({ pedido, onRefresh, isAutor }) {
   const [busy, setBusy] = useState(false)
   const next = STATUS_NEXT[pedido.status]
   const canCancel = isAutor && CAN_CANCEL.has(pedido.status)
+  // À vista (pix/dinheiro/débito): só libera "em compra" após quitar o Contas a Pagar.
+  const bloqueadoAvista = pedido.status === 'aprovado' && next?.status === 'em_compra' && pedido.eh_avista && !pedido.cp_pago
 
   async function advance(s) {
     if (s === 'cancelado') {
@@ -1337,7 +1339,14 @@ function StatusBadge({ pedido, onRefresh, isAutor }) {
       if (!window.confirm(`Cancelar o pedido ${num}?\n\nEsta ação não pode ser desfeita.`)) return
     }
     setBusy(true)
-    try { await api.updatePedidoStatus(pedido.id, s); onRefresh() } finally { setBusy(false) }
+    try {
+      await api.updatePedidoStatus(pedido.id, s)
+      onRefresh()
+    } catch (err) {
+      alert(err.message || 'Erro ao mudar status do pedido.')
+    } finally {
+      setBusy(false)
+    }
   }
 
   return (
@@ -1348,8 +1357,11 @@ function StatusBadge({ pedido, onRefresh, isAutor }) {
       {!busy && next && (
         <button
           className="button-secondary"
-          style={{ fontSize: 11, padding: '2px 8px' }}
-          onClick={() => advance(next.status)}
+          style={{ fontSize: 11, padding: '2px 8px', opacity: bloqueadoAvista ? 0.5 : 1, cursor: bloqueadoAvista ? 'not-allowed' : 'pointer' }}
+          onClick={() => bloqueadoAvista
+            ? alert('Pagamento à vista: quite o lançamento em Contas a Pagar antes de iniciar a compra.')
+            : advance(next.status)}
+          title={bloqueadoAvista ? 'Quite o Contas a Pagar (à vista) para liberar a compra' : undefined}
           type="button"
         >
           → {next.label}
