@@ -8502,10 +8502,12 @@ def create_app():
             descricao_cp = f"Pedido {pedido.get('numero_pedido') or item_id} – {pedido.get('fornecedor') or 'Fornecedor não informado'}"
             if prazo_info:
                 descricao_cp += f" ({prazo_info})"
+            # competencia é DATE — usa 1º dia do mês do pedido (YYYY-MM-01)
+            competencia = (data_pedido[:7] + '-01') if data_pedido and len(data_pedido) >= 7 else data_pedido
             cp_row = {
                 'filial_id': filial_id_item,
                 'filial_nome': filial_nome,
-                'competencia': (data_pedido or '')[:7],
+                'competencia': competencia,
                 'tipo_despesa': 'COMPRAS',
                 'descricao': descricao_cp,
                 'fornecedor_nome': pedido.get('fornecedor') or None,
