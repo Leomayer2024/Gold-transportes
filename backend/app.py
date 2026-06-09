@@ -7625,15 +7625,16 @@ def create_app():
                     except Exception:
                         pass
                 # Mapa contas_pagar_id -> pago? À vista exige CP quitado p/ liberar compra.
+                # IDs de contas_a_pagar são UUID (string) — nunca usar int().
                 cp_pago_map = {}
-                cp_ids = sorted({int(row['contas_pagar_id']) for row in rows if row.get('contas_pagar_id') is not None})
+                cp_ids = sorted({str(row['contas_pagar_id']) for row in rows if row.get('contas_pagar_id') is not None})
                 if cp_ids:
                     try:
                         cps = (supabase.table('contas_a_pagar')
                                .select('id, status')
                                .in_('id', cp_ids)
                                .execute().data or [])
-                        cp_pago_map = {int(c['id']): (c.get('status') == 'PAGO') for c in cps if c.get('id') is not None}
+                        cp_pago_map = {str(c['id']): _status_cp_eh_pago(c.get('status')) for c in cps if c.get('id') is not None}
                     except Exception:
                         pass
                 for row in rows:
@@ -7643,7 +7644,7 @@ def create_app():
                     row['criado_por_nome'] = colaboradores_por_id.get(criado_por_id, '') if criado_por_id is not None else ''
                     filial_id_row = int(row['filial_id']) if row.get('filial_id') is not None else None
                     row['filial_nome'] = filiais_por_id.get(filial_id_row, '-') if filial_id_row is not None else '-'
-                    cpid_row = int(row['contas_pagar_id']) if row.get('contas_pagar_id') is not None else None
+                    cpid_row = str(row['contas_pagar_id']) if row.get('contas_pagar_id') is not None else None
                     row['eh_reembolso'] = _pedido_eh_reembolso(row)
                     row['exige_cp_pago'] = _pedido_exige_cp_pago(row)
                     row['cp_pago'] = cp_pago_map.get(cpid_row, False) if cpid_row is not None else False
@@ -8480,6 +8481,11 @@ def create_app():
     # a compra (aí o valor real p/ a empresa já é conhecido). As demais (cartão de
     # crédito, boleto, crédito fornecedor) seguem normal — compra liberada na aprovação.
     PEDIDO_FORMA_AVISTA = {'dinheiro', 'pix', 'cartao_debito'}
+    # Status de contas_a_pagar que contam como quitado (UI grava 'FINALIZADO' ao pagar).
+    CONTAS_PAGAR_STATUS_PAGO = {'PAGO', 'FINALIZADO'}
+
+    def _status_cp_eh_pago(status):
+        return (status or '').strip().upper() in CONTAS_PAGAR_STATUS_PAGO
 
     def _pedido_eh_avista(forma_pagamento):
         return (forma_pagamento or '').strip().lower() in PEDIDO_FORMA_AVISTA
@@ -8493,7 +8499,7 @@ def create_app():
                   .eq('id', contas_pagar_id)
                   .limit(1)
                   .execute().data) or []
-            return bool(cp) and (cp[0].get('status') == 'PAGO')
+            return bool(cp) and _status_cp_eh_pago(cp[0].get('status'))
         except Exception:
             return False
 
