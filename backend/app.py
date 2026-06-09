@@ -7344,7 +7344,7 @@ def create_app():
         # 3) Contas a receber — faturado vs em aberto
         try:
             cq = (supabase.table('contas_a_receber')
-                  .select('filial_id, status_fat, cobrado_wm, competencia')
+                  .select('filial_id, status_fat, cobrado_wm, valor_gold, competencia')
                   .in_('filial_id', filial_ids))
             for row in (cq.execute().data or []):
                 fid = row.get('filial_id')
@@ -7352,7 +7352,8 @@ def create_app():
                     continue
                 if (row.get('competencia') or '')[:7] != mes_prefix:
                     continue
-                valor = parse_float_or_default(row.get('cobrado_wm'), 0.0)
+                # HE fixo grava só valor_gold; usa cobrado_wm e cai p/ valor_gold se vazio
+                valor = parse_float_or_default(row.get('cobrado_wm'), 0.0) or parse_float_or_default(row.get('valor_gold'), 0.0)
                 if (row.get('status_fat') or '').upper() == 'FATURADO':
                     agg[int(fid)]['contas_receber_faturado'] += valor
                 else:
@@ -8459,6 +8460,61 @@ def create_app():
             app.logger.error('Erro ao carregar detalhes do pedido %s: %s', pedido_id, exc)
             return jsonify({'error': translate_database_error(exc)}), 500
 
+    def _ensure_pedido_payable(pedido):
+        """Cria contas_a_pagar para um pedido_compra de forma idempotente.
+        Retorna contas_pagar_id (existente ou novo), ou None se falhar/pular."""
+        if not pedido:
+            return None
+        existing = pedido.get('contas_pagar_id')
+        if existing:
+            return existing
+        from datetime import date as _date
+        item_id = pedido.get('id')
+        try:
+            valor = float(pedido.get('valor_total') or 0)
+            filial_id_item = pedido.get('filial_id')
+            data_pedido = pedido.get('data_pedido') or _date.today().isoformat()
+            data_vencimento_pedido = (
+                pedido.get('data_vencimento') or
+                pedido.get('data_necessidade') or
+                data_pedido
+            )
+            filial_nome = ''
+            try:
+                f_resp = supabase.table('filiais').select('cidade, uf').eq('id', filial_id_item).limit(1).execute()
+                if f_resp.data:
+                    fr = f_resp.data[0]
+                    filial_nome = f"{fr.get('cidade','')}/{fr.get('uf','')}"
+            except Exception:
+                pass
+            prazo_info = pedido.get('prazo_pagamento') or ''
+            descricao_cp = f"Pedido {pedido.get('numero_pedido') or item_id} – {pedido.get('fornecedor') or 'Fornecedor não informado'}"
+            if prazo_info:
+                descricao_cp += f" ({prazo_info})"
+            cp_row = {
+                'filial_id': filial_id_item,
+                'filial_nome': filial_nome,
+                'competencia': (data_pedido or '')[:7],
+                'tipo_despesa': 'COMPRAS',
+                'descricao': descricao_cp,
+                'fornecedor_nome': pedido.get('fornecedor') or None,
+                'valor': valor,
+                'data_vencimento': data_vencimento_pedido,
+                'status': 'PENDENTE',
+                'numero_documento': pedido.get('numero_pedido') or None,
+                'observacoes': f"Gerado automaticamente do pedido de compra #{item_id}",
+            }
+            cp_resp = supabase.table('contas_a_pagar').insert(cp_row).execute()
+            if cp_resp.data:
+                new_id = cp_resp.data[0].get('id')
+                supabase.table('pedidos_compra').update(
+                    {'contas_pagar_id': new_id}
+                ).eq('id', item_id).execute()
+                return new_id
+        except Exception as cp_exc:
+            app.logger.warning('Falha ao criar contas_a_pagar para pedido %s: %s', item_id, cp_exc)
+        return None
+
     @app.patch('/api/pedidos_compra/<int:pedido_id>/status')
     @require_auth
     def update_pedido_status(profile, pedido_id):
@@ -8480,19 +8536,27 @@ def create_app():
         try:
             pedido_row = (
                 supabase.table('pedidos_compra')
-                .select('id, filial_id')
+                .select('id, filial_id, valor_total, fornecedor, numero_pedido, '
+                        'data_pedido, data_vencimento, data_necessidade, prazo_pagamento, contas_pagar_id')
                 .eq('id', pedido_id)
                 .limit(1)
                 .execute()
             ).data or []
             if not pedido_row:
                 return jsonify({'error': 'Pedido não encontrado.'}), 404
-            if not ensure_profile_can_access_filial(profile, pedido_row[0].get('filial_id')):
+            pedido = pedido_row[0]
+            if not ensure_profile_can_access_filial(profile, pedido.get('filial_id')):
                 return jsonify({'error': 'Sem permissão para esta base.'}), 403
 
             supabase.table('pedidos_compra').update({'status': novo_status}).eq('id', pedido_id).execute()
             write_audit_event(profile, 'update', 'pedidos_compra', pedido_id, details={'status': novo_status})
-            return jsonify({'status': 'ok', 'novo_status': novo_status})
+
+            # Pedido aprovado / recebido / finalizado vai para Contas a Pagar (idempotente)
+            contas_pagar_id = None
+            if novo_status in ('aprovado', 'recebido', 'finalizado'):
+                pedido['status'] = novo_status
+                contas_pagar_id = _ensure_pedido_payable(pedido)
+            return jsonify({'status': 'ok', 'novo_status': novo_status, 'contas_pagar_id': contas_pagar_id})
         except Exception as exc:
             app.logger.error('Erro ao atualizar status do pedido %s: %s', pedido_id, exc)
             return jsonify({'error': translate_database_error(exc)}), 500
@@ -12534,52 +12598,10 @@ def create_app():
                         resource_type, item_id, sol_exc
                     )
 
-            # ── Auto-cria contas_a_pagar quando pedido_compra é aprovado ──
+            # ── Auto-cria contas_a_pagar quando pedido_compra é aprovado (idempotente) ──
             contas_pagar_id = None
             if resource_type == 'pedidos_compra':
-                try:
-                    valor = float(item.get('valor_total') or 0)
-                    filial_id_item = item.get('filial_id')
-                    data_pedido = item.get('data_pedido') or date_class.today().isoformat()
-                    data_vencimento_pedido = (
-                        item.get('data_vencimento') or
-                        item.get('data_necessidade') or
-                        data_pedido
-                    )
-                    # Busca nome da filial
-                    filial_nome = ''
-                    try:
-                        f_resp = supabase.table('filiais').select('cidade, uf').eq('id', filial_id_item).limit(1).execute()
-                        if f_resp.data:
-                            fr = f_resp.data[0]
-                            filial_nome = f"{fr.get('cidade','')}/{fr.get('uf','')}"
-                    except Exception:
-                        pass
-                    prazo_info = item.get('prazo_pagamento') or ''
-                    descricao_cp = f"Pedido {item.get('numero_pedido') or item_id} – {item.get('fornecedor') or 'Fornecedor não informado'}"
-                    if prazo_info:
-                        descricao_cp += f" ({prazo_info})"
-                    cp_row = {
-                        'filial_id': filial_id_item,
-                        'filial_nome': filial_nome,
-                        'competencia': data_pedido[:7],
-                        'tipo_despesa': 'COMPRAS',
-                        'descricao': descricao_cp,
-                        'fornecedor_nome': item.get('fornecedor') or None,
-                        'valor': valor,
-                        'data_vencimento': data_vencimento_pedido,
-                        'status': 'PENDENTE',
-                        'numero_documento': item.get('numero_pedido') or None,
-                        'observacoes': f"Gerado automaticamente ao aprovar pedido de compra #{item_id}",
-                    }
-                    cp_resp = supabase.table('contas_a_pagar').insert(cp_row).execute()
-                    if cp_resp.data:
-                        contas_pagar_id = cp_resp.data[0].get('id')
-                        supabase.table('pedidos_compra').update(
-                            {'contas_pagar_id': contas_pagar_id}
-                        ).eq('id', item_id).execute()
-                except Exception as cp_exc:
-                    app.logger.warning('Falha ao criar contas_a_pagar para pedido %d: %s', item_id, cp_exc)
+                contas_pagar_id = _ensure_pedido_payable(item)
 
             # Registrar auditoria
             write_audit_event(
@@ -13236,6 +13258,164 @@ def create_app():
 
     # ============ HORAS EXTRAS RTM — FECHAMENTOS ============
 
+    def _rebuild_financeiro_rtm(mes_referencia):
+        """Regenera Contas a Receber (horas fixo) e Contas a Pagar (horas extra)
+        de um mês RTM a partir dos registros gravados em horas_extras_rtm_registros.
+        Idempotente: apaga as linhas auto-geradas do mês e recria a partir da fonte
+        de verdade (registros). Retorna (cr_count, cp_count)."""
+        if not mes_referencia:
+            return (0, 0)
+        mes_prefix = mes_referencia[:7]
+        mes_label = mes_prefix
+        from collections import defaultdict
+
+        regs = (supabase.table('horas_extras_rtm_registros')
+                .select('colaborador_id, filial_id, filial_nome, total_geral, tipo_hora')
+                .eq('mes_referencia', mes_referencia)
+                .execute().data) or []
+
+        # Sem registros: ainda limpa qualquer linha auto-gerada órfã do mês.
+        if not regs:
+            supabase.table('contas_a_receber').delete().eq('horas_extras_rtm_mes', mes_referencia).execute()
+            supabase.table('contas_a_pagar').delete().eq('horas_extras_rtm_mes', mes_referencia).execute()
+            return (0, 0)
+
+        # Mapa colaborador → contrato (apenas fixo) para resolver cliente/contrato.
+        colab_contrato_map = {}
+        try:
+            cc_resp = supabase.table('contratos_colaboradores').select(
+                'colaborador_id, tipo_item, inicio_vigencia, contrato_operacional_id'
+            ).execute()
+            for cc in (cc_resp.data or []):
+                cid_cc = cc.get('colaborador_id')
+                if cid_cc is None:
+                    continue
+                iv = cc.get('inicio_vigencia')
+                if iv is not None and iv[:7] > mes_prefix:
+                    continue
+                ti = (cc.get('tipo_item') or '').lower()
+                if ti in ('colaborador', 'pacote_motorista_veiculo') and cc.get('contrato_operacional_id'):
+                    colab_contrato_map[str(cid_cc)] = cc['contrato_operacional_id']
+        except Exception:
+            pass
+
+        contrato_cliente_map = {}
+        fixo_contrato_ids = list({v for v in colab_contrato_map.values() if v})
+        if fixo_contrato_ids:
+            try:
+                cont_resp = supabase.table('contratos_operacionais').select(
+                    'id, cliente_nome, nome_contrato'
+                ).in_('id', fixo_contrato_ids).execute()
+                for c in (cont_resp.data or []):
+                    contrato_cliente_map[c['id']] = {
+                        'cliente_nome': c.get('cliente_nome') or c.get('nome_contrato', ''),
+                        'contrato_nome': c.get('nome_contrato', ''),
+                    }
+            except Exception:
+                pass
+
+        # Lookup de filial por nome (fallback quando o registro não tem filial_id).
+        filiais_cadastradas = []
+        filial_nome_to_id = {}
+        try:
+            fil_resp = supabase.table('filiais').select('id, cidade').execute()
+            for f in (fil_resp.data or []):
+                cid = (f.get('cidade') or '').upper().strip()
+                filiais_cadastradas.append({'id': f['id'], 'cidade': cid})
+                filial_nome_to_id[cid] = f['id']
+        except Exception:
+            pass
+
+        def _find_fid(nome):
+            if not nome:
+                return None
+            nome = nome.upper().strip()
+            if nome in filial_nome_to_id:
+                return filial_nome_to_id[nome]
+            for f in filiais_cadastradas:
+                if nome in f['cidade'] or f['cidade'] in nome:
+                    return f['id']
+            return None
+
+        fixo_groups = defaultdict(lambda: {
+            'total': 0.0, 'count': 0, 'filial_nome': '', 'filial_id': None,
+            'contrato_id': None, 'cliente_nome': '', 'contrato_nome': '',
+        })
+        extra_groups = defaultdict(lambda: {'total': 0.0, 'count': 0, 'filial_nome': '', 'filial_id': None})
+        for r in regs:
+            fname = r.get('filial_nome') or 'Sem filial'
+            total = float(r.get('total_geral') or 0)
+            cid = r.get('colaborador_id')
+            if (r.get('tipo_hora') or 'extra') == 'fixo':
+                contrato_id = colab_contrato_map.get(str(cid)) if cid else None
+                key = (fname, contrato_id)
+                info = fixo_groups[key]
+                info['total'] += total
+                info['count'] += 1
+                info['filial_nome'] = r.get('filial_nome', '') or fname
+                info['filial_id'] = r.get('filial_id')
+                info['contrato_id'] = contrato_id
+                if contrato_id and contrato_id in contrato_cliente_map:
+                    info['cliente_nome'] = contrato_cliente_map[contrato_id]['cliente_nome']
+                    info['contrato_nome'] = contrato_cliente_map[contrato_id]['contrato_nome']
+            else:
+                info = extra_groups[fname]
+                info['total'] += total
+                info['count'] += 1
+                info['filial_nome'] = r.get('filial_nome', '') or fname
+                info['filial_id'] = r.get('filial_id')
+
+        supabase.table('contas_a_receber').delete().eq('horas_extras_rtm_mes', mes_referencia).execute()
+        supabase.table('contas_a_pagar').delete().eq('horas_extras_rtm_mes', mes_referencia).execute()
+
+        cr_rows, cp_rows = [], []
+        # FIXO → Contas a Receber (cliente reembolsa a Gold)
+        for _key, info in fixo_groups.items():
+            if info['total'] <= 0:
+                continue
+            fid_cr = _find_fid(info.get('filial_nome', '')) or info['filial_id']
+            valor = round(info['total'], 2)
+            cr_rows.append({
+                'filial_id': fid_cr,
+                'filial_nome': info['filial_nome'],
+                'competencia': mes_referencia,
+                'obrigacao': 'HORA EXTRA',
+                'descricao': f"Horas Extras – Fixo Contrato ({mes_label}) – {info['filial_nome']}",
+                'cliente_nome': info.get('cliente_nome') or '',
+                'contrato_operacional_id': info.get('contrato_id'),
+                'contrato_nome': info.get('contrato_nome', ''),
+                'valor_gold': valor,
+                'cobrado_wm': valor,
+                'status_fat': 'NÃO FATURADO',
+                'status': 'FALTA COBRAR',
+                'horas_extras_rtm_mes': mes_referencia,
+                'tipo_hora': 'fixo',
+                'limite_dia': 10,
+                'prazo_envio': 'ATÉ O DIA 10 - SUB',
+            })
+        # EXTRA → Contas a Pagar (Gold absorve o custo, sem CR)
+        for _fid, info in extra_groups.items():
+            if info['total'] <= 0:
+                continue
+            fid_cp = _find_fid(info.get('filial_nome', '')) or info['filial_id']
+            cp_rows.append({
+                'filial_id': fid_cp,
+                'filial_nome': info['filial_nome'],
+                'competencia': mes_referencia,
+                'tipo_despesa': 'HORAS EXTRAS',
+                'descricao': f"Horas Extras Fora Contrato ({mes_label}) – {info['filial_nome']} – {info['count']} funcionários",
+                'valor': round(info['total'], 2),
+                'status': 'PENDENTE',
+                'horas_extras_rtm_mes': mes_referencia,
+                'colaboradores_count': info['count'],
+            })
+
+        if cr_rows:
+            supabase.table('contas_a_receber').insert(cr_rows).execute()
+        if cp_rows:
+            supabase.table('contas_a_pagar').insert(cp_rows).execute()
+        return (len(cr_rows), len(cp_rows))
+
     @app.route('/api/horas-extras-rtm/salvar', methods=['POST'])
     @require_auth
     def salvar_horas_extras_rtm(profile):
@@ -13495,91 +13675,10 @@ def create_app():
                     filial_id=filial_id,
                 )
 
-            # Auto-create Contas a Receber (fixo only) and Contas a Pagar (extra only)
+            # Regenera Contas a Receber (fixo) e Contas a Pagar (extra) a partir dos
+            # registros já gravados no banco — fonte única de verdade, reusada pela edição.
             try:
-                from collections import defaultdict
-                # Group by filial_nome (not filial_id) so that each branch gets its own CP/CR
-                # even when filial_id resolution falls back to the user's home branch
-                fixo_groups = defaultdict(lambda: {
-                    'total': 0.0, 'count': 0, 'filial_nome': '', 'filial_id': None,
-                    'contrato_id': None, 'cliente_nome': '', 'contrato_nome': '',
-                })
-                extra_groups = defaultdict(lambda: {'total': 0.0, 'count': 0, 'filial_nome': '', 'filial_id': None})
-                for r in rows:
-                    fname = r.get('filial_nome') or 'Sem filial'
-                    total = float(r.get('total_geral') or 0)
-                    cid = r.get('colaborador_id')
-                    if r.get('tipo_hora') == 'fixo':
-                        contrato_id = colab_contrato_map.get(str(cid)) if cid else None
-                        key = (fname, contrato_id)
-                        info = fixo_groups[key]
-                        info['total'] += total
-                        info['count'] += 1
-                        info['filial_nome'] = r.get('filial_nome', '')
-                        info['filial_id'] = r.get('filial_id')
-                        info['contrato_id'] = contrato_id
-                        if contrato_id and contrato_id in contrato_cliente_map:
-                            info['cliente_nome'] = contrato_cliente_map[contrato_id]['cliente_nome']
-                            info['contrato_nome'] = contrato_cliente_map[contrato_id]['contrato_nome']
-                    else:
-                        info = extra_groups[fname]
-                        info['total'] += total
-                        info['count'] += 1
-                        info['filial_nome'] = r.get('filial_nome', '')
-                        info['filial_id'] = r.get('filial_id')
-
-                # Remove auto-generated CR/CP for this month before recreating
-                supabase.table('contas_a_receber').delete().eq('horas_extras_rtm_mes', mes_referencia).execute()
-                supabase.table('contas_a_pagar').delete().eq('horas_extras_rtm_mes', mes_referencia).execute()
-
-                mes_label = mes_referencia[:7]  # YYYY-MM
-                cr_rows, cp_rows = [], []
-
-                # FIXO → Contas a Receber (client reimburses Gold)
-                for _key, info in fixo_groups.items():
-                    if info['total'] <= 0:
-                        continue
-                    fid_cr = find_filial_id(info.get('filial_nome', '')) or info['filial_id']
-                    cliente = info.get('cliente_nome') or ''
-                    cr_rows.append({
-                        'filial_id': fid_cr,
-                        'filial_nome': info['filial_nome'],
-                        'competencia': mes_referencia,
-                        'obrigacao': 'HORA EXTRA',
-                        'descricao': f"Horas Extras – Fixo Contrato ({mes_label}) – {info['filial_nome']}",
-                        'cliente_nome': cliente,
-                        'contrato_operacional_id': info.get('contrato_id'),
-                        'contrato_nome': info.get('contrato_nome', ''),
-                        'valor_gold': round(info['total'], 2),
-                        'status_fat': 'NÃO FATURADO',
-                        'status': 'FALTA COBRAR',
-                        'horas_extras_rtm_mes': mes_referencia,
-                        'tipo_hora': 'fixo',
-                        'limite_dia': 10,
-                        'prazo_envio': 'ATÉ O DIA 10 - SUB',
-                    })
-
-                # EXTRA → Contas a Pagar only (Gold absorbs cost, no CR created)
-                for _fid, info in extra_groups.items():
-                    if info['total'] <= 0:
-                        continue
-                    fid_cp = find_filial_id(info.get('filial_nome', '')) or info['filial_id']
-                    cp_rows.append({
-                        'filial_id': fid_cp,
-                        'filial_nome': info['filial_nome'],
-                        'competencia': mes_referencia,
-                        'tipo_despesa': 'HORAS EXTRAS',
-                        'descricao': f"Horas Extras Fora Contrato ({mes_label}) – {info['filial_nome']} – {info['count']} funcionários",
-                        'valor': round(info['total'], 2),
-                        'status': 'PENDENTE',
-                        'horas_extras_rtm_mes': mes_referencia,
-                        'colaboradores_count': info['count'],
-                    })
-
-                if cr_rows:
-                    supabase.table('contas_a_receber').insert(cr_rows).execute()
-                if cp_rows:
-                    supabase.table('contas_a_pagar').insert(cp_rows).execute()
+                _rebuild_financeiro_rtm(mes_referencia)
             except Exception as fin_exc:
                 app.logger.warning('auto_create_financeiro_rtm: %s', fin_exc)
 
@@ -13737,10 +13836,12 @@ def create_app():
     def editar_registro_horas_extras_rtm(profile, registro_id):
         data = request.get_json() or {}
         try:
-            # Verify filial scope before editing
+            # Carrega filial_id + mes_referencia (escopo e regeneração do financeiro)
+            reg_resp = supabase.table('horas_extras_rtm_registros').select(
+                'filial_id, mes_referencia'
+            ).eq('id', registro_id).limit(1).execute()
+            reg = (reg_resp.data or [{}])[0]
             if profile_has_filial_scope(profile):
-                reg_resp = supabase.table('horas_extras_rtm_registros').select('filial_id').eq('id', registro_id).limit(1).execute()
-                reg = (reg_resp.data or [{}])[0]
                 if reg.get('filial_id') and int(reg['filial_id']) not in set(profile.get('allowed_filial_ids') or []):
                     return jsonify({'error': 'Sem permissão para editar este registro.'}), 403
             hn = float(data.get('horas_normais') or 0)
@@ -13759,6 +13860,14 @@ def create_app():
                 'total_geral': t50 + t100,
             }
             supabase.table('horas_extras_rtm_registros').update(update).eq('id', registro_id).execute()
+
+            # Edição altera totais → regenera Contas a Receber/Pagar do mês (evita dado defasado)
+            mes_ref = reg.get('mes_referencia')
+            if mes_ref:
+                try:
+                    _rebuild_financeiro_rtm(mes_ref)
+                except Exception as fin_exc:
+                    app.logger.warning('rebuild_financeiro_rtm (editar): %s', fin_exc)
             return jsonify({'ok': True})
         except Exception as exc:
             app.logger.error('editar_registro_horas_extras_rtm: %s', exc)
@@ -14057,7 +14166,7 @@ def create_app():
             rows = result.data or []
             from datetime import date as _date
             hoje = _date.today().isoformat()
-            total_a_receber = sum(float(r.get('cobrado_wm') or 0) for r in rows if r.get('status_fat') != 'FATURADO')
+            total_a_receber = sum(float(r.get('cobrado_wm') or r.get('valor_gold') or 0) for r in rows if r.get('status_fat') != 'FATURADO')
             nao_faturado = sum(1 for r in rows if r.get('status_fat') == 'NÃO FATURADO')
             falta_cobrar = sum(1 for r in rows if r.get('status') == 'FALTA COBRAR')
             vencidos = sum(1 for r in rows if (r.get('data_limite') or r.get('data_vencimento') or '') < hoje and r.get('status_fat') != 'FATURADO')
