@@ -7625,6 +7625,17 @@ def create_app():
                         }
                     except Exception:
                         pass
+                # Auto-espelho: pedido liberado sem Contas a Pagar gera/religa o lançamento
+                # (idempotente via _ensure_pedido_payable). Substitui o botão Sincronizar.
+                _STATUS_GERA_CP = {'aprovado', 'em_compra', 'recebido', 'finalizado'}
+                for row in rows:
+                    if row.get('contas_pagar_id') is None and (row.get('status') or '') in _STATUS_GERA_CP:
+                        try:
+                            novo_cp = _ensure_pedido_payable(row)
+                            if novo_cp:
+                                row['contas_pagar_id'] = novo_cp
+                        except Exception:
+                            pass
                 # Mapa contas_pagar_id -> pago? À vista exige CP quitado p/ liberar compra.
                 # IDs de contas_a_pagar são UUID (string) — nunca usar int().
                 cp_pago_map = {}
