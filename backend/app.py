@@ -2467,11 +2467,12 @@ def create_app():
                 'data_necessidade', 'fornecedor', 'forma_pagamento', 'prazo_pagamento',
                 'centro_custo', 'observacoes', 'chave_pix', 'dados_bancarios',
                 'tipo_reembolso', 'motivo_reprovacao', 'numero_solicitacao',
+                'contas_pagar_id',  # uuid (FK contas_a_pagar) — NÃO coagir p/ int
             ]:
                 if sanitized.get(nullable_field) == '':
                     sanitized[nullable_field] = None
 
-            for int_field in ['criado_por', 'aprovado_por', 'em_analise_por', 'reprovado_por', 'contas_pagar_id']:
+            for int_field in ['criado_por', 'aprovado_por', 'em_analise_por', 'reprovado_por']:
                 if int_field in sanitized:
                     raw = sanitized.get(int_field)
                     sanitized[int_field] = parse_int_or_default(raw, None) if raw not in ('', None) else None
@@ -8523,6 +8524,20 @@ def create_app():
             return existing
         from datetime import date as _date
         item_id = pedido.get('id')
+        marker = f"Gerado automaticamente do pedido de compra #{item_id}"
+        # Idempotência: se já existe CP auto p/ este pedido, reaproveita e religa (evita duplicar).
+        if item_id is not None:
+            try:
+                ja = (supabase.table('contas_a_pagar').select('id')
+                      .eq('observacoes', marker).limit(1).execute().data) or []
+                if ja:
+                    cp_id = ja[0].get('id')
+                    supabase.table('pedidos_compra').update(
+                        {'contas_pagar_id': cp_id}
+                    ).eq('id', item_id).execute()
+                    return cp_id
+            except Exception:
+                pass
         try:
             valor = float(pedido.get('valor_total') or 0)
             # valor_total no cabeçalho costuma ficar 0.00 — valor real vem dos itens.
@@ -8568,7 +8583,7 @@ def create_app():
                 'data_vencimento': data_vencimento_pedido,
                 'status': 'PENDENTE',
                 'numero_documento': pedido.get('numero_pedido') or None,
-                'observacoes': f"Gerado automaticamente do pedido de compra #{item_id}",
+                'observacoes': marker,
             }
             cp_resp = supabase.table('contas_a_pagar').insert(cp_row).execute()
             if cp_resp.data:
