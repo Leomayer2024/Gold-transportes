@@ -7644,7 +7644,8 @@ def create_app():
                     filial_id_row = int(row['filial_id']) if row.get('filial_id') is not None else None
                     row['filial_nome'] = filiais_por_id.get(filial_id_row, '-') if filial_id_row is not None else '-'
                     cpid_row = int(row['contas_pagar_id']) if row.get('contas_pagar_id') is not None else None
-                    row['eh_avista'] = _pedido_eh_avista(row.get('forma_pagamento'))
+                    row['eh_reembolso'] = _pedido_eh_reembolso(row)
+                    row['exige_cp_pago'] = _pedido_exige_cp_pago(row)
                     row['cp_pago'] = cp_pago_map.get(cpid_row, False) if cpid_row is not None else False
             if resource_name == 'estoque_movimentos':
                 # Enriquece com nome do item e nome do colaborador
@@ -8496,6 +8497,16 @@ def create_app():
         except Exception:
             return False
 
+    def _pedido_eh_reembolso(pedido):
+        # Reembolso = solicitante já comprou do próprio bolso; CP serve p/ devolver a ele.
+        tipo = (pedido.get('tipo_reembolso') or '').strip().lower()
+        return bool(tipo) and tipo != 'nenhum'
+
+    def _pedido_exige_cp_pago(pedido):
+        # À vista (não-reembolso) exige CP quitado antes de liberar 'em compra'.
+        # Reembolso já está comprado → libera normal mesmo sendo à vista/pix.
+        return _pedido_eh_avista(pedido.get('forma_pagamento')) and not _pedido_eh_reembolso(pedido)
+
     def _ensure_pedido_payable(pedido):
         """Cria contas_a_pagar para um pedido_compra de forma idempotente.
         Retorna contas_pagar_id (existente ou novo), ou None se falhar/pular."""
@@ -8585,7 +8596,7 @@ def create_app():
         try:
             pedido_row = (
                 supabase.table('pedidos_compra')
-                .select('id, filial_id, valor_total, fornecedor, numero_pedido, forma_pagamento, '
+                .select('id, filial_id, valor_total, fornecedor, numero_pedido, forma_pagamento, tipo_reembolso, '
                         'data_pedido, data_vencimento, data_necessidade, prazo_pagamento, contas_pagar_id')
                 .eq('id', pedido_id)
                 .limit(1)
@@ -8597,9 +8608,9 @@ def create_app():
             if not ensure_profile_can_access_filial(profile, pedido.get('filial_id')):
                 return jsonify({'error': 'Sem permissão para esta base.'}), 403
 
-            # À vista (pix/dinheiro/débito): só libera 'em compra' depois de quitar o
-            # Contas a Pagar. A prazo segue normal.
-            if novo_status == 'em_compra' and _pedido_eh_avista(pedido.get('forma_pagamento')):
+            # À vista (pix/dinheiro/débito) e não-reembolso: só libera 'em compra' depois
+            # de quitar o Contas a Pagar. A prazo e reembolso seguem normal.
+            if novo_status == 'em_compra' and _pedido_exige_cp_pago(pedido):
                 if not _contas_pagar_esta_pago(pedido.get('contas_pagar_id')):
                     return jsonify({'error': 'Pagamento à vista: quite o lançamento em Contas a Pagar antes de iniciar a compra.'}), 400
 

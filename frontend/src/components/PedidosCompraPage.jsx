@@ -1330,8 +1330,9 @@ function StatusBadge({ pedido, onRefresh, isAutor }) {
   const [busy, setBusy] = useState(false)
   const next = STATUS_NEXT[pedido.status]
   const canCancel = isAutor && CAN_CANCEL.has(pedido.status)
-  // À vista (pix/dinheiro/débito): só libera "em compra" após quitar o Contas a Pagar.
-  const bloqueadoAvista = pedido.status === 'aprovado' && next?.status === 'em_compra' && pedido.eh_avista && !pedido.cp_pago
+  // À vista não-reembolso: só libera "em compra" após quitar o Contas a Pagar.
+  // Reembolso (já comprado pelo solicitante) e a prazo seguem normal.
+  const bloqueadoAvista = pedido.status === 'aprovado' && next?.status === 'em_compra' && pedido.exige_cp_pago && !pedido.cp_pago
 
   async function advance(s) {
     if (s === 'cancelado') {
