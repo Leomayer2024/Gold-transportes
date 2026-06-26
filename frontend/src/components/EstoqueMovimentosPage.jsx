@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { api } from '../services/api'
 import { useAuth } from '../context/AuthContext'
-import { canCreateResource } from '../lib/permissions'
+import { canCreateResource, hasActionPermission } from '../lib/permissions'
 
 // ─── Opções ───────────────────────────────────────────────────────────────────
 
@@ -106,6 +106,19 @@ function LancarNotaModal({ filiais, colaboradores, itens, filialId, preItemId, o
     }
     onClose()
   }
+
+  const canAjuste = hasActionPermission(profile, 'action.estoque.ajuste')
+  const tipoOptsVisiveis = useMemo(
+    () => canAjuste ? TIPO_OPTS : TIPO_OPTS.filter(o => o.value !== 'ajuste_positivo' && o.value !== 'ajuste_negativo'),
+    [canAjuste],
+  )
+
+  // Sem permissão de ajuste, nunca deixa o tipo travado num ajuste.
+  useEffect(() => {
+    if (!canAjuste && (tipo === 'ajuste_positivo' || tipo === 'ajuste_negativo')) {
+      setTipo('entrada')
+    }
+  }, [canAjuste, tipo])
 
   const cfg = TIPO_CFG[tipo] || TIPO_CFG.entrada
   const isMulti = cfg.multi
@@ -226,7 +239,7 @@ function LancarNotaModal({ filiais, colaboradores, itens, filialId, preItemId, o
           {/* Tipo */}
           <label className="form-label">Tipo de movimento *
             <select className="form-input" value={tipo} onChange={e => setTipo(e.target.value)}>
-              {TIPO_OPTS.map(o => <option key={o.value} value={o.value}>{o.icon} {o.label}</option>)}
+              {tipoOptsVisiveis.map(o => <option key={o.value} value={o.value}>{o.icon} {o.label}</option>)}
             </select>
           </label>
 

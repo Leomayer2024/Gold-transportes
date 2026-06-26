@@ -63,6 +63,34 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(payload),
     }),
+  updateLoadingEvent: (journeyId, eventId, payload) =>
+    request(`/carregamento/jornadas/${journeyId}/eventos/${eventId}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  deleteLoadingEvent: (journeyId, eventId) =>
+    request(`/carregamento/jornadas/${journeyId}/eventos/${eventId}`, {
+      method: 'DELETE',
+    }),
+  deleteLoadingJourney: (journeyId) =>
+    request(`/carregamento/jornadas/${journeyId}`, {
+      method: 'DELETE',
+    }),
+  reopenLoadingJourney: (journeyId) =>
+    request(`/carregamento/jornadas/${journeyId}/reabrir`, {
+      method: 'POST',
+    }),
+  closeLoadingShift: (payload) =>
+    request('/carregamento/turno/fechamento', {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  reopenLoadingShift: (params = {}) => {
+    const search = new URLSearchParams(params)
+    return request(`/carregamento/turno/fechamento?${search.toString()}`, {
+      method: 'DELETE',
+    })
+  },
   getPermissionsConfig: () => request('/permissoes/config'),
   getPermissionsDetail: (collaboratorId) => request(`/permissoes/${collaboratorId}`),
   updatePermissions: (collaboratorId, payload) =>

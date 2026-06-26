@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../services/api'
 
 const LOADING_CACHE_KEY = 'seg-loading-cache'
@@ -38,6 +38,20 @@ function formatDateTime(value) {
   }
 
   return parsed.toLocaleString('pt-BR')
+}
+
+function toDateTimeLocal(value) {
+  if (!value) {
+    return ''
+  }
+
+  const parsed = new Date(value)
+  if (Number.isNaN(parsed.getTime())) {
+    return ''
+  }
+
+  const pad = (number) => String(number).padStart(2, '0')
+  return `${parsed.getFullYear()}-${pad(parsed.getMonth() + 1)}-${pad(parsed.getDate())}T${pad(parsed.getHours())}:${pad(parsed.getMinutes())}`
 }
 
 function timelineLabel(evento, motivosMap) {
@@ -87,6 +101,10 @@ export default function LoadingPage() {
   const [pauseDrafts, setPauseDrafts] = useState({})
   const [occurrenceDrafts, setOccurrenceDrafts] = useState({})
   const [closingDrafts, setClosingDrafts] = useState({})
+  const [editingEventId, setEditingEventId] = useState(null)
+  const [eventDraft, setEventDraft] = useState({ inicio_evento: '', fim_evento: '' })
+  const [turnoFechamento, setTurnoFechamento] = useState(null)
+  const eventSaveTimer = useRef(null)
 
   useEffect(() => {
     let active = true
@@ -154,6 +172,7 @@ export default function LoadingPage() {
 
         setConfig((current) => ({ ...current, database_ready: response.database_ready }))
         setJourneys(response.items || [])
+        setTurnoFechamento(response.turno_fechamento || null)
         writeLoadingCache({
           config: {
             ...config,
@@ -351,6 +370,7 @@ export default function LoadingPage() {
       ...(selectedTurno ? { turno: selectedTurno } : {}),
     })
     setJourneys(response.items || [])
+    setTurnoFechamento(response.turno_fechamento || null)
     setConfig((current) => ({ ...current, database_ready: response.database_ready }))
   }
 
@@ -404,6 +424,186 @@ export default function LoadingPage() {
       await api.closeLoadingJourney(journeyId, draft)
       await refreshJourneys()
       setFeedback('Jornada finalizada com sucesso.')
+    } catch (error) {
+      setErrorMessage(error.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function startEventEdit(evento) {
+    setEditingEventId(String(evento.id))
+    setEventDraft({
+      inicio_evento: toDateTimeLocal(evento.inicio_evento),
+      fim_evento: toDateTimeLocal(evento.fim_evento),
+    })
+    setFeedback('')
+    setErrorMessage('')
+  }
+
+  function cancelEventEdit() {
+    if (eventSaveTimer.current) {
+      clearTimeout(eventSaveTimer.current)
+      eventSaveTimer.current = null
+    }
+    setEditingEventId(null)
+    setEventDraft({ inicio_evento: '', fim_evento: '' })
+  }
+
+  // Salva o horário do evento automaticamente (sem botão Salvar).
+  async function persistEvent(journeyId, eventId, draft) {
+    if (!draft.inicio_evento) {
+      setErrorMessage('O início do evento não pode ficar em branco. Para remover, use Excluir.')
+      return
+    }
+    setSaving(true)
+    setErrorMessage('')
+    try {
+      await api.updateLoadingEvent(journeyId, eventId, {
+        inicio_evento: draft.inicio_evento,
+        fim_evento: draft.fim_evento || '',
+      })
+      await refreshJourneys()
+      setFeedback('Horário atualizado automaticamente.')
+    } catch (error) {
+      setErrorMessage(error.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function changeEventDraft(journeyId, eventId, patch, { immediate = false } = {}) {
+    setEventDraft((current) => {
+      const next = { ...current, ...patch }
+      if (eventSaveTimer.current) clearTimeout(eventSaveTimer.current)
+      if (immediate) {
+        persistEvent(journeyId, eventId, next)
+      } else {
+        eventSaveTimer.current = setTimeout(() => persistEvent(journeyId, eventId, next), 700)
+      }
+      return next
+    })
+  }
+
+  async function handleReopenJourney(journeyId) {
+    if (!window.confirm('Reabrir esta jornada finalizada? O fechamento será removido e ela volta para "em operação".')) {
+      return
+    }
+    setSaving(true)
+    setFeedback('')
+    setErrorMessage('')
+    try {
+      await api.reopenLoadingJourney(journeyId)
+      await refreshJourneys()
+      setFeedback('Jornada reaberta. Ajuste o que precisar e finalize de novo.')
+    } catch (error) {
+      setErrorMessage(error.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleResetOpenEvent(journeyId, evento) {
+    const tipo = evento.tipo_evento === 'parada' ? 'parada' : 'carga'
+    if (!window.confirm(`Resetar a ${tipo} em aberto? O evento será removido e você pode iniciar de novo.`)) {
+      return
+    }
+    setSaving(true)
+    setFeedback('')
+    setErrorMessage('')
+    try {
+      await api.deleteLoadingEvent(journeyId, evento.id)
+      await refreshJourneys()
+      cancelEventEdit()
+      setFeedback(`${tipo === 'parada' ? 'Parada' : 'Carga'} em aberto resetada.`)
+    } catch (error) {
+      setErrorMessage(error.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleEncerrarTurno(encerradoEm) {
+    if (!selectedFilial) {
+      setErrorMessage('Selecione uma base (não "Todas") para encerrar o turno.')
+      return
+    }
+    setSaving(true)
+    setFeedback('')
+    setErrorMessage('')
+    try {
+      const fechamento = await api.closeLoadingShift({
+        data_operacao: selectedDate,
+        filial_id: Number(selectedFilial),
+        turno: selectedTurno,
+        ...(encerradoEm ? { encerrado_em: encerradoEm } : {}),
+      })
+      setTurnoFechamento(fechamento || null)
+      setFeedback('Turno encerrado. Operação do dia/noite finalizada.')
+    } catch (error) {
+      setErrorMessage(error.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleReabrirTurno() {
+    if (!window.confirm('Reabrir o turno? O horário de encerramento será removido.')) {
+      return
+    }
+    setSaving(true)
+    setFeedback('')
+    setErrorMessage('')
+    try {
+      await api.reopenLoadingShift({
+        data: selectedDate,
+        filial_id: Number(selectedFilial),
+        turno: selectedTurno,
+      })
+      setTurnoFechamento(null)
+      setFeedback('Turno reaberto.')
+    } catch (error) {
+      setErrorMessage(error.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDeleteEvent(journeyId, eventId) {
+    if (!window.confirm('Excluir este registro da linha do tempo? Esta ação não pode ser desfeita.')) {
+      return
+    }
+
+    setSaving(true)
+    setFeedback('')
+    setErrorMessage('')
+
+    try {
+      await api.deleteLoadingEvent(journeyId, eventId)
+      await refreshJourneys()
+      cancelEventEdit()
+      setFeedback('Registro excluído com sucesso.')
+    } catch (error) {
+      setErrorMessage(error.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function handleDeleteJourney(journey) {
+    if (!window.confirm(`Excluir a jornada do caminhão ${journey.placa || journey.id}? Todos os eventos e o fechamento serão removidos.`)) {
+      return
+    }
+
+    setSaving(true)
+    setFeedback('')
+    setErrorMessage('')
+
+    try {
+      await api.deleteLoadingJourney(journey.id)
+      await refreshJourneys()
+      cancelEventEdit()
+      setFeedback('Jornada excluída com sucesso.')
     } catch (error) {
       setErrorMessage(error.message)
     } finally {
@@ -629,6 +829,49 @@ export default function LoadingPage() {
               </div>
             </div>
 
+            {config.can_operate && (
+              <div className="surface-card loading-turno-fechamento" style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 12, padding: '12px 16px', marginBottom: 12 }}>
+                {turnoFechamento ? (
+                  <>
+                    <div style={{ flex: '1 1 240px' }}>
+                      <span className="eyebrow">Turno encerrado</span>
+                      <strong style={{ display: 'block' }}>Operação do {selectedTurno} finalizada</strong>
+                    </div>
+                    <label className="field" style={{ flex: '0 1 220px' }}>
+                      <span>Horário de encerramento</span>
+                      <input
+                        disabled={saving}
+                        onChange={(event) => setTurnoFechamento((current) => ({ ...current, encerrado_em: event.target.value ? new Date(event.target.value).toISOString() : current.encerrado_em }))}
+                        onBlur={(event) => { if (event.target.value) handleEncerrarTurno(new Date(event.target.value).toISOString()) }}
+                        type="datetime-local"
+                        value={toDateTimeLocal(turnoFechamento.encerrado_em)}
+                      />
+                    </label>
+                    <button className="button-secondary" disabled={!config.can_operate || saving} onClick={handleReabrirTurno} type="button">
+                      Reabrir turno
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <div style={{ flex: '1 1 240px' }}>
+                      <span className="eyebrow">Encerrar turno</span>
+                      <strong style={{ display: 'block' }}>Marcar fim da operação do {selectedTurno}</strong>
+                      <small style={{ color: 'var(--text-muted)' }}>Registra o horário que acabou tudo. Não finaliza as jornadas — só marca o fim do dia/noite.</small>
+                    </div>
+                    <button
+                      className="button-primary"
+                      disabled={!config.can_operate || saving || !selectedFilial}
+                      onClick={() => handleEncerrarTurno()}
+                      title={!selectedFilial ? 'Selecione uma base (não "Todas")' : undefined}
+                      type="button"
+                    >
+                      Encerrar turno agora
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+
             <div className="loading-card-grid loading-card-grid-compact">
             {journeys.map((journey) => {
               const pauseDraft = pauseDrafts[journey.id] || {}
@@ -846,13 +1089,32 @@ export default function LoadingPage() {
                       </div>
 
                       <div className="button-row loading-action-row">
+                        {journey.status === 'finalizado' ? (
+                          <button
+                            className="button-secondary"
+                            disabled={!config.can_operate || saving}
+                            onClick={() => handleReopenJourney(journey.id)}
+                            type="button"
+                          >
+                            Reabrir jornada
+                          </button>
+                        ) : (
+                          <button
+                            className="button-primary"
+                            disabled={!config.can_operate || saving}
+                            onClick={() => handleCloseJourney(journey.id)}
+                            type="button"
+                          >
+                            Finalizar jornada
+                          </button>
+                        )}
                         <button
-                          className="button-primary"
-                          disabled={!config.can_operate || journey.status === 'finalizado' || saving}
-                          onClick={() => handleCloseJourney(journey.id)}
+                          className="button-danger"
+                          disabled={!config.can_plan || saving}
+                          onClick={() => handleDeleteJourney(journey)}
                           type="button"
                         >
-                          Finalizar jornada
+                          Excluir jornada
                         </button>
                       </div>
 
@@ -868,18 +1130,90 @@ export default function LoadingPage() {
                           <div className="empty-state">Nenhum evento lançado ainda.</div>
                         ) : (
                           <ul className="loading-timeline-list">
-                            {journey.eventos.map((evento) => (
-                              <li className="loading-timeline-item" key={evento.id}>
-                                <strong>{timelineLabel(evento, motivosMap)}</strong>
-                                <span>
-                                  {formatDateTime(evento.inicio_evento)}
-                                  {evento.fim_evento ? ` até ${formatDateTime(evento.fim_evento)}` : ' em aberto'}
-                                </span>
-                                <small>
-                                  {evento.tipo_evento === 'ocorrencia' ? evento.observacao || 'Sem detalhe' : `Duração ${formatMinutes(evento.duration_minutes)}`}
-                                </small>
-                              </li>
-                            ))}
+                            {journey.eventos.map((evento) => {
+                              const isEditing = editingEventId === String(evento.id)
+                              const isOpenEvent = !evento.fim_evento && (evento.tipo_evento === 'carga' || evento.tipo_evento === 'parada')
+
+                              return (
+                                <li className="loading-timeline-item" key={evento.id}>
+                                  <strong>{timelineLabel(evento, motivosMap)}</strong>
+                                  <span>
+                                    {formatDateTime(evento.inicio_evento)}
+                                    {evento.fim_evento ? ` até ${formatDateTime(evento.fim_evento)}` : ' em aberto'}
+                                  </span>
+                                  <small>
+                                    {evento.tipo_evento === 'ocorrencia' ? evento.observacao || 'Sem detalhe' : `Duração ${formatMinutes(evento.duration_minutes)}`}
+                                  </small>
+
+                                  {config.can_operate && !isEditing && (
+                                    <div className="button-row loading-timeline-actions">
+                                      <button className="button-secondary" disabled={saving} onClick={() => startEventEdit(evento)} type="button">
+                                        Editar horário/data
+                                      </button>
+                                      {isOpenEvent && (
+                                        <button className="button-secondary" disabled={saving} onClick={() => handleResetOpenEvent(journey.id, evento)} type="button">
+                                          Resetar (em aberto)
+                                        </button>
+                                      )}
+                                      <button className="button-danger" disabled={saving} onClick={() => handleDeleteEvent(journey.id, evento.id)} type="button">
+                                        Excluir
+                                      </button>
+                                    </div>
+                                  )}
+
+                                  {config.can_operate && isEditing && (
+                                    <div className="loading-timeline-edit">
+                                      <div className="loading-inline-grid">
+                                        <label className="field">
+                                          <span>Início</span>
+                                          <input
+                                            disabled={saving}
+                                            onBlur={() => persistEvent(journey.id, evento.id, eventDraft)}
+                                            onChange={(event) => changeEventDraft(journey.id, evento.id, { inicio_evento: event.target.value })}
+                                            type="datetime-local"
+                                            value={eventDraft.inicio_evento}
+                                          />
+                                        </label>
+                                        <label className="field">
+                                          <span>Fim (deixe em branco para "em aberto")</span>
+                                          <input
+                                            disabled={saving || !eventDraft.fim_evento}
+                                            onBlur={() => persistEvent(journey.id, evento.id, eventDraft)}
+                                            onChange={(event) => changeEventDraft(journey.id, evento.id, { fim_evento: event.target.value })}
+                                            type="datetime-local"
+                                            value={eventDraft.fim_evento}
+                                          />
+                                          <label className="checkbox-inline" style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 6, fontWeight: 400 }}>
+                                            <input
+                                              checked={!eventDraft.fim_evento}
+                                              disabled={saving}
+                                              onChange={(event) => changeEventDraft(
+                                                journey.id, evento.id,
+                                                { fim_evento: event.target.checked ? '' : (eventDraft.inicio_evento || toDateTimeLocal(new Date().toISOString())) },
+                                                { immediate: true },
+                                              )}
+                                              type="checkbox"
+                                            />
+                                            <span>Em aberto (sem horário de fim)</span>
+                                          </label>
+                                        </label>
+                                      </div>
+                                      <div className="loading-autosave-hint" style={{ fontSize: 12, color: 'var(--text-muted)', margin: '2px 0 8px' }}>
+                                        {saving ? 'Salvando…' : '✓ Alterações salvas automaticamente'}
+                                      </div>
+                                      <div className="button-row loading-timeline-actions">
+                                        <button className="button-secondary" disabled={saving} onClick={cancelEventEdit} type="button">
+                                          Fechar edição
+                                        </button>
+                                        <button className="button-danger" disabled={saving} onClick={() => handleDeleteEvent(journey.id, evento.id)} type="button">
+                                          Excluir
+                                        </button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </li>
+                              )
+                            })}
                           </ul>
                         )}
                       </div>

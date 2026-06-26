@@ -424,7 +424,7 @@ export default function EstoquePage() {
                 <th style={{ textAlign: 'right' }}>Estoque atual</th>
                 <th style={{ textAlign: 'right' }}>Mínimo</th>
                 <th>Status</th>
-                <th style={{ width: 100 }}></th>
+                <th style={{ width: 180 }}></th>
               </tr>
             </thead>
             <tbody>
@@ -459,14 +459,26 @@ export default function EstoquePage() {
                     </span>
                   </td>
                   <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                    <button
-                      className="button-secondary"
-                      style={{ fontSize: 12, padding: '4px 10px' }}
-                      type="button"
-                      onClick={() => navigate('/estoque/movimentos', { state: { itemId: item.id, itemNome: item.nome } })}
-                    >
-                      Movimentação
-                    </button>
+                    <div style={{ display: 'inline-flex', gap: 6 }}>
+                      {canCreate && (
+                        <button
+                          className="button-secondary"
+                          style={{ fontSize: 12, padding: '4px 10px' }}
+                          type="button"
+                          onClick={() => setModalItem(item)}
+                        >
+                          Editar
+                        </button>
+                      )}
+                      <button
+                        className="button-secondary"
+                        style={{ fontSize: 12, padding: '4px 10px' }}
+                        type="button"
+                        onClick={() => navigate('/estoque/movimentos', { state: { itemId: item.id, itemNome: item.nome } })}
+                      >
+                        Movimentação
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}

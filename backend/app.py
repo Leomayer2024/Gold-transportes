@@ -578,6 +578,48 @@ RESOURCE_DEFINITIONS = {
         'create_scope': 'create.notas_cte',
         'filial_scope_field': 'filial_id',
     },
+    'notas_fiscais_servico': {
+        'table': 'notas_fiscais_servico',
+        'order': 'data_emissao',
+        'required_fields': ['tomador_nome'],
+        'allowed_fields': [
+            'filial_id', 'cliente_id',
+            'numero', 'codigo_verificacao', 'competencia', 'data_emissao', 'status',
+            'prestador_cnpj', 'prestador_nome', 'prestador_endereco', 'prestador_inscricao_municipal',
+            'prestador_email', 'prestador_municipio', 'prestador_telefone', 'prestador_cep',
+            'tomador_cnpj', 'tomador_nome', 'tomador_endereco', 'tomador_inscricao_municipal',
+            'tomador_email', 'tomador_municipio', 'tomador_telefone', 'tomador_cep',
+            'cnae', 'item_lista_servico', 'discriminacao', 'local_prestacao',
+            'municipio_incidencia', 'pais_prestacao',
+            'optante_simples', 'regime_especial', 'exigibilidade_issqn', 'issqn_retido',
+            'responsavel_recolhimento',
+            'valor_servicos', 'total_deducoes', 'desconto_incondicionado', 'desconto_condicionado',
+            'base_calculo', 'aliquota_issqn', 'valor_issqn',
+            'valor_irrf', 'valor_pis', 'valor_cofins', 'valor_inss', 'valor_csll',
+            'outras_retencoes', 'total_retencoes', 'valor_liquido',
+            'informacoes_complementares', 'observacoes', 'ativo',
+        ],
+        'partial_match_fields': ['numero', 'codigo_verificacao', 'tomador_nome', 'tomador_cnpj', 'discriminacao'],
+        'nullable_fields': [
+            'filial_id', 'cliente_id', 'numero', 'codigo_verificacao', 'competencia', 'data_emissao',
+            'prestador_cnpj', 'prestador_nome', 'prestador_endereco', 'prestador_inscricao_municipal',
+            'prestador_email', 'prestador_municipio', 'prestador_telefone', 'prestador_cep',
+            'tomador_cnpj', 'tomador_endereco', 'tomador_inscricao_municipal',
+            'tomador_email', 'tomador_municipio', 'tomador_telefone', 'tomador_cep',
+            'cnae', 'item_lista_servico', 'discriminacao', 'local_prestacao',
+            'municipio_incidencia', 'pais_prestacao', 'regime_especial', 'exigibilidade_issqn',
+            'responsavel_recolhimento',
+            'valor_servicos', 'total_deducoes', 'desconto_incondicionado', 'desconto_condicionado',
+            'base_calculo', 'aliquota_issqn', 'valor_issqn',
+            'valor_irrf', 'valor_pis', 'valor_cofins', 'valor_inss', 'valor_csll',
+            'outras_retencoes', 'total_retencoes', 'valor_liquido',
+            'informacoes_complementares', 'observacoes',
+        ],
+        'view_scope': 'menu.notas_fiscais_servico',
+        'create_scope': 'create.notas_fiscais_servico',
+        'filial_scope_field': 'filial_id',
+        'filial_scope_include_null': True,
+    },
     'cargos': {
         'table': 'cargos',
         'order': 'ordem',
@@ -961,6 +1003,8 @@ PERMISSION_SCOPE_GROUPS = [
             {'name': 'create.contas_pagar',   'label': 'Lançar contas a pagar',    'platforms': ['web'], 'auto_enable': ['menu.contas_pagar'],    'description': 'Permite criar e editar lançamentos de contas a pagar.'},
             {'name': 'menu.banco',            'label': 'Ver banco / conciliação',  'platforms': ['web'], 'auto_enable': [],                      'description': 'Gestão de contas bancárias, lançamentos e conciliação com contas a receber e pagar.'},
             {'name': 'create.banco',          'label': 'Lançar no banco',          'platforms': ['web'], 'auto_enable': ['menu.banco'],           'description': 'Permite cadastrar contas bancárias, lançamentos e marcar conciliações.'},
+            {'name': 'menu.notas_fiscais_servico',   'label': 'Ver NFSe emitidas',     'platforms': ['web'], 'auto_enable': [],                              'description': 'Cadastro e consulta das NFSe emitidas pela Gold como prestadora do serviço.'},
+            {'name': 'create.notas_fiscais_servico', 'label': 'Cadastrar NFSe',        'platforms': ['web'], 'auto_enable': ['menu.notas_fiscais_servico'],  'description': 'Permite cadastrar, editar e cancelar dados das NFSe emitidas.'},
         ],
     },
     # ── Estoque ───────────────────────────────────────────────────────────────
@@ -1026,6 +1070,7 @@ PERMISSION_SCOPE_GROUPS = [
             {'name': 'action.global.bulk_export',     'label': 'Exportar listas em massa (genérico)',      'platforms': ['web'], 'auto_enable': [],                              'description': 'Mostra botões "Exportar selecionados" e "Exportar tudo" em listas que suportam exportação.'},
             {'name': 'action.global.bulk_delete',     'label': 'Excluir em massa (genérico)',              'platforms': ['web'], 'auto_enable': [],                              'description': 'Permite seleção múltipla + exclusão em lote em listas que suportam (ação destrutiva).'},
             {'name': 'action.ponto.exportar',         'label': 'Exportar ponto para Excel',                'platforms': ['web'], 'auto_enable': ['menu.ponto'],                  'description': 'Mostra o botão "Exportar Excel" na tela de Ponto e habilita o download da planilha de batidas.'},
+            {'name': 'action.estoque.ajuste',         'label': 'Ajustar inventário (ajuste +/−)',          'platforms': ['web', 'app'], 'auto_enable': ['menu.estoque_movimentos'], 'description': 'Mostra os tipos "Ajuste positivo" e "Ajuste negativo" no lançamento de movimento. Sem esta permissão o usuário só registra entradas, saídas e trocas — não corrige o saldo do inventário diretamente.'},
         ],
     },
 ]
@@ -4815,6 +4860,30 @@ def create_app():
             for row in (response.data or [])
         }
 
+    def fetch_turno_fechamento(target_date, filial_id, turno):
+        """Fechamento de turno (horário em que a operação do dia/noite terminou).
+
+        Nível turno = (data_operacao, filial, turno). Tabela opcional: se a
+        migration ainda não rodou, retorna None sem quebrar a tela.
+        """
+        if not (target_date and filial_id and turno):
+            return None
+        if not table_exists_ready('jornada_turno_fechamentos'):
+            return None
+        try:
+            resp = (
+                supabase.table('jornada_turno_fechamentos')
+                .select('*')
+                .eq('data_operacao', target_date.isoformat())
+                .eq('filial_id', filial_id)
+                .eq('turno', turno)
+                .limit(1)
+                .execute()
+            )
+            return resp.data[0] if resp.data else None
+        except Exception:
+            return None
+
     def fetch_collaborator_labels(collaborator_ids):
         if not collaborator_ids:
             return {}
@@ -5338,6 +5407,23 @@ def create_app():
         # Anteriormente liberava tudo (backdoor de privilégio).
         known_scopes = set(profile.get('permission_scopes') or [])
         return scope_name in known_scopes
+
+    def profile_can_ajustar_estoque(profile):
+        """Permissão granular para ajuste +/− de inventário.
+
+        Espelha hasActionPermission do frontend: super admin libera; escopo
+        explícito libera; e — por compatibilidade — usuário sem NENHUM escopo
+        'action.*' configurado continua liberado (cadastros antigos não perdem
+        o botão). Assim que o admin marca ao menos uma ação, só as marcadas valem.
+        """
+        if profile.get('is_super_admin'):
+            return True
+        scopes = set(profile.get('permission_scopes') or [])
+        if 'action.estoque.ajuste' in scopes:
+            return True
+        if any(s.startswith('action.') for s in scopes):
+            return False
+        return True
 
     def build_profile(collaborator, user):
         detailed_permissions = fetch_permissions(collaborator['id'])
@@ -7763,6 +7849,29 @@ def create_app():
         if filial_scope_field and not ensure_profile_can_access_filial(profile, payload.get(filial_scope_field)):
             return jsonify({'error': 'Sem permissão para cadastrar dados nesta base.'}), 403
 
+        # Bloqueia item de estoque duplicado (mesma filial + mesmo nome, ativo).
+        # Sem isso, dois itens iguais geram saldos separados e a movimentação cai
+        # em um item enquanto a lista mostra o outro zerado.
+        if resource_name == 'estoque_itens':
+            nome_novo = (payload.get('nome') or '').strip()
+            filial_novo = payload.get('filial_id')
+            if nome_novo and filial_novo is not None:
+                try:
+                    existentes = (
+                        supabase.table('estoque_itens')
+                        .select('id, nome')
+                        .eq('filial_id', filial_novo)
+                        .eq('ativo', True)
+                        .ilike('nome', nome_novo)
+                        .limit(1)
+                        .execute()
+                        .data or []
+                    )
+                    if existentes:
+                        return jsonify({'error': f'Já existe um item ativo "{nome_novo}" nesta base. Use a movimentação para ajustar o saldo em vez de cadastrar de novo.'}), 409
+                except Exception as _dup_exc:
+                    app.logger.warning('Falha ao checar duplicata de estoque_itens: %s', _dup_exc)
+
         # Gera número de solicitação antes do INSERT para incluir diretamente no payload
         _SOLICITACAO_TIPO_MAP = {
             'manutencoes': 'manutencoes',
@@ -8080,6 +8189,8 @@ def create_app():
         item_id = parse_int_or_default(raw_payload.get('item_id'), None)
         filial_id = parse_int_or_default(raw_payload.get('filial_id'), None)
         tipo = (raw_payload.get('tipo') or '').strip().lower()
+        if tipo in {'ajuste_positivo', 'ajuste_negativo'} and not profile_can_ajustar_estoque(profile):
+            return jsonify({'error': 'Sem permissão para ajustar inventário (ajuste positivo/negativo).'}), 403
         quantidade = max(0.001, parse_float_or_default(raw_payload.get('quantidade'), 0))
         colaborador_id = parse_int_or_default(raw_payload.get('colaborador_id'), None)
         registrado_por = parse_int_or_default(raw_payload.get('registrado_por'), None)
@@ -8213,6 +8324,8 @@ def create_app():
             return jsonify({'error': 'Informe a filial.'}), 400
         if tipo not in ESTOQUE_TIPOS:
             return jsonify({'error': 'Tipo inválido.'}), 400
+        if tipo in {'ajuste_positivo', 'ajuste_negativo'} and not profile_can_ajustar_estoque(profile):
+            return jsonify({'error': 'Sem permissão para ajustar inventário (ajuste positivo/negativo).'}), 403
         if not itens or not isinstance(itens, list):
             return jsonify({'error': 'Adicione pelo menos 1 item.'}), 400
         if not ensure_profile_can_access_filial(profile, filial_id):
@@ -11588,6 +11701,7 @@ def create_app():
                 'database_ready': True,
                 'date': target_date.isoformat(),
                 'items': list_loading_journeys(profile, target_date, filial_id, turno),
+                'turno_fechamento': fetch_turno_fechamento(target_date, filial_id, turno),
             })
         except Exception as exc:
             app.logger.error('Erro ao listar jornadas de carregamento: %s', exc)
@@ -11930,6 +12044,264 @@ def create_app():
             return jsonify(current_item or {'status': 'ok'})
         except Exception as exc:
             app.logger.error('Erro ao finalizar jornada de carregamento: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 400
+
+    def normalize_loading_event_datetime(raw_value):
+        """Converte datetime do front (datetime-local ou ISO) em ISO com timezone.
+
+        Retorna (iso_string_ou_None, erro_ou_None). Valor vazio vira None (campo em branco).
+        """
+        if raw_value in (None, ''):
+            return None, None
+        parsed = parse_iso_datetime(raw_value)
+        if not parsed:
+            return None, 'Data/hora informada é inválida.'
+        if parsed.tzinfo is None:
+            parsed = parsed.astimezone()
+        return parsed.isoformat(), None
+
+    @app.put('/api/carregamento/jornadas/<int:journey_id>/eventos/<int:event_id>')
+    @require_auth
+    def loading_update_event(profile, journey_id, event_id):
+        scope_error = require_scope_permission(profile, 'manage.operacao_carregamento', 'Sem permissão para ajustar eventos de carregamento.')
+        if scope_error:
+            return scope_error
+
+        if not loading_tables_ready():
+            return jsonify({'error': 'As tabelas do módulo de carregamento ainda não existem. Rode a migration primeiro.'}), 400
+
+        journey, journey_error = ensure_loading_journey_allowed(profile, journey_id)
+        if journey_error:
+            return journey_error
+
+        existing = (
+            supabase.table('jornada_carregamento_eventos')
+            .select('*')
+            .eq('id', event_id)
+            .eq('jornada_id', journey_id)
+            .limit(1)
+            .execute()
+        ).data
+        if not existing:
+            return jsonify({'error': 'Evento não encontrado nesta jornada.'}), 404
+        event_row = existing[0]
+
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            payload = {}
+
+        update_fields = {}
+
+        if 'inicio_evento' in payload:
+            raw_inicio = payload.get('inicio_evento')
+            if raw_inicio in (None, ''):
+                return jsonify({'error': 'O início do evento não pode ficar em branco. Para remover o evento, use Excluir.'}), 400
+            inicio_iso, inicio_error = normalize_loading_event_datetime(raw_inicio)
+            if inicio_error:
+                return jsonify({'error': inicio_error}), 400
+            update_fields['inicio_evento'] = inicio_iso
+
+        if 'fim_evento' in payload:
+            fim_iso, fim_error = normalize_loading_event_datetime(payload.get('fim_evento'))
+            if fim_error:
+                return jsonify({'error': fim_error}), 400
+            update_fields['fim_evento'] = fim_iso
+
+        if not update_fields:
+            return jsonify({'error': 'Nada para atualizar.'}), 400
+
+        final_inicio = update_fields.get('inicio_evento', event_row.get('inicio_evento'))
+        final_fim = update_fields.get('fim_evento') if 'fim_evento' in update_fields else event_row.get('fim_evento')
+        if final_inicio and final_fim:
+            inicio_dt = parse_iso_datetime(final_inicio)
+            fim_dt = parse_iso_datetime(final_fim)
+            if inicio_dt and fim_dt and fim_dt < inicio_dt:
+                return jsonify({'error': 'O fim do evento não pode ser anterior ao início.'}), 400
+
+        try:
+            supabase.table('jornada_carregamento_eventos').update(update_fields).eq('id', event_id).eq('jornada_id', journey_id).execute()
+            items = list_loading_journeys(profile, parse_iso_date(journey['data_operacao']), journey['filial_id'], journey['turno'])
+            current_item = next((item for item in items if int(item['id']) == int(journey_id)), None)
+            return jsonify(current_item or {'status': 'ok'})
+        except Exception as exc:
+            app.logger.error('Erro ao ajustar evento de carregamento: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 400
+
+    @app.delete('/api/carregamento/jornadas/<int:journey_id>/eventos/<int:event_id>')
+    @require_auth
+    def loading_delete_event(profile, journey_id, event_id):
+        scope_error = require_scope_permission(profile, 'manage.operacao_carregamento', 'Sem permissão para excluir eventos de carregamento.')
+        if scope_error:
+            return scope_error
+
+        if not loading_tables_ready():
+            return jsonify({'error': 'As tabelas do módulo de carregamento ainda não existem. Rode a migration primeiro.'}), 400
+
+        journey, journey_error = ensure_loading_journey_allowed(profile, journey_id)
+        if journey_error:
+            return journey_error
+
+        existing = (
+            supabase.table('jornada_carregamento_eventos')
+            .select('id')
+            .eq('id', event_id)
+            .eq('jornada_id', journey_id)
+            .limit(1)
+            .execute()
+        ).data
+        if not existing:
+            return jsonify({'error': 'Evento não encontrado nesta jornada.'}), 404
+
+        try:
+            supabase.table('jornada_carregamento_eventos').delete().eq('id', event_id).eq('jornada_id', journey_id).execute()
+            items = list_loading_journeys(profile, parse_iso_date(journey['data_operacao']), journey['filial_id'], journey['turno'])
+            current_item = next((item for item in items if int(item['id']) == int(journey_id)), None)
+            return jsonify(current_item or {'status': 'ok'})
+        except Exception as exc:
+            app.logger.error('Erro ao excluir evento de carregamento: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 400
+
+    @app.delete('/api/carregamento/jornadas/<int:journey_id>')
+    @require_auth
+    def loading_delete_journey(profile, journey_id):
+        scope_error = require_scope_permission(profile, 'manage.programacao_carregamento', 'Sem permissão para excluir jornadas de carregamento.')
+        if scope_error:
+            return scope_error
+
+        if not loading_tables_ready():
+            return jsonify({'error': 'As tabelas do módulo de carregamento ainda não existem. Rode a migration primeiro.'}), 400
+
+        journey, journey_error = ensure_loading_journey_allowed(profile, journey_id)
+        if journey_error:
+            return journey_error
+
+        try:
+            supabase.table('jornada_carregamento_eventos').delete().eq('jornada_id', journey_id).execute()
+            supabase.table('jornada_carregamento_fechamentos').delete().eq('jornada_id', journey_id).execute()
+            supabase.table('jornadas_carregamento').delete().eq('id', journey_id).execute()
+            return jsonify({'status': 'ok', 'deleted_id': journey_id})
+        except Exception as exc:
+            app.logger.error('Erro ao excluir jornada de carregamento: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 400
+
+    @app.post('/api/carregamento/jornadas/<int:journey_id>/reabrir')
+    @require_auth
+    def loading_reopen_journey(profile, journey_id):
+        """Reabre uma jornada finalizada: volta para em operação e remove o fechamento."""
+        scope_error = require_scope_permission(profile, 'manage.operacao_carregamento', 'Sem permissão para reabrir jornadas de carregamento.')
+        if scope_error:
+            return scope_error
+
+        if not loading_tables_ready():
+            return jsonify({'error': 'As tabelas do módulo de carregamento ainda não existem. Rode a migration primeiro.'}), 400
+
+        journey, journey_error = ensure_loading_journey_allowed(profile, journey_id)
+        if journey_error:
+            return journey_error
+        if journey.get('status') != 'finalizado':
+            return jsonify({'error': 'Só é possível reabrir uma jornada já finalizada.'}), 400
+
+        try:
+            supabase.table('jornada_carregamento_fechamentos').delete().eq('jornada_id', journey_id).execute()
+            supabase.table('jornadas_carregamento').update({
+                'status': 'em_operacao',
+                'finalizado_em': None,
+            }).eq('id', journey_id).execute()
+
+            items = list_loading_journeys(profile, parse_iso_date(journey['data_operacao']), journey['filial_id'], journey['turno'])
+            current_item = next((item for item in items if int(item['id']) == int(journey_id)), None)
+            return jsonify(current_item or {'status': 'ok'})
+        except Exception as exc:
+            app.logger.error('Erro ao reabrir jornada de carregamento: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 400
+
+    @app.put('/api/carregamento/turno/fechamento')
+    @require_auth
+    def loading_close_shift(profile):
+        """Encerra o turno: grava o horário em que a operação do dia/noite terminou.
+
+        Nível turno (data_operacao + filial + turno). Não finaliza jornadas —
+        só marca o fim da operação. O horário é editável (reenvio sobrescreve).
+        """
+        scope_error = require_scope_permission(profile, 'manage.operacao_carregamento', 'Sem permissão para encerrar o turno.')
+        if scope_error:
+            return scope_error
+
+        if not table_exists_ready('jornada_turno_fechamentos'):
+            return jsonify({'error': 'A tabela de fechamento de turno ainda não existe. Rode a migration 020_turno_fechamento.sql.'}), 400
+
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            payload = {}
+
+        target_date = parse_iso_date(payload.get('data_operacao'))
+        filial_id = parse_int_or_default(payload.get('filial_id'), None)
+        turno = (payload.get('turno') or '').strip().lower() or None
+
+        if not target_date:
+            return jsonify({'error': 'Informe a data da operação.'}), 400
+        if not filial_id:
+            return jsonify({'error': 'Selecione a base para encerrar o turno.'}), 400
+        if turno not in LOADING_SHIFT_OPTIONS:
+            return jsonify({'error': 'Turno informado é inválido.'}), 400
+        if not ensure_profile_can_access_filial(profile, filial_id):
+            return jsonify({'error': 'Sem permissão para esta base.'}), 403
+
+        encerrado_iso, encerrado_error = normalize_loading_event_datetime(payload.get('encerrado_em'))
+        if encerrado_error:
+            return jsonify({'error': encerrado_error}), 400
+        if not encerrado_iso:
+            encerrado_iso = now_iso()
+
+        record = {
+            'data_operacao': target_date.isoformat(),
+            'filial_id': filial_id,
+            'turno': turno,
+            'encerrado_em': encerrado_iso,
+            'encerrado_por': profile['user_id'],
+        }
+
+        try:
+            supabase.table('jornada_turno_fechamentos').upsert(
+                record, on_conflict='data_operacao,filial_id,turno'
+            ).execute()
+            return jsonify(fetch_turno_fechamento(target_date, filial_id, turno) or record)
+        except Exception as exc:
+            app.logger.error('Erro ao encerrar turno de carregamento: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 400
+
+    @app.delete('/api/carregamento/turno/fechamento')
+    @require_auth
+    def loading_reopen_shift(profile):
+        """Reabre o turno: remove o horário de encerramento."""
+        scope_error = require_scope_permission(profile, 'manage.operacao_carregamento', 'Sem permissão para reabrir o turno.')
+        if scope_error:
+            return scope_error
+
+        if not table_exists_ready('jornada_turno_fechamentos'):
+            return jsonify({'error': 'A tabela de fechamento de turno ainda não existe. Rode a migration 020_turno_fechamento.sql.'}), 400
+
+        target_date = parse_iso_date(request.args.get('data'))
+        filial_id = request.args.get('filial_id', type=int)
+        turno = (request.args.get('turno') or '').strip().lower() or None
+
+        if not target_date or not filial_id or turno not in LOADING_SHIFT_OPTIONS:
+            return jsonify({'error': 'Informe data, base e turno válidos.'}), 400
+        if not ensure_profile_can_access_filial(profile, filial_id):
+            return jsonify({'error': 'Sem permissão para esta base.'}), 403
+
+        try:
+            (
+                supabase.table('jornada_turno_fechamentos')
+                .delete()
+                .eq('data_operacao', target_date.isoformat())
+                .eq('filial_id', filial_id)
+                .eq('turno', turno)
+                .execute()
+            )
+            return jsonify({'status': 'ok'})
+        except Exception as exc:
+            app.logger.error('Erro ao reabrir turno de carregamento: %s', exc)
             return jsonify({'error': translate_database_error(exc)}), 400
 
     # ─── Gestão de Acessos (somente super admin) ─────────────────────────────
