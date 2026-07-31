@@ -4,6 +4,7 @@ import FiliaisPage from './components/FiliaisPage'
 import ColaboradoresPage from './components/ColaboradoresPage'
 import ColaboradorDocumentosPage from './components/ColaboradorDocumentosPage'
 import DiariasPage from './components/DiariasPage'
+import HotelariaPage from './components/HotelariaPage'
 import HotelariaAprovacoesPage from './components/HotelariaAprovacoesPage'
 import ContratosOperacionaisPage from './components/ContratosOperacionaisPage'
 import TesteContratoPage from './components/TesteContratoPage'
@@ -113,6 +114,7 @@ export default function App() {
           </Route>
           <Route element={<AccessRoute requiredScope="menu.diarias" />}>
             <Route path="/diarias" element={<DiariasPage />} />
+            <Route path="/hotelaria" element={<HotelariaPage />} />
           </Route>
           <Route element={<AccessRoute requiredScope="menu.hotelaria_aprovacoes" />}>
             <Route path="/hotelaria-aprovacoes" element={<HotelariaAprovacoesPage />} />

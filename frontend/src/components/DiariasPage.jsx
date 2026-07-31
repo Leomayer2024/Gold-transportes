@@ -287,9 +287,6 @@ function DiariasModal({ modo, solicitacao, itensIniciais, colaboradores, filiais
     rota: '',
     status: 'pendente',
     banco: '',
-    chave_pix: '',
-    favorecido: '',
-    dados_bancarios: '',
     observacoes: '',
   })
   const [itens, setItens] = useState(() => itensIniciais.length > 0 ? itensIniciais : [novoItem()])
@@ -355,9 +352,6 @@ function DiariasModal({ modo, solicitacao, itensIniciais, colaboradores, filiais
         rota: sol.rota || null,
         status: modo === 'nova' ? 'pendente' : (sol.status || 'pendente'),
         banco: sol.banco || null,
-        chave_pix: sol.chave_pix || null,
-        favorecido: sol.favorecido || null,
-        dados_bancarios: sol.dados_bancarios || null,
         observacoes: sol.observacoes || null,
         criado_por: profile?.id || null,
       }
@@ -441,15 +435,6 @@ function DiariasModal({ modo, solicitacao, itensIniciais, colaboradores, filiais
               <select value={sol.banco || ''} onChange={(e) => setSol({ ...sol, banco: e.target.value })}>
                 {BANCOS.map((b) => <option key={b} value={b}>{b || '— selecione —'}</option>)}
               </select>
-            </label>
-            <label><span>Favorecido (depósito)</span>
-              <input type="text" value={sol.favorecido || ''} onChange={(e) => setSol({ ...sol, favorecido: e.target.value })} placeholder="Nome de quem recebe" />
-            </label>
-            <label><span>Chave Pix</span>
-              <input type="text" value={sol.chave_pix || ''} onChange={(e) => setSol({ ...sol, chave_pix: e.target.value })} placeholder="CPF, e-mail, telefone ou aleatória" />
-            </label>
-            <label><span>Dados bancários</span>
-              <input type="text" value={sol.dados_bancarios || ''} onChange={(e) => setSol({ ...sol, dados_bancarios: e.target.value })} placeholder="Banco / agência / conta" />
             </label>
           </div>
 
