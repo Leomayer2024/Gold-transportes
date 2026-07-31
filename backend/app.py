@@ -46,8 +46,8 @@ RESOURCE_DEFINITIONS = {
         'table': 'filiais',
         'order': 'cidade',
         'required_fields': ['cidade', 'uf', 'parceira'],
-        'allowed_fields': ['cidade', 'uf', 'parceira', 'endereco', 'cnpj', 'telefone_filial', 'email_filial', 'ativo'],
-        'nullable_fields': ['endereco', 'cnpj', 'telefone_filial', 'email_filial'],
+        'allowed_fields': ['cidade', 'uf', 'parceira', 'endereco', 'cnpj', 'telefone_filial', 'email_filial', 'ativo', 'latitude', 'longitude', 'raio_metros'],
+        'nullable_fields': ['endereco', 'cnpj', 'telefone_filial', 'email_filial', 'latitude', 'longitude', 'raio_metros'],
         'partial_match_fields': ['cidade', 'uf', 'parceira'],
         'view_scope': 'menu.filiais',
         'create_scope': 'create.filiais',
@@ -68,10 +68,12 @@ RESOURCE_DEFINITIONS = {
             'horario_padrao_inicio',
             'horario_padrao_fim',
             'carga_horaria_semanal',
+            'carga_horaria_sabado',
             'intervalo_almoco_minutos',
             'salario_base_mensal',
             'percentual_periculosidade',
             'percentual_adicional_clt',
+            'percentual_desconto_vt',
             'adicional_noturno_sobre_periculosidade',
             'beneficios_tipos',
             'beneficios_mensais',
@@ -88,7 +90,7 @@ RESOURCE_DEFINITIONS = {
             'email',
             'ativo',
         ],
-        'nullable_fields': ['data_desligamento', 'horario_padrao_inicio', 'horario_padrao_fim', 'telefone', 'email_recuperacao', 'email'],
+        'nullable_fields': ['data_desligamento', 'horario_padrao_inicio', 'horario_padrao_fim', 'telefone', 'email_recuperacao', 'email', 'percentual_periculosidade', 'percentual_adicional_clt', 'percentual_desconto_vt', 'adicional_noturno_sobre_periculosidade'],
         'partial_match_fields': ['nome_completo', 'cargo', 'cpf'],
         'view_scope': 'menu.colaboradores',
         'view_scope_any': [
@@ -270,9 +272,10 @@ RESOURCE_DEFINITIONS = {
             'data_solicitacao','data_inicio','data_fim','rota','status','valor_total',
             'criado_por','aprovado_por','aprovado_em','motivo_reprovacao','reprovado_por',
             'reprovado_em','banco','observacoes','ativo',
+            'chave_pix','favorecido','dados_bancarios',
         ],
-        'partial_match_fields': ['cidade_destino','rota','status','numero_solicitacao','tipo','observacoes'],
-        'nullable_fields': ['numero_solicitacao','uf_destino','rota','criado_por','aprovado_por','aprovado_em','motivo_reprovacao','reprovado_por','reprovado_em','banco','observacoes'],
+        'partial_match_fields': ['cidade_destino','rota','status','numero_solicitacao','tipo','observacoes','favorecido'],
+        'nullable_fields': ['numero_solicitacao','uf_destino','rota','criado_por','aprovado_por','aprovado_em','motivo_reprovacao','reprovado_por','reprovado_em','banco','observacoes','chave_pix','favorecido','dados_bancarios'],
         'view_scope': 'menu.diarias',
         'create_scope': 'create.diarias',
         'filial_scope_field': 'filial_id',
@@ -563,6 +566,10 @@ RESOURCE_DEFINITIONS = {
             'descricao',
             'status',
             'categoria',
+            'natureza',
+            'gera_financeiro',
+            'conta_pagar_id',
+            'conta_receber_id',
             'pedido_compra_id',
             'comprovante_url',
             'observacoes',
@@ -572,7 +579,8 @@ RESOURCE_DEFINITIONS = {
         'nullable_fields': [
             'numero_documento', 'chave_acesso', 'emitente', 'destinatario',
             'data_emissao', 'data_vencimento', 'data_pagamento', 'descricao',
-            'categoria', 'pedido_compra_id', 'comprovante_url', 'observacoes',
+            'categoria', 'natureza', 'conta_pagar_id', 'conta_receber_id',
+            'pedido_compra_id', 'comprovante_url', 'observacoes',
         ],
         'view_scope': 'menu.notas_cte',
         'create_scope': 'create.notas_cte',
@@ -584,7 +592,7 @@ RESOURCE_DEFINITIONS = {
         'required_fields': ['tomador_nome'],
         'allowed_fields': [
             'filial_id', 'cliente_id',
-            'numero', 'codigo_verificacao', 'competencia', 'data_emissao', 'status',
+            'numero', 'codigo_verificacao', 'pedido_sap', 'competencia', 'data_emissao', 'status',
             'prestador_cnpj', 'prestador_nome', 'prestador_endereco', 'prestador_inscricao_municipal',
             'prestador_email', 'prestador_municipio', 'prestador_telefone', 'prestador_cep',
             'tomador_cnpj', 'tomador_nome', 'tomador_endereco', 'tomador_inscricao_municipal',
@@ -598,10 +606,12 @@ RESOURCE_DEFINITIONS = {
             'valor_irrf', 'valor_pis', 'valor_cofins', 'valor_inss', 'valor_csll',
             'outras_retencoes', 'total_retencoes', 'valor_liquido',
             'informacoes_complementares', 'observacoes', 'ativo',
+            'gera_financeiro', 'conta_receber_id',
+            'chave_acesso', 'contrato_operacional_id', 'tipo_servico',
         ],
-        'partial_match_fields': ['numero', 'codigo_verificacao', 'tomador_nome', 'tomador_cnpj', 'discriminacao'],
+        'partial_match_fields': ['numero', 'codigo_verificacao', 'pedido_sap', 'tomador_nome', 'tomador_cnpj', 'discriminacao', 'chave_acesso'],
         'nullable_fields': [
-            'filial_id', 'cliente_id', 'numero', 'codigo_verificacao', 'competencia', 'data_emissao',
+            'filial_id', 'cliente_id', 'numero', 'codigo_verificacao', 'pedido_sap', 'competencia', 'data_emissao',
             'prestador_cnpj', 'prestador_nome', 'prestador_endereco', 'prestador_inscricao_municipal',
             'prestador_email', 'prestador_municipio', 'prestador_telefone', 'prestador_cep',
             'tomador_cnpj', 'tomador_endereco', 'tomador_inscricao_municipal',
@@ -614,6 +624,8 @@ RESOURCE_DEFINITIONS = {
             'valor_irrf', 'valor_pis', 'valor_cofins', 'valor_inss', 'valor_csll',
             'outras_retencoes', 'total_retencoes', 'valor_liquido',
             'informacoes_complementares', 'observacoes',
+            'gera_financeiro', 'conta_receber_id',
+            'chave_acesso', 'contrato_operacional_id', 'tipo_servico',
         ],
         'view_scope': 'menu.notas_fiscais_servico',
         'create_scope': 'create.notas_fiscais_servico',
@@ -690,19 +702,53 @@ RESOURCE_DEFINITIONS = {
             'litros',
             'valor_litro',
             'tipo_combustivel',
+            'itens',
+            'posto_id',
             'fornecedor',
             'numero_nota',
             'motorista_id',
             'registrado_por',
             'observacoes',
+            'foto_painel_url',
+            'foto_bomba_url',
+            'foto_cupom_url',
+            'foto_nota_url',
             'status',
             'ativo',
             'os_motorista_id',
         ],
         'partial_match_fields': ['fornecedor', 'numero_nota', 'observacoes'],
-        'nullable_fields': ['fornecedor', 'numero_nota', 'motorista_id', 'registrado_por', 'observacoes', 'os_motorista_id'],
+        'nullable_fields': ['itens', 'posto_id', 'fornecedor', 'numero_nota', 'motorista_id', 'registrado_por', 'observacoes', 'foto_painel_url', 'foto_bomba_url', 'foto_cupom_url', 'foto_nota_url', 'os_motorista_id'],
         'view_scope': 'menu.abastecimentos',
         'create_scope': 'create.abastecimentos',
+        'filial_scope_field': 'filial_id',
+    },
+    'postos_combustivel': {
+        'table': 'postos_combustivel',
+        'order': 'nome',
+        'required_fields': ['filial_id', 'nome'],
+        'allowed_fields': [
+            'filial_id',
+            'nome',
+            'cnpj',
+            'endereco',
+            'preco_diesel',
+            'preco_diesel_s10',
+            'preco_gasolina',
+            'preco_flex',
+            'preco_gnv',
+            'preco_arla',
+            'preco_arla_granel',
+            'observacoes',
+            'ativo',
+        ],
+        'partial_match_fields': ['nome', 'cnpj', 'endereco', 'observacoes'],
+        'nullable_fields': ['cnpj', 'endereco', 'preco_diesel', 'preco_diesel_s10', 'preco_gasolina', 'preco_flex', 'preco_gnv', 'preco_arla', 'preco_arla_granel', 'observacoes'],
+        # Quem lança abastecimento precisa ler os postos como relação, mesmo sem
+        # o menu do cadastro — por isso view_scope_any inclui menu.abastecimentos.
+        'view_scope_any': ['menu.postos_combustivel', 'menu.abastecimentos'],
+        'view_scope': 'menu.postos_combustivel',
+        'create_scope': 'create.postos_combustivel',
         'filial_scope_field': 'filial_id',
     },
     'veiculos_pneus': {
@@ -920,8 +966,9 @@ PERMISSION_SCOPE_GROUPS = [
             {'name': 'aprovar.abastecimentos',       'label': 'Aprovar combustível (final)',  'platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.abastecimentos'], 'description': 'Etapa final do fluxo de combustível.'},
             {'name': 'aprovar.abastecimentos.lider', 'label': 'Aprovar comb. — Líder base',   'platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.abastecimentos'], 'description': 'Etapa 1 — líder da base.'},
             {'name': 'aprovar.abastecimentos.responsavel','label':'Aprovar comb. — Responsável','platforms':['web'],       'auto_enable': ['menu.acompanhamento', 'menu.abastecimentos'], 'description': 'Etapa final — responsável de frota.'},
-            {'name': 'aprovar.diarias.lider',        'label': 'Aprovar diárias — Líder base', 'platforms': ['web', 'app'], 'auto_enable': ['menu.acompanhamento', 'menu.diarias'],        'description': 'Etapa 1 — líder da base.'},
-            {'name': 'aprovar.diarias.responsavel',  'label': 'Aprovar diárias — Responsável','platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.diarias'],        'description': 'Etapa final — responsável de frota.'},
+            {'name': 'aprovar.diarias.lider',        'label': 'Aprovar diárias — Líder base', 'platforms': ['web', 'app'], 'auto_enable': ['menu.acompanhamento', 'menu.diarias', 'menu.hotelaria_aprovacoes'],        'description': 'Etapa 1 (pendente → em análise) da hotelaria/diárias — líder da base. Vale web e app.'},
+            {'name': 'aprovar.diarias.responsavel',  'label': 'Aprovar diárias — Responsável','platforms': ['web', 'app'], 'auto_enable': ['menu.acompanhamento', 'menu.diarias', 'menu.hotelaria_aprovacoes'],        'description': 'Etapa final (em análise → aprovado) da hotelaria/diárias — responsável.'},
+            {'name': 'menu.hotelaria_aprovacoes',    'label': 'Ver Hotelaria — Aprovações',   'platforms': ['web', 'app'], 'auto_enable': [],                                             'description': 'Mostra a tela dedicada de Solicitação de Depósito Bancário / aprovação de hotelaria. Auto-habilitado ao conceder qualquer etapa de aprovação de diárias.'},
             {'name': 'aprovar.pneus',                'label': 'Aprovar controle de pneus',    'platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.pneus'],          'description': 'Permite aprovar ou reprovar lançamentos de controle de pneus.'},
         ],
     },
@@ -932,6 +979,7 @@ PERMISSION_SCOPE_GROUPS = [
         'items': [
             {'name': 'menu.colaboradores',           'label': 'Ver colaboradores',                   'platforms': ['web'],        'auto_enable': [],                          'description': 'Mostra o cadastro de colaboradores no menu.'},
             {'name': 'create.colaboradores',         'label': 'Cadastrar colaboradores',             'platforms': ['web'],        'auto_enable': ['menu.colaboradores'],       'description': 'Permite criar novos colaboradores.'},
+            {'name': 'menu.treinamentos',            'label': 'Ver treinamentos',                    'platforms': ['web'],        'auto_enable': [],                          'description': 'Mostra o módulo de Treinamentos (acompanhamento de cursos dos colaboradores) no menu.'},
             {'name': 'menu.custos_rh',               'label': 'Ver custos RH',                       'platforms': ['web'],        'auto_enable': [],                          'description': 'Mostra o painel de custos de mão de obra, contratos e acuracidade financeira por base.'},
             {'name': 'menu.contratos_operacionais',  'label': 'Ver contratos operacionais',          'platforms': ['web'],        'auto_enable': [],                          'description': 'Mostra o cadastro de contratos por base, com valor, headcount e cargos previstos.'},
             {'name': 'create.contratos_operacionais','label': 'Cadastrar contratos operacionais',    'platforms': ['web'],        'auto_enable': ['menu.contratos_operacionais'], 'description': 'Permite criar e manter contratos por base para análise de acuracidade e custos.'},
@@ -950,6 +998,7 @@ PERMISSION_SCOPE_GROUPS = [
             {'name': 'menu.ordens_servico',          'label': 'Ver ordens de serviço (motorista)',   'platforms': ['web', 'app'], 'auto_enable': [],                          'description': 'Mostra as OS de motorista (viagens) — usado pelos motoristas no app e gestores no web.'},
             {'name': 'create.ordens_servico',        'label': 'Abrir OS de motorista',               'platforms': ['web', 'app'], 'auto_enable': ['menu.ordens_servico'],     'description': 'Permite ao motorista criar OS de viagem (origem/destino) e usá-la pra agrupar HE, combustível e diárias.'},
             {'name': 'finalizar.ordens_servico',     'label': 'Finalizar / cancelar OS',             'platforms': ['web', 'app'], 'auto_enable': ['menu.ordens_servico'],     'description': 'Permite finalizar ou cancelar OS de motorista. Sem aprovação — é apenas registro de encerramento.'},
+            {'name': 'menu.checklist',               'label': 'Ver / preencher checklist',           'platforms': ['app'],        'auto_enable': [],                          'description': 'Libera a tela de Checklist no app (inspeção/conferência com respostas Conforme / Não conforme / N/A).'},
             {'name': 'menu.quadro_funcionarios',     'label': 'Ver quadro de funcionários',          'platforms': ['web'],        'auto_enable': [],                          'description': 'Mostra o quadro por base com totais e status da equipe.'},
             {'name': 'menu.bonificacao',             'label': 'Ver bonificação',                     'platforms': ['web'],        'auto_enable': [],                          'description': 'Mostra o controle mensal de bonificação por colaborador e os totais pagos.'},
             {'name': 'manage.bonificacao',           'label': 'Modificar bonificação',               'platforms': ['web'],        'auto_enable': ['menu.bonificacao'],         'description': 'Permite alterar lançamentos mensais de bonificação por colaborador.'},
@@ -967,8 +1016,10 @@ PERMISSION_SCOPE_GROUPS = [
             {'name': 'menu.frota_dashboard',       'label': 'Ver dashboard de frota',        'platforms': ['web'], 'auto_enable': [],                         'description': 'Mostra o painel consolidado de frota com custos, manutenções e consumo.'},
             {'name': 'menu.manutencoes',           'label': 'Ver manutenções',               'platforms': ['web'], 'auto_enable': [],                         'description': 'Mostra o módulo de ordens de serviço de manutenção de veículos.'},
             {'name': 'create.manutencoes',         'label': 'Abrir OS de manutenção',        'platforms': ['web'], 'auto_enable': ['menu.manutencoes'],        'description': 'Permite criar ordens de serviço de manutenção e adicionar peças/serviços.'},
-            {'name': 'menu.abastecimentos',        'label': 'Ver abastecimentos',            'platforms': ['web'], 'auto_enable': [],                         'description': 'Mostra o histórico de abastecimentos por veículo e filial.'},
+            {'name': 'menu.abastecimentos',        'label': 'Ver / lançar abastecimentos',   'platforms': ['web', 'app'], 'auto_enable': [],                         'description': 'Web: histórico de abastecimentos por veículo e filial. App: mostra o tile "Abastecimento" (posto + valores + 4 fotos) e o botão dentro da OS.'},
             {'name': 'create.abastecimentos',      'label': 'Registrar abastecimento',       'platforms': ['web'], 'auto_enable': ['menu.abastecimentos'],     'description': 'Permite lançar abastecimentos de combustível por veículo.'},
+            {'name': 'menu.postos_combustivel',    'label': 'Ver postos de combustível',     'platforms': ['web'], 'auto_enable': [],                         'description': 'Mostra o cadastro de postos com preço por tipo de combustível.'},
+            {'name': 'create.postos_combustivel',  'label': 'Cadastrar postos',              'platforms': ['web'], 'auto_enable': ['menu.postos_combustivel'], 'description': 'Permite cadastrar postos e manter os preços por combustível.'},
             {'name': 'menu.pneus',                 'label': 'Ver controle de pneus',         'platforms': ['web'], 'auto_enable': [],                         'description': 'Mostra o controle de pneus por posição e veículo.'},
             {'name': 'create.pneus',               'label': 'Gerenciar pneus',               'platforms': ['web'], 'auto_enable': ['menu.pneus'],              'description': 'Permite cadastrar e atualizar o controle de pneus dos veículos.'},
             {'name': 'menu.veiculos_documentos',   'label': 'Ver documentos de frota',       'platforms': ['web'], 'auto_enable': [],                         'description': 'Mostra o controle documental dos veículos: CRLV, seguro, licenças e outros.'},
@@ -986,8 +1037,8 @@ PERMISSION_SCOPE_GROUPS = [
             {'name': 'create.fornecedores',   'label': 'Cadastrar fornecedores',   'platforms': ['web'],        'auto_enable': ['menu.fornecedores'],   'description': 'Permite criar e editar fornecedores no cadastro.'},
             {'name': 'menu.clientes',         'label': 'Ver clientes',             'platforms': ['web'],        'auto_enable': [],                     'description': 'Acesso ao cadastro de clientes para sugestão nos contratos e contas a receber.'},
             {'name': 'create.clientes',       'label': 'Cadastrar clientes',       'platforms': ['web'],        'auto_enable': ['menu.clientes'],       'description': 'Permite criar e editar clientes no cadastro.'},
-            {'name': 'menu.notas_cte',        'label': 'Ver notas / CT-e',         'platforms': ['web'],        'auto_enable': [],                     'description': 'Permite lançar e controlar notas fiscais, CT-e e faturas pendentes de pagamento.'},
-            {'name': 'create.notas_cte',      'label': 'Lançar notas / CT-e',      'platforms': ['web'],        'auto_enable': ['menu.notas_cte'],      'description': 'Permite criar, editar e quitar notas fiscais, CT-e e faturas.'},
+            {'name': 'menu.notas_cte',        'label': 'Ver CT-e',                 'platforms': ['web'],        'auto_enable': [],                     'description': 'Permite visualizar e controlar CT-e lançados, com vencimentos e vínculo financeiro opcional.'},
+            {'name': 'create.notas_cte',      'label': 'Lançar CT-e',              'platforms': ['web'],        'auto_enable': ['menu.notas_cte'],      'description': 'Permite criar, editar e quitar CT-e (e demais documentos fiscais).'},
             {'name': 'menu.feriados',         'label': 'Ver feriados',             'platforms': ['web'],        'auto_enable': [],                     'description': 'Permite visualizar e gerenciar feriados por UF, município e filial no calendário.'},
             {'name': 'create.feriados',       'label': 'Cadastrar feriados',       'platforms': ['web'],        'auto_enable': ['menu.feriados'],       'description': 'Permite criar e editar feriados no calendário.'},
         ],
@@ -997,14 +1048,15 @@ PERMISSION_SCOPE_GROUPS = [
         'key': 'financeiro',
         'title': 'Financeiro',
         'items': [
+            {'name': 'menu.financeiro_painel', 'label': 'Ver painel financeiro',   'platforms': ['web'], 'auto_enable': [],                      'description': 'Painel consolidado: total a pagar × a receber, vencimentos, fluxo de caixa e saldo bancário.'},
             {'name': 'menu.contas_receber',   'label': 'Ver contas a receber',     'platforms': ['web'], 'auto_enable': [],                      'description': 'Controle de obrigações a receber de clientes, com status, documentos e SLA.'},
             {'name': 'create.contas_receber', 'label': 'Lançar contas a receber',  'platforms': ['web'], 'auto_enable': ['menu.contas_receber'],  'description': 'Permite criar e editar lançamentos de contas a receber.'},
             {'name': 'menu.contas_pagar',     'label': 'Ver contas a pagar',       'platforms': ['web'], 'auto_enable': [],                      'description': 'Controle de obrigações a pagar: fornecedores, horas extras Gold, hospedagens e despesas.'},
             {'name': 'create.contas_pagar',   'label': 'Lançar contas a pagar',    'platforms': ['web'], 'auto_enable': ['menu.contas_pagar'],    'description': 'Permite criar e editar lançamentos de contas a pagar.'},
             {'name': 'menu.banco',            'label': 'Ver banco / conciliação',  'platforms': ['web'], 'auto_enable': [],                      'description': 'Gestão de contas bancárias, lançamentos e conciliação com contas a receber e pagar.'},
             {'name': 'create.banco',          'label': 'Lançar no banco',          'platforms': ['web'], 'auto_enable': ['menu.banco'],           'description': 'Permite cadastrar contas bancárias, lançamentos e marcar conciliações.'},
-            {'name': 'menu.notas_fiscais_servico',   'label': 'Ver NFSe emitidas',     'platforms': ['web'], 'auto_enable': [],                              'description': 'Cadastro e consulta das NFSe emitidas pela Gold como prestadora do serviço.'},
-            {'name': 'create.notas_fiscais_servico', 'label': 'Cadastrar NFSe',        'platforms': ['web'], 'auto_enable': ['menu.notas_fiscais_servico'],  'description': 'Permite cadastrar, editar e cancelar dados das NFSe emitidas.'},
+            {'name': 'menu.notas_fiscais_servico',   'label': 'Ver NFS-e emitidas',    'platforms': ['web'], 'auto_enable': [],                              'description': 'Cadastro e consulta das NFS-e emitidas pela Gold como prestadora do serviço.'},
+            {'name': 'create.notas_fiscais_servico', 'label': 'Cadastrar NFS-e',       'platforms': ['web'], 'auto_enable': ['menu.notas_fiscais_servico'],  'description': 'Permite cadastrar, editar e cancelar dados das NFS-e emitidas.'},
         ],
     },
     # ── Estoque ───────────────────────────────────────────────────────────────
@@ -1358,9 +1410,31 @@ def create_app():
     _sb_last_check = [0.0]
     _sb_check_interval = float(os.getenv('SUPABASE_KEEPALIVE_INTERVAL', '20'))
 
+    def _exc_chain_text(exc):
+        """Nomes de tipo + mensagens ao longo da cadeia de exceções (lower).
+
+        httpx.RemoteProtocolError vira str '<ConnectionTerminated ...>' — o nome
+        da classe NÃO aparece em str(exc). Por isso incluímos type(exc).__name__
+        e percorremos __cause__/__context__: assim GOAWAY/timeouts são detectados.
+        """
+        parts, seen, cur, depth = [], set(), exc, 0
+        while cur is not None and id(cur) not in seen and depth < 8:
+            seen.add(id(cur))
+            parts.append(type(cur).__name__)
+            parts.append(str(cur))
+            cur = getattr(cur, '__cause__', None) or getattr(cur, '__context__', None)
+            depth += 1
+        return ' '.join(parts).lower()
+
+    # Erros que morrem no socket → exigem recriar o cliente Supabase (pool novo).
+    _DISCONNECT_KW = (
+        'server disconnected', 'connection reset', 'connection aborted',
+        'connection terminated', 'connectionterminated', 'remoteprotocol',
+        'protocolerror', 'goaway', 'broken pipe',
+    )
+
     def _is_disconnect_err(exc):
-        msg = str(exc).lower()
-        return 'server disconnected' in msg or 'connection reset' in msg or 'remoteprotocol' in msg
+        return any(kw in _exc_chain_text(exc) for kw in _DISCONNECT_KW)
 
     @app.before_request
     def _supabase_keepalive():
@@ -1662,6 +1736,26 @@ def create_app():
 
         return (hours * 60) + minutes
 
+    def fracao_noturna_turno(col):
+        """Fração (0..1) da jornada padrão do colaborador que cai na faixa
+        noturna legal 22h–5h. Usada p/ aplicar o adicional noturno SÓ sobre as
+        horas realmente noturnas (não em toda hora extra). Turno diurno = 0."""
+        ini = parse_time_to_minutes((col or {}).get('horario_padrao_inicio'))
+        fim = parse_time_to_minutes((col or {}).get('horario_padrao_fim'))
+        if ini is None or fim is None:
+            return 0.0
+        if fim <= ini:
+            fim += 24 * 60  # turno vira a meia-noite
+        total = fim - ini
+        if total <= 0:
+            return 0.0
+        noturno = 0
+        for minute in range(ini, fim):
+            h = minute % (24 * 60)
+            if h >= 22 * 60 or h < 5 * 60:  # 22:00–05:00
+                noturno += 1
+        return round(noturno / total, 4)
+
     def estimated_daily_work_hours(collaborator):
         start_minutes = parse_time_to_minutes(collaborator.get('horario_padrao_inicio'))
         end_minutes = parse_time_to_minutes(collaborator.get('horario_padrao_fim'))
@@ -1785,17 +1879,20 @@ def create_app():
     def now_iso():
         return datetime.now().astimezone().isoformat()
 
+    # Superset: disconnects (recriam cliente) + timeouts + falhas de rede.
+    _TRANSIENT_KW = _DISCONNECT_KW + (
+        'connection refused', 'getaddrinfo failed', 'name or service not known',
+        'temporary failure', 'timed out', 'timeoutexception', 'connecterror',
+        'connecttimeout', 'readerror', 'readtimeout', 'writeerror',
+        'writetimeout', 'pooltimeout', 'networkerror', 'poolclosed',
+        'resource temporarily unavailable', 'eagain',
+    )
+
     def is_transient_disconnect_error(exc):
-        message = str(exc).lower()
-        # Errno 11 = EAGAIN (non-blocking socket would block) — transient on Linux
+        # Errno 11 = EAGAIN (socket não-bloqueante) — transitório no Linux
         if getattr(exc, 'errno', None) == 11:
             return True
-        return any(kw in message for kw in (
-            'server disconnected', 'connection reset', 'remoteprotocolerror',
-            'getaddrinfo failed', 'name or service not known', 'temporary failure',
-            'connection refused', 'timed out', 'connection aborted',
-            'resource temporarily unavailable', 'eagain',
-        ))
+        return any(kw in _exc_chain_text(exc) for kw in _TRANSIENT_KW)
 
     def _force_recreate_supabase():
         """Recria o cliente Supabase (chamado quando detectamos conexão morta)."""
@@ -1826,6 +1923,39 @@ def create_app():
                     continue
                 raise
         raise last_exc
+
+    @app.errorhandler(Exception)
+    def _handle_uncaught(exc):
+        """Rede de segurança: instabilidade de rede com o Supabase (GOAWAY, reset,
+        timeout) NÃO pode virar 500 e quebrar o carregamento. Converte em 503
+        limpo (JSON) e recria o cliente. Erros reais seguem para o 500 padrão."""
+        from werkzeug.exceptions import HTTPException
+        if isinstance(exc, HTTPException):
+            return exc  # 404/403/405/etc. seguem o fluxo normal
+        if is_transient_disconnect_error(exc):
+            app.logger.warning('Erro transitório convertido em 503: %s', exc)
+            if _is_disconnect_err(exc):
+                _force_recreate_supabase()
+            return jsonify({
+                'error': 'Conexão instável com o banco. Tente novamente em instantes.',
+                'transient': True,
+            }), 503
+        raise exc
+
+    def db_error_response(exc):
+        """Resposta padrão para except de handler. Instabilidade de rede com o
+        Supabase (GOAWAY, reset, server disconnected, timeout) NUNCA vira 500:
+        converte em 503 limpo + recria o cliente. Erro real de banco segue 500.
+        Use no lugar de `return jsonify({'error': translate_database_error(exc)}), 500`."""
+        if is_transient_disconnect_error(exc):
+            app.logger.warning('Erro transitório convertido em 503: %s', exc)
+            if _is_disconnect_err(exc):
+                _force_recreate_supabase()
+            return jsonify({
+                'error': 'Conexão instável com o banco. Tente novamente em instantes.',
+                'transient': True,
+            }), 503
+        return jsonify({'error': translate_database_error(exc)}), 500  # erro real de banco
 
     def table_exists_ready(table_name, retry_attempts=3):
         cache_entry = table_ready_cache.get(table_name)
@@ -2122,17 +2252,19 @@ def create_app():
         if resource_name == 'colaboradores':
             numeric_defaults = {
                 'carga_horaria_semanal': 44,
+                'carga_horaria_sabado': 0,
                 'intervalo_almoco_minutos': 60,
                 'salario_base_mensal': 0,
                 'percentual_periculosidade': 0,
                 'percentual_adicional_clt': 0,
+                'percentual_desconto_vt': 6,
                 'beneficios_mensais': 0,
             }
             for field_name, default_value in numeric_defaults.items():
                 if field_name in sanitized:
-                    if field_name in {'carga_horaria_semanal', 'intervalo_almoco_minutos'}:
+                    if field_name in {'carga_horaria_semanal', 'carga_horaria_sabado', 'intervalo_almoco_minutos'}:
                         sanitized[field_name] = parse_int_or_default(sanitized.get(field_name), default_value)
-                    elif field_name in {'percentual_periculosidade', 'percentual_adicional_clt'}:
+                    elif field_name in {'percentual_periculosidade', 'percentual_adicional_clt', 'percentual_desconto_vt'}:
                         sanitized[field_name] = max(0.0, min(100.0, parse_float_or_default(sanitized.get(field_name), default_value)))
                     else:
                         sanitized[field_name] = parse_float_or_default(sanitized.get(field_name), default_value)
@@ -2148,6 +2280,12 @@ def create_app():
             for nullable_field in config.get('nullable_fields', []):
                 if sanitized.get(nullable_field) == '':
                     sanitized[nullable_field] = None
+
+            # Rede de segurança: qualquer outro campo que chegue como "" vira null
+            # (evita 22P02 "invalid input syntax for type numeric" em colunas novas).
+            for _k in list(sanitized.keys()):
+                if sanitized[_k] == '':
+                    sanitized[_k] = None
 
         if resource_name == 'contratos_operacionais':
             if 'codigo_contrato' in sanitized and isinstance(sanitized['codigo_contrato'], str):
@@ -2593,6 +2731,16 @@ def create_app():
             if sanitized.get('status') in (None, 'aberta'):
                 sanitized['status'] = 'aguardando_aprovacao'
 
+        if resource_name == 'veiculos_abastecimentos':
+            # Odômetro é km INTEIRO no banco: trunca decimais para não estourar
+            # 22P02 ("invalid input syntax for type integer") quando o usuário
+            # digita algo como "1772.4". Litros e preço são numéricos (decimais ok).
+            if sanitized.get('odometro_km') not in (None, ''):
+                sanitized['odometro_km'] = parse_int_or_default(sanitized.get('odometro_km'), None)
+            for _num_field in ('litros', 'valor_litro'):
+                if sanitized.get(_num_field) not in (None, ''):
+                    sanitized[_num_field] = parse_float_or_default(sanitized.get(_num_field), None)
+
         if resource_name == 'veiculos_abastecimentos' and not partial:
             # Novos abastecimentos entram sempre como pendente; o aprovador libera via /approvals
             sanitized['status'] = 'pendente_aprovacao'
@@ -2787,6 +2935,11 @@ def create_app():
         benefit_type = normalize_bonus_token((item or {}).get('tipo_beneficio'))
         rubrica = str((item or {}).get('codigo_rubrica') or '').strip().upper()
         return benefit_type in {'vale_transporte', 'ajuda_custo', 'vale_alimentacao', 'vale_refeicao'} or rubrica in {'VT', 'AJUDA', 'VA'}
+
+    def is_vale_transporte_item(item):
+        benefit_type = normalize_bonus_token((item or {}).get('tipo_beneficio'))
+        rubrica = str((item or {}).get('codigo_rubrica') or '').strip().upper()
+        return benefit_type == 'vale_transporte' or rubrica == 'VT'
 
     def scale_is_44h_saturday(scale_value):
         """Retorna True se a escala é Seg-Sáb com sábado compensatório (4h) para fechar 44h semanais."""
@@ -3049,8 +3202,17 @@ def create_app():
 
         query = supabase.table('colaborador_documentos').select('*').eq('ativo', True)
         query = apply_filial_scope(query, profile, RESOURCE_DEFINITIONS['colaborador_documentos'])
-        rows = query.execute().data or []
-        documents = [enrich_collaborator_document(row) for row in rows]
+        rows = supabase_retry(query.execute).data or []
+
+        # Colaborador desligado não gera pendência: descarta docs de quem saiu.
+        colab_q = supabase.table('colaboradores').select('id').eq('ativo', True)
+        colab_q = apply_filial_scope(colab_q, profile, RESOURCE_DEFINITIONS['colaboradores'])
+        active_collaborator_ids = {r['id'] for r in (supabase_retry(colab_q.execute).data or [])}
+
+        documents = [
+            enrich_collaborator_document(row) for row in rows
+            if row.get('colaborador_id') is None or row.get('colaborador_id') in active_collaborator_ids
+        ]
 
         overdue_count = sum(1 for item in documents if item.get('status_calculado') == 'vencido')
         due_soon_count = sum(1 for item in documents if item.get('status_calculado') == 'vence_em_breve')
@@ -3090,6 +3252,11 @@ def create_app():
         filtered = []
         for collaborator in collaborators:
             collaborator_id = int(collaborator.get('id')) if collaborator.get('id') is not None else None
+            # Escala é filtro DURO: quem não trabalha nesse dia da semana (ex.:
+            # seg-sex num sábado) não aparece — nem com registro/batida forçando
+            # (ensured_ids). ensured só cobre admissão/desligamento, não a escala.
+            if not collaborator_works_on_date(collaborator, target_date):
+                continue
             if collaborator_id in ensured_ids or was_collaborator_active_on_date(collaborator, target_date):
                 filtered.append(collaborator)
 
@@ -3674,7 +3841,7 @@ def create_app():
         collaborators_select = (
             'id, filial_id, nome_completo, cargo, turno, escala_servico, horario_padrao_inicio, horario_padrao_fim, '
             'carga_horaria_semanal, intervalo_almoco_minutos, salario_base_mensal, percentual_periculosidade, percentual_adicional_clt, '
-            'adicional_noturno_sobre_periculosidade, '
+            'percentual_desconto_vt, adicional_noturno_sobre_periculosidade, '
             'beneficios_tipos, beneficios_mensais, ativo'
         )
         legacy_collaborators_select = (
@@ -3698,12 +3865,13 @@ def create_app():
             collaborators_rows = execute_collaborators_query(collaborators_select)
         except Exception as exc:
             missing_column = extract_missing_column_name(exc)
-            if missing_column not in {'percentual_periculosidade', 'percentual_adicional_clt', 'adicional_noturno_sobre_periculosidade'}:
+            if missing_column not in {'percentual_periculosidade', 'percentual_adicional_clt', 'percentual_desconto_vt', 'adicional_noturno_sobre_periculosidade'}:
                 raise
             collaborators_rows = execute_collaborators_query(legacy_collaborators_select)
             for collaborator_row in collaborators_rows:
                 collaborator_row.setdefault('percentual_periculosidade', 0)
                 collaborator_row.setdefault('percentual_adicional_clt', 0)
+                collaborator_row.setdefault('percentual_desconto_vt', 6)
                 collaborator_row.setdefault('adicional_noturno_sobre_periculosidade', False)
 
         collaborators = filter_visible_collaborators(collaborators_rows)
@@ -3752,6 +3920,7 @@ def create_app():
         totals = {
             'salary': 0.0,
             'benefits': 0.0,
+            'desconto_vt': 0.0,
             'monthly_cost': 0.0,
             'headcount': 0,
         }
@@ -3781,6 +3950,7 @@ def create_app():
 
             detailed_benefits = 0.0
             variable_benefits = 0.0
+            vt_benefit_total = 0.0
             projected_days_base_total = 0
             projected_days_discounts_total = 0
             projected_days_final_total = 0
@@ -3812,16 +3982,25 @@ def create_app():
                     detailed_benefits += benefit_value
                     if (benefit_item.get('modo_calculo') or 'fixo_mensal').strip().lower() != 'fixo_mensal':
                         variable_benefits += benefit_value
+                    if is_vale_transporte_item(benefit_item):
+                        vt_benefit_total += benefit_value
 
             bonificacao_mensal = max(0.0, parse_float_or_default(bonificacao_total_by_collaborator.get(collaborator_id or -1), 0.0))
             benefits = round(fixed_benefits + detailed_benefits + bonificacao_mensal, 2)
-            monthly_total_cost = round(salary + benefits, 2)
+            # Desconto de VT do colaborador (Lei 7.418/85): até percentual% do
+            # salário BASE, limitado ao valor real do VT (nunca paga mais que o
+            # vale). Reduz o custo LÍQUIDO da empresa. % editável (padrão 6%).
+            vt_percent = max(0.0, min(100.0, parse_float_or_default(collaborator.get('percentual_desconto_vt'), 6.0)))
+            desconto_vt = round(min(salary_base * (vt_percent / 100.0), vt_benefit_total), 2)
+            beneficios_liquido = round(benefits - desconto_vt, 2)
+            monthly_total_cost = round(salary + beneficios_liquido, 2)
             hourly_cost = round((monthly_total_cost / monthly_hours), 2) if monthly_hours > 0 else 0.0
             daily_hours = estimated_daily_work_hours(collaborator)
             estimated_daily_cost = round((hourly_cost * daily_hours), 2) if daily_hours is not None else None
 
             totals['salary'] += salary
             totals['benefits'] += benefits
+            totals['desconto_vt'] += desconto_vt
             totals['monthly_cost'] += monthly_total_cost
             totals['headcount'] += 1
 
@@ -3866,6 +4045,8 @@ def create_app():
                 'beneficios_variaveis_mensais': round(variable_benefits, 2),
                 'bonificacao_mensal': round(bonificacao_mensal, 2),
                 'beneficios_mensais': round(benefits, 2),
+                'desconto_vt_mensal': round(desconto_vt, 2),
+                'beneficios_liquido_mensais': round(beneficios_liquido, 2),
                 'beneficios_tipos_texto': ', '.join(sorted(list(benefit_types_by_collaborator.get(int(collaborator.get('id')), set())))) if collaborator.get('id') is not None else '',
                 'dias_presente_mes': int(collaborator_presence.get('presente', 0)),
                 'dias_falta_mes': int(collaborator_presence.get('falta', 0)),
@@ -4438,6 +4619,7 @@ def create_app():
                 'headcount_total': totals['headcount'],
                 'salary_total': round(totals['salary'], 2),
                 'benefits_total': round(totals['benefits'], 2),
+                'desconto_vt_total': round(totals['desconto_vt'], 2),
                 'monthly_total_cost': round(totals['monthly_cost'], 2),
                 'average_headcount_accuracy': avg_headcount_accuracy,
                 'average_value_accuracy': avg_value_accuracy,
@@ -4783,8 +4965,18 @@ def create_app():
     def fetch_filial_labels(filial_ids):
         if not filial_ids:
             return []
-        query = supabase.table('filiais').select('id, cidade, uf').in_('id', filial_ids).order('cidade')
-        response = supabase_retry(query.execute)
+        try:
+            response = supabase_retry(
+                lambda: supabase.table('filiais')
+                .select('id, cidade, uf')
+                .in_('id', filial_ids)
+                .order('cidade')
+                .execute()
+            )
+        except Exception as exc:
+            # Rótulos de filial são cosméticos — um blip de rede não pode derrubar o login.
+            app.logger.warning('fetch_filial_labels falhou (%s); seguindo sem rótulos.', exc)
+            return []
         return [f"{item['cidade']}/{item['uf']}" for item in (response.data or [])]
 
     def fetch_loading_support_rows(profile):
@@ -5007,6 +5199,141 @@ def create_app():
             summarize_loading_journey(item, events_by_journey.get(int(item['id']), []), closures_by_journey.get(int(item['id'])), maps)
             for item in journeys
         ]
+
+    def list_loading_journeys_range(profile, data_inicio, data_fim, filial_id=None, turno=None):
+        """Mesma estrutura de list_loading_journeys, mas para um intervalo de datas.
+
+        Usado pela tela de métricas/gráficos do carregamento.
+        """
+        query = (
+            supabase.table('jornadas_carregamento')
+            .select('*')
+            .gte('data_operacao', data_inicio.isoformat())
+            .lte('data_operacao', data_fim.isoformat())
+            .order('data_operacao')
+        )
+        if profile_has_filial_scope(profile):
+            query = query.in_('filial_id', profile.get('allowed_filial_ids') or [])
+        if filial_id:
+            query = query.eq('filial_id', filial_id)
+        if turno:
+            query = query.eq('turno', turno)
+
+        journeys = query.execute().data or []
+        journey_ids = [int(item['id']) for item in journeys]
+        events_by_journey = fetch_loading_events(journey_ids)
+        closures_by_journey = fetch_loading_closures(journey_ids)
+        support_rows = fetch_loading_support_rows(profile)
+
+        maps = {
+            'filiais': {int(item['id']): item for item in support_rows['filiais']},
+            'rotas': {int(item['id']): item for item in support_rows['rotas']},
+            'veiculos': {int(item['id']): item for item in support_rows['veiculos']},
+            'collaborators': fetch_collaborator_labels([
+                int(item['lider_colaborador_id'])
+                for item in journeys
+                if item.get('lider_colaborador_id')
+            ]),
+        }
+
+        summaries = [
+            summarize_loading_journey(item, events_by_journey.get(int(item['id']), []), closures_by_journey.get(int(item['id'])), maps)
+            for item in journeys
+        ]
+        return summaries, support_rows
+
+    def aggregate_loading_metrics(profile, data_inicio, data_fim, filial_id=None, turno=None):
+        summaries, support_rows = list_loading_journeys_range(profile, data_inicio, data_fim, filial_id, turno)
+        motivos_map = {int(item['id']): item.get('descricao') or 'Motivo' for item in support_rows['motivos']}
+
+        def cilindros(journey):
+            value = (journey.get('fechamento') or {}).get('quantidade_cilindros')
+            try:
+                return int(value or 0)
+            except (TypeError, ValueError):
+                return 0
+
+        total_cilindros = sum(cilindros(item) for item in summaries)
+        total_jornadas = len(summaries)
+        total_finalizadas = sum(1 for item in summaries if item.get('status') == 'finalizado')
+        total_ocorrencias = sum(int(item.get('ocorrencias_count') or 0) for item in summaries)
+
+        # Tempo médio só conta jornadas que tiveram tempo de carga registrado.
+        tempos_carga = [int(item.get('tempo_carregamento_minutos') or 0) for item in summaries if int(item.get('tempo_carregamento_minutos') or 0) > 0]
+        tempos_parado = [int(item.get('tempo_parado_minutos') or 0) for item in summaries if int(item.get('tempo_parado_minutos') or 0) > 0]
+        tempo_medio_carga = round(sum(tempos_carga) / len(tempos_carga), 1) if tempos_carga else 0
+        tempo_medio_parado = round(sum(tempos_parado) / len(tempos_parado), 1) if tempos_parado else 0
+
+        def bucket_sum(key_fn, label_fn=None):
+            acc = {}
+            for item in summaries:
+                key = key_fn(item)
+                if key is None or key == '':
+                    continue
+                entry = acc.setdefault(key, {'cilindros': 0, 'jornadas': 0, 'tempo_total': 0, 'tempo_count': 0})
+                entry['cilindros'] += cilindros(item)
+                entry['jornadas'] += 1
+                tempo = int(item.get('tempo_carregamento_minutos') or 0)
+                if tempo > 0:
+                    entry['tempo_total'] += tempo
+                    entry['tempo_count'] += 1
+            rows = []
+            for key, entry in acc.items():
+                rows.append({
+                    'chave': key,
+                    'label': label_fn(key) if label_fn else key,
+                    'cilindros': entry['cilindros'],
+                    'jornadas': entry['jornadas'],
+                    'tempo_medio': round(entry['tempo_total'] / entry['tempo_count'], 1) if entry['tempo_count'] else 0,
+                })
+            return rows
+
+        por_dia = sorted(bucket_sum(lambda j: j.get('data_operacao')), key=lambda r: r['chave'])
+        por_veiculo = sorted(bucket_sum(lambda j: j.get('placa') or 'Sem placa'), key=lambda r: r['cilindros'], reverse=True)
+        por_filial = sorted(bucket_sum(lambda j: j.get('filial_nome') or 'Sem base'), key=lambda r: r['cilindros'], reverse=True)
+        por_turno = sorted(bucket_sum(lambda j: (j.get('turno') or 'sem turno')), key=lambda r: r['cilindros'], reverse=True)
+        por_rota = sorted(bucket_sum(lambda j: j.get('rota_nome') or 'Sem referência'), key=lambda r: r['cilindros'], reverse=True)
+
+        # Motivos de parada: conta eventos de parada e soma minutos.
+        motivos_acc = {}
+        for item in summaries:
+            for evento in item.get('eventos') or []:
+                if evento.get('tipo_evento') != 'parada':
+                    continue
+                label = motivos_map.get(int(evento['motivo_parada_id'])) if evento.get('motivo_parada_id') else 'Sem motivo'
+                entry = motivos_acc.setdefault(label, {'ocorrencias': 0, 'minutos': 0})
+                entry['ocorrencias'] += 1
+                entry['minutos'] += int(evento.get('duration_minutes') or 0)
+        por_motivo = sorted(
+            [{'label': k, 'ocorrencias': v['ocorrencias'], 'minutos': v['minutos']} for k, v in motivos_acc.items()],
+            key=lambda r: r['minutos'],
+            reverse=True,
+        )
+
+        filiais_disponiveis = [
+            {'id': int(item['id']), 'label': f"{item['cidade']}/{item['uf']}"}
+            for item in support_rows['filiais']
+        ]
+
+        return {
+            'data_inicio': data_inicio.isoformat(),
+            'data_fim': data_fim.isoformat(),
+            'total_cilindros': total_cilindros,
+            'total_jornadas': total_jornadas,
+            'total_finalizadas': total_finalizadas,
+            'total_ocorrencias': total_ocorrencias,
+            'media_cilindros_jornada': round(total_cilindros / total_jornadas, 1) if total_jornadas else 0,
+            'tempo_medio_carga_min': tempo_medio_carga,
+            'tempo_medio_parado_min': tempo_medio_parado,
+            'por_dia': por_dia,
+            'por_veiculo': por_veiculo,
+            'por_filial': por_filial,
+            'por_turno': por_turno,
+            'por_rota': por_rota,
+            'por_motivo': por_motivo,
+            'turno_options': LOADING_SHIFT_OPTIONS,
+            'filiais_disponiveis': filiais_disponiveis,
+        }
 
     def find_open_loading_event(events, event_type):
         return next(
@@ -6226,7 +6553,7 @@ def create_app():
             })
         except Exception as exc:
             app.logger.error('Erro ao listar batidas de ponto: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.get('/api/ponto/resumo')
     @rate_limit_endpoint(max_requests=60)
@@ -6291,7 +6618,7 @@ def create_app():
             return jsonify({'database_ready': True, 'items': items})
         except Exception as exc:
             app.logger.error('Erro ao montar resumo de ponto: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.post('/api/ponto/batida')
     @rate_limit_endpoint(max_requests=60)
@@ -6533,7 +6860,1310 @@ def create_app():
             return response_stream
         except Exception as exc:
             app.logger.error('Erro ao exportar ponto XLSX: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
+
+    # ─── Integração iopoint (ponto eletrônico externo, SOMENTE LEITURA) ─────────
+    # A API Customer V2 do iopoint autentica por um único header `apiIopointToken`.
+    # O token é da EMPRESA e fica apenas no servidor (.env) — nunca é enviado ao
+    # frontend. O SEG faz proxy, cruza por CPF com `colaboradores` e concilia com
+    # presença (`presencas_diarias`) e horas extras aprovadas (`horas_extras`).
+    IOPOINT_DEFAULT_BASE = 'https://api.iopoint.com.br/api/customer/v2'
+
+    class _IopointError(Exception):
+        def __init__(self, message, status=502, code=None):
+            super().__init__(message)
+            self.message = message
+            self.status = status
+            self.code = code
+
+    def _iopoint_config():
+        base = (os.getenv('IOPOINT_API_BASE') or IOPOINT_DEFAULT_BASE).strip().rstrip('/')
+        token = (os.getenv('IOPOINT_API_TOKEN') or '').strip()
+        return base, token
+
+    def _iopoint_enabled():
+        return bool(_iopoint_config()[1])
+
+    def _iopoint_common_params():
+        """Parâmetros aplicados a todo GET: grupo econômico (matriz lê filiais) e
+        CNPJ opcional para mirar uma empresa específica. Controlados por .env."""
+        params = {}
+        if (os.getenv('IOPOINT_INCLUDE_BRANCHES', '1') or '').strip().lower() in ('1', 'true', 'sim'):
+            params['include_branches'] = 1
+        cnpj = re.sub(r'\D', '', os.getenv('IOPOINT_COMPANY_NATIONAL_REGISTRY') or '')
+        if cnpj:
+            params['company_national_registry'] = cnpj
+        return params
+
+    def _iopoint_get(path, params=None):
+        """GET no iopoint. Devolve o conteúdo de `data`. Lança _IopointError em
+        qualquer falha — o chamador traduz para resposta amigável. NUNCA deixa uma
+        exceção de rede/externa virar 500 silencioso (ver resiliência Supabase)."""
+        from urllib.parse import urlencode
+        base, token = _iopoint_config()
+        if not token:
+            raise _IopointError('Integração iopoint não configurada (defina IOPOINT_API_TOKEN no servidor).', status=503, code='not_configured')
+        query = ''
+        if params:
+            clean = {k: v for k, v in params.items() if v is not None and v != ''}
+            # doseq=True repete as chaves de lista: national_registry_list[]=a&...=b
+            query = '?' + urlencode(clean, doseq=True)
+        url = f'{base}/{path.lstrip("/")}{query}'
+        # User-Agent estilo navegador e ASCII: o WAF do iopoint pode devolver 403 a
+        # UA de bot. Mantém ASCII (acentos no header já causaram bloqueio).
+        req = urllib_request.Request(url, headers={
+            'apiIopointToken': token,
+            'Accept': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (compatible; SEG-iopoint/1.0)',
+        })
+        # O WAF do iopoint às vezes bloqueia/limita rajadas (403/429/5xx) nos
+        # endpoints mais pesados. Uma tentativa extra e gentil costuma resolver o
+        # bloqueio transitório antes de o frontend ver o erro (evita a tempestade
+        # de retries do request() do frontend).
+        _IOPOINT_RETRYABLE = {403, 408, 425, 429, 500, 502, 503, 504}
+        raw = None
+        last_exc = None
+        for attempt in range(2):
+            try:
+                with urllib_request.urlopen(req, timeout=15) as resp:
+                    raw = resp.read()
+                last_exc = None
+                break
+            except urllib_error.HTTPError as exc:
+                body = b''
+                try:
+                    body = exc.read()
+                except Exception:
+                    pass
+                code, message = _iopoint_parse_error(body)
+                if exc.code == 401:
+                    raise _IopointError('Token do iopoint inválido ou empresa inativa. Verifique o IOPOINT_API_TOKEN no servidor.', status=502, code=code or 'invalid_iopoint_token')
+                if exc.code == 404 and code == 'company_not_found':
+                    raise _IopointError('CNPJ não encontrado no grupo econômico deste token.', status=404, code=code)
+                last_exc = _IopointError(message or f'O iopoint respondeu {exc.code}.', status=502, code=code)
+                if exc.code in _IOPOINT_RETRYABLE and attempt == 0:
+                    time.sleep(1.3)
+                    continue
+                raise last_exc
+            except (urllib_error.URLError, TimeoutError, OSError):
+                last_exc = _IopointError('Não foi possível falar com o iopoint agora. Tente novamente em instantes.', status=503, code='iopoint_unreachable')
+                if attempt == 0:
+                    time.sleep(1.3)
+                    continue
+                raise last_exc
+        if raw is None:
+            raise last_exc or _IopointError('Falha ao consultar o iopoint.', status=502)
+        try:
+            parsed = json.loads((raw or b'').decode('utf-8') or '{}')
+        except (ValueError, UnicodeDecodeError):
+            raise _IopointError('Resposta inválida do iopoint.', status=502, code='invalid_response')
+        if isinstance(parsed, dict) and parsed.get('error'):
+            err = parsed.get('error') or {}
+            raise _IopointError(err.get('message') or 'Erro do iopoint.', status=502, code=err.get('code'))
+        return parsed.get('data') if isinstance(parsed, dict) else parsed
+
+    def _iopoint_parse_error(body_bytes):
+        try:
+            j = json.loads((body_bytes or b'').decode('utf-8') or '{}')
+            err = j.get('error') or {}
+            return err.get('code'), err.get('message')
+        except Exception:
+            return None, None
+
+    def _iopoint_cpf_digits(value):
+        digits = re.sub(r'\D', '', str(value or ''))
+        if len(digits) == 11 and digits != '00000000000':
+            return digits
+        return None
+
+    def _iopoint_dur_to_hours(value):
+        """'HH:MM:SS' (com sinal), decimal ou número -> horas float."""
+        if value is None:
+            return 0.0
+        if isinstance(value, (int, float)):
+            return float(value)
+        s = str(value).strip()
+        if not s or s in ('0', '00:00:00'):
+            return 0.0
+        neg = s.startswith('-')
+        s = s.lstrip('+-')
+        if ':' in s:
+            parts = s.split(':')
+            try:
+                h = int(parts[0])
+                m = int(parts[1]) if len(parts) > 1 else 0
+                sec = int(parts[2]) if len(parts) > 2 else 0
+            except ValueError:
+                return 0.0
+            total = h + m / 60.0 + sec / 3600.0
+        else:
+            try:
+                total = float(s.replace(',', '.'))
+            except ValueError:
+                return 0.0
+        return -total if neg else total
+
+    def _iopoint_minutes(value):
+        """Minutos de atraso (com sinal). Número puro = minutos (ex.: `minutes_late`);
+        'HH:MM[:SS]' = duração convertida em minutos (ex.: `value` de inconsistência).
+        Negativo = adiantado. Retorna None quando não dá pra interpretar."""
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            return None
+        if isinstance(value, (int, float)):
+            return int(round(value))
+        s = str(value).strip()
+        if not s:
+            return None
+        neg = s.startswith('-')
+        body = s.lstrip('+-')
+        if ':' in body:
+            parts = body.split(':')
+            try:
+                total = int(parts[0]) * 60 + (int(parts[1]) if len(parts) > 1 else 0)
+            except ValueError:
+                return None
+        else:
+            try:
+                total = int(round(float(body.replace(',', '.'))))
+            except ValueError:
+                return None
+        return -total if neg else total
+
+    # Atraso até esta tolerância (min, ±) conta como presente no horário; acima vira
+    # "atraso" (→ presente + observação). Ajustável por IOPOINT_ATRASO_TOLERANCIA_MIN.
+    _IOPOINT_ATRASO_TOL_MIN = max(0, int(os.getenv('IOPOINT_ATRASO_TOLERANCIA_MIN', '10')))
+
+    _IOPOINT_OT_BUCKETS = ('over_time_1', 'over_time_2', 'over_time_3', 'over_time_4', 'over_time_dsr', 'over_time_holiday')
+    # HE de dia útil (adicional 50%) × HE de DSR/feriado (adicional 100%).
+    _IOPOINT_OT_50 = ('over_time_1', 'over_time_2', 'over_time_3', 'over_time_4')
+    _IOPOINT_OT_100 = ('over_time_dsr', 'over_time_holiday')
+
+    def _iopoint_sum_buckets(total_hours, keys):
+        if not isinstance(total_hours, dict):
+            return 0.0
+        return round(sum(_iopoint_dur_to_hours(total_hours.get(k)) for k in keys), 2)
+
+    def _iopoint_sum_overtime(total_hours):
+        if not isinstance(total_hours, dict):
+            return 0.0
+        return round(sum(_iopoint_dur_to_hours(total_hours.get(k)) for k in _IOPOINT_OT_BUCKETS), 2)
+
+    def _iopoint_absence_status(type_text):
+        t = (type_text or '').strip().lower()
+        if 'féri' in t or 'feri' in t:
+            return 'ferias'
+        if 'atestado' in t:
+            return 'atestado'
+        return 'afastado'
+
+    def _iopoint_period(args, default_days=7, max_days=31):
+        fim = _parse_iso_date(args.get('fim')) or date_class.today()
+        ini = _parse_iso_date(args.get('inicio')) or (fim - timedelta(days=default_days))
+        if ini > fim:
+            ini, fim = fim, ini
+        if (fim - ini).days > (max_days - 1):
+            return None, None, f'O período máximo é de {max_days} dias.'
+        return ini, fim, None
+
+    def _iopoint_norm_name(name):
+        """Nome comparável: sem acento, espaços colapsados, maiúsculo."""
+        s = unicodedata.normalize('NFKD', str(name or '')).encode('ascii', 'ignore').decode('ascii')
+        return re.sub(r'\s+', ' ', s).strip().upper()
+
+    def _iopoint_matcher(profile, filial_id=None):
+        """Índices para casar o iopoint com o SEG: by_cpf {cpf11: colab} e
+        by_name {nome_normalizado: [colabs]}. Ignora CPF placeholder. O nome é o
+        fallback quando o colaborador do SEG está sem CPF."""
+        query = supabase.table('colaboradores').select('id, nome_completo, cpf, filial_id, cargo, email, ativo, carga_horaria_semanal, carga_horaria_sabado, escala_servico, intervalo_almoco_minutos')
+        if str(filial_id).isdigit():
+            query = query.eq('filial_id', int(filial_id))
+        elif profile_has_filial_scope(profile):
+            allowed = profile.get('allowed_filial_ids') or []
+            query = query.in_('filial_id', allowed or [-1])
+        rows = query.execute().data or []
+        by_cpf, by_name = {}, {}
+        for c in rows:
+            cpf = _iopoint_cpf_digits(c.get('cpf'))
+            if cpf and cpf not in by_cpf:
+                by_cpf[cpf] = c
+            nm = _iopoint_norm_name(c.get('nome_completo'))
+            if nm:
+                by_name.setdefault(nm, []).append(c)
+        return {'by_cpf': by_cpf, 'by_name': by_name}
+
+    def _iopoint_resolve(national_registry, name, matcher):
+        """(seg, match_por). Tenta CPF (forte); se não, nome exato normalizado
+        (fallback). match_por ∈ {'cpf','nome','ambiguo',None}. Nome repetido no SEG
+        (>1 colaborador) fica 'ambiguo' e NÃO vincula (evita casar errado)."""
+        cpf = _iopoint_cpf_digits(national_registry)
+        if cpf:
+            seg = matcher['by_cpf'].get(cpf)
+            if seg:
+                return seg, 'cpf'
+        cands = matcher['by_name'].get(_iopoint_norm_name(name)) or []
+        if len(cands) == 1:
+            return cands[0], 'nome'
+        if len(cands) > 1:
+            return None, 'ambiguo'
+        return None, None
+
+    def _iopoint_scoped(profile, filial_id):
+        """True quando o resultado deve ficar restrito aos colaboradores do SEG
+        (usuário com escopo de filial ou filtro de filial). Nesse caso, registros
+        do iopoint sem colaborador correspondente no SEG são ocultados."""
+        return bool(str(filial_id).isdigit()) or profile_has_filial_scope(profile)
+
+    def _iopoint_period_params(ini, fim):
+        params = _iopoint_common_params()
+        params.update({'begin_date': ini.isoformat(), 'end_date': fim.isoformat()})
+        return params
+
+    def _iopoint_person(colab, matcher):
+        cpf = _iopoint_cpf_digits(colab.get('national_registry'))
+        seg, match_por = _iopoint_resolve(colab.get('national_registry'), colab.get('name'), matcher)
+        nome = (seg or {}).get('nome_completo') or colab.get('name') or (cpf or '—')
+        return cpf, seg, nome, match_por
+
+    @app.get('/api/iopoint/status')
+    @rate_limit_endpoint(max_requests=120)
+    @require_auth
+    def iopoint_status(profile):
+        scope_error = require_scope_permission(profile, 'menu.ponto', 'Sem permissão para ver o ponto.')
+        if scope_error:
+            return scope_error
+        if not _iopoint_enabled():
+            return jsonify({'enabled': False})
+        try:
+            data = _iopoint_get('company', _iopoint_common_params())
+        except _IopointError as exc:
+            # Configurado, mas token/conexão com problema — front mostra aviso sem quebrar.
+            return jsonify({'enabled': True, 'ok': False, 'error': exc.message, 'code': exc.code})
+        company = data[0] if isinstance(data, list) else (data or {})
+        return jsonify({
+            'enabled': True,
+            'ok': True,
+            'company': {
+                'name': (company or {}).get('trading_name') or (company or {}).get('name'),
+                'national_registry': (company or {}).get('national_registry'),
+            },
+        })
+
+    def _worked_from_points(pts):
+        """Horas trabalhadas somando pares consecutivos de batidas
+        (entrada→saída). Ignora o worked_time do iopoint, que erra feio quando
+        as batidas não seguem o padrão do turno (conta só o 1º par, ou zera dia
+        com 2 batidas). O par entrada/saída já exclui o almoço naturalmente."""
+        from datetime import datetime as _dt
+        ts = []
+        for p in pts:
+            dtv = p.get('datetime')
+            if not dtv:
+                continue
+            try:
+                ts.append(_dt.fromisoformat(str(dtv)[:19]))
+            except ValueError:
+                pass
+        ts.sort()
+        secs = 0.0
+        for i in range(0, len(ts) - 1, 2):
+            delta = (ts[i + 1] - ts[i]).total_seconds()
+            if 0 < delta < 20 * 3600:
+                secs += delta
+        return round(secs / 3600.0, 2)
+
+    def _iopoint_espelho_data(profile, args):
+        """Monta o espelho de ponto do iopoint. Retorna o dict de resposta ou
+        lança _IopointError. Compartilhado pela rota JSON e pela exportação."""
+        if not _iopoint_enabled():
+            return {'enabled': False, 'items': []}
+        ini, fim, perr = _iopoint_period(args)
+        if perr:
+            raise _IopointError(perr, status=422, code='bad_period')
+        filial_id = args.get('filial_id')
+        params = _iopoint_period_params(ini, fim)
+        cpf_filter = _iopoint_cpf_digits(args.get('colaborador_cpf'))
+        if cpf_filter:
+            params['national_registry_list[]'] = [cpf_filter]
+        data = _iopoint_get('point/getFromPeriod', params) or []
+
+        matcher = _iopoint_matcher(profile, filial_id)
+        scoped = _iopoint_scoped(profile, filial_id)
+        filial_ids = set()
+        items = []
+        nao_vinculados = 0
+        for colab in data:
+            cpf, seg, nome, match_por = _iopoint_person(colab, matcher)
+            if scoped:
+                if not seg:
+                    continue
+                if str(filial_id).isdigit() and int(seg.get('filial_id') or -1) != int(filial_id):
+                    continue
+            if not seg:
+                nao_vinculados += 1
+            if seg and seg.get('filial_id') is not None:
+                filial_ids.add(int(seg['filial_id']))
+            dias = []
+            total_horas = 0.0
+            for day in (colab.get('days') or []):
+                pts = sorted((day.get('points') or []), key=lambda p: (p.get('datetime') or ''))
+                # Calcula das batidas (não do worked_time do iopoint, que é furado).
+                worked = _worked_from_points(pts)
+                ent = pts[0].get('hour') if pts else None
+                sai = pts[-1].get('hour') if pts else None
+                # Almoço do cadastro NÃO entra no trabalhado; mínimo legal de 60 min.
+                try:
+                    lunch_min = max(60.0, float((seg or {}).get('intervalo_almoco_minutos') or 0)) / 60.0
+                except (TypeError, ValueError):
+                    lunch_min = 1.0
+                span = _iop_span_horas(ent, sai)
+                trabalhado = worked
+                if worked > 0 and span is not None and span > 0:
+                    trabalhado = max(0.0, min(worked, span - lunch_min))
+                total_horas += trabalhado
+                esperado = _iop_esperado_dia(seg, (day.get('date') or '')[:10])
+                extra = round(max(0.0, trabalhado - esperado), 2) if esperado is not None else None
+                dias.append({
+                    'data': (day.get('date') or '')[:10],
+                    'shift': day.get('shift'),
+                    'esperado_horas': esperado,
+                    'extra_horas': extra,
+                    'worked_time': day.get('worked_time'),
+                    'worked_horas': round(worked, 2),
+                    'trabalhado_horas': round(trabalhado, 2),
+                    'qtd_batidas': len(pts),
+                    'entrada': ent,
+                    'saida': sai,
+                    'ajustes': sum(1 for p in pts if p.get('is_adjusted')),
+                    'batidas': [{
+                        'point_id': p.get('point_id'),
+                        'hora': p.get('hour'),
+                        'method': p.get('method'),
+                        'origin': p.get('origin'),
+                        'is_adjusted': bool(p.get('is_adjusted')),
+                        'has_audit_photo': bool(p.get('has_audit_photo')),
+                        'address': p.get('address'),
+                        'geoloc': p.get('geolocation'),
+                        'accuracy': p.get('accuracy_meters'),
+                    } for p in pts],
+                })
+            dias.sort(key=lambda d: d['data'], reverse=True)
+            items.append({
+                'cpf': cpf,
+                'vinculado': bool(seg),
+                'match_por': match_por,
+                'colaborador_id': (seg or {}).get('id'),
+                'nome': nome,
+                'iopoint_name': colab.get('name'),
+                'occupation': colab.get('occupation'),
+                'filial_id': (seg or {}).get('filial_id'),
+                'dias': dias,
+                'total_worked_horas': round(total_horas, 2),
+            })
+        filial_map = _fetch_filial_map(filial_ids)
+        for it in items:
+            it['filial_label'] = filial_map.get(int(it['filial_id'])) if it.get('filial_id') is not None else None
+        items.sort(key=lambda i: (not i['vinculado'], (i['nome'] or '').lower()))
+        return {
+            'enabled': True,
+            'inicio': ini.isoformat(),
+            'fim': fim.isoformat(),
+            'items': items,
+            'meta': {'total_colaboradores': len(items), 'nao_vinculados': nao_vinculados},
+        }
+
+    @app.get('/api/iopoint/espelho')
+    @rate_limit_endpoint(max_requests=60)
+    @require_auth
+    def iopoint_espelho(profile):
+        scope_error = require_scope_permission(profile, 'menu.ponto', 'Sem permissão para ver o ponto.')
+        if scope_error:
+            return scope_error
+        try:
+            return jsonify(_iopoint_espelho_data(profile, request.args))
+        except _IopointError as exc:
+            return jsonify({'error': exc.message, 'code': exc.code, 'source': 'iopoint'}), exc.status
+
+    # Dias trabalhados por escala (0=segunda ... 6=domingo).
+    _ESCALA_DIAS = {
+        'seg-sex': {0, 1, 2, 3, 4},
+        '5x2': {0, 1, 2, 3, 4},
+        'seg-sab': {0, 1, 2, 3, 4, 5},
+        '6x1': {0, 1, 2, 3, 4, 5},
+        'seg-dom': {0, 1, 2, 3, 4, 5, 6},
+    }
+
+    def _iop_span_horas(ent, sai):
+        """Duração entre a primeira e a última batida (HH:MM). Trata virada de dia."""
+        def _h(s):
+            m = re.match(r'^(\d{1,2}):(\d{2})', str(s or ''))
+            return int(m.group(1)) + int(m.group(2)) / 60.0 if m else None
+        a, b = _h(ent), _h(sai)
+        if a is None or b is None:
+            return None
+        if b < a:
+            b += 24
+        return round(b - a, 4)
+
+    def _iop_esperado_dia(seg, date_iso):
+        """Jornada esperada do dia pela ESCALA + carga semanal do cadastro (SEG).
+        Ex.: seg-sex 44h -> 44/5 = 8,8h/dia. Dia fora da escala (folga) -> 0 (tudo
+        vira extra). None quando não dá pra determinar (escala não mapeada/sem carga)."""
+        if not seg:
+            return None
+        try:
+            carga = float(seg.get('carga_horaria_semanal') or 0)
+        except (TypeError, ValueError):
+            carga = 0.0
+        if carga <= 0:
+            return None
+        esc = (seg.get('escala_servico') or '').strip().lower()
+        workdays = _ESCALA_DIAS.get(esc)
+        if not workdays:
+            return None
+        try:
+            wd = date_class.fromisoformat(date_iso).weekday() if date_iso else None
+        except ValueError:
+            wd = None
+        if wd is not None and wd not in workdays:
+            return 0.0
+        if esc == 'seg-sab':
+            # Sábado tem carga própria (ex.: 4h); seg-sex = (semanal - sábado) / 5.
+            try:
+                sab = float(seg.get('carga_horaria_sabado') or 0)
+            except (TypeError, ValueError):
+                sab = 0.0
+            if sab <= 0:
+                sab = 4.0
+            if wd == 5:
+                return round(sab, 2)
+            return round((carga - sab) / 5.0, 2)
+        return round(carga / len(workdays), 2)
+
+    def _iop_latlng(v):
+        # iopoint manda geolocation como string "lat,lng" (às vezes objeto {lat,lng}).
+        if isinstance(v, dict):
+            return v.get('lat'), v.get('lng')
+        if isinstance(v, str) and ',' in v:
+            a, b = v.split(',', 1)
+            try:
+                return float(a), float(b)
+            except ValueError:
+                return None, None
+        return None, None
+
+    def _iop_haversine_m(lat1, lng1, lat2, lng2):
+        from math import radians, sin, cos, asin, sqrt
+        dlat = radians(lat2 - lat1)
+        dlng = radians(lng2 - lng1)
+        h = sin(dlat / 2) ** 2 + cos(radians(lat1)) * cos(radians(lat2)) * sin(dlng / 2) ** 2
+        return 2 * 6371000.0 * asin(min(1.0, sqrt(h)))
+
+    def _iop_br_date(iso):
+        if not iso:
+            return ''
+        p = str(iso)[:10].split('-')
+        return f'{p[2]}/{p[1]}/{p[0]}' if len(p) == 3 else str(iso)
+
+    def _iop_hhmm(horas):
+        v = float(horas or 0)
+        neg = v < 0
+        a = abs(v)
+        hh = int(a)
+        mm = round((a - hh) * 60)
+        return f'{"−" if neg else ""}{hh}h{mm:02d}'
+
+    @app.get('/api/iopoint/espelho/export-xlsx')
+    @rate_limit_endpoint(max_requests=30)
+    @require_auth
+    def iopoint_espelho_export(profile):
+        scope_error = require_scope_permission(profile, 'menu.ponto', 'Sem permissão para exportar o ponto.')
+        if scope_error:
+            return scope_error
+        try:
+            payload = _iopoint_espelho_data(profile, request.args)
+        except _IopointError as exc:
+            return jsonify({'error': exc.message, 'code': exc.code, 'source': 'iopoint'}), exc.status
+        if not payload.get('enabled'):
+            return jsonify({'error': 'Integração iopoint não configurada.'}), 400
+        items = payload.get('items') or []
+
+        wb = Workbook()
+        ws = wb.active
+        ws.title = 'Ponto iopoint'
+        bold = Font(bold=True)
+        white_bold = Font(bold=True, color='FFFFFFFF')
+        center = Alignment(horizontal='center', vertical='center')
+        left = Alignment(horizontal='left', vertical='center')
+        header_fill = PatternFill(start_color='FF1F4E78', end_color='FF1F4E78', fill_type='solid')
+        sub_fill = PatternFill(start_color='FFDDEBF7', end_color='FFDDEBF7', fill_type='solid')
+        thin = Side(border_style='thin', color='FFBFBFBF')
+        border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+        headers = ['Colaborador', 'Cargo', 'Base', 'Data', 'Entrada', 'Saída', 'Batidas', 'Horas', 'Ajustes']
+        for col, header in enumerate(headers, start=1):
+            cell = ws.cell(row=1, column=col, value=header)
+            cell.font = white_bold
+            cell.fill = header_fill
+            cell.alignment = center
+            cell.border = border
+
+        row_idx = 2
+        for it in items:
+            nome = it.get('nome') or it.get('iopoint_name') or '—'
+            cargo = it.get('occupation') or ''
+            base = it.get('filial_label') or ('não vinculado' if not it.get('vinculado') else '')
+            for d in (it.get('dias') or []):
+                valores = [
+                    nome, cargo, base,
+                    _iop_br_date(d.get('data')),
+                    d.get('entrada') or '',
+                    d.get('saida') or '',
+                    d.get('qtd_batidas') or 0,
+                    d.get('worked_time') or _iop_hhmm(d.get('worked_horas')),
+                    d.get('ajustes') or 0,
+                ]
+                for col, valor in enumerate(valores, start=1):
+                    cell = ws.cell(row=row_idx, column=col, value=valor)
+                    cell.alignment = left
+                    cell.border = border
+                row_idx += 1
+            ws.merge_cells(start_row=row_idx, start_column=1, end_row=row_idx, end_column=7)
+            tot = ws.cell(row=row_idx, column=1, value=f'Total {nome}')
+            tot.font = bold
+            hcell = ws.cell(row=row_idx, column=8, value=_iop_hhmm(it.get('total_worked_horas')))
+            hcell.font = bold
+            for col in range(1, len(headers) + 1):
+                ws.cell(row=row_idx, column=col).fill = sub_fill
+            row_idx += 1
+
+        widths = [28, 18, 16, 12, 10, 10, 10, 12, 10]
+        for i, w in enumerate(widths, start=1):
+            ws.column_dimensions[ws.cell(row=1, column=i).column_letter].width = w
+        ws.freeze_panes = 'A2'
+
+        bio = io.BytesIO()
+        wb.save(bio)
+        bio.seek(0)
+        response_stream = make_response(bio.read())
+        filename = f'ponto_iopoint_{date_class.today().isoformat()}.xlsx'
+        response_stream.headers.set('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response_stream.headers.set('Content-Disposition', f'attachment; filename="{filename}"')
+        write_audit_event(profile, 'ponto_exportar_iopoint', 'iopoint', details={'colaboradores': len(items)})
+        return response_stream
+
+    def _iopoint_severity_for_type(type_text):
+        t = (type_text or '').strip().lower()
+        if 'falta' in t:
+            return 'danger'
+        if 'hora extra' in t or 'extra' in t or 'inter' in t or 'intra' in t or 'limite' in t:
+            return 'warning'
+        return 'info'
+
+    @app.get('/api/iopoint/alertas')
+    @rate_limit_endpoint(max_requests=60)
+    @require_auth
+    def iopoint_alertas(profile):
+        scope_error = require_scope_permission(profile, 'menu.ponto', 'Sem permissão para ver o ponto.')
+        if scope_error:
+            return scope_error
+        if not _iopoint_enabled():
+            return jsonify({'enabled': False, 'itens': []})
+        ini, fim, perr = _iopoint_period(request.args)
+        if perr:
+            return jsonify({'error': perr}), 422
+        filial_id = request.args.get('filial_id')
+        params = _iopoint_period_params(ini, fim)
+        matcher = _iopoint_matcher(profile, filial_id)
+        scoped = _iopoint_scoped(profile, filial_id)
+
+        def _keep(seg):
+            if not scoped:
+                return True
+            if not seg:
+                return False
+            if str(filial_id).isdigit() and int(seg.get('filial_id') or -1) != int(filial_id):
+                return False
+            return True
+
+        itens = []
+        filial_ids = set()
+        errors = []
+
+        def _collect(path, builder):
+            try:
+                data = _iopoint_get(path, params) or []
+            except _IopointError as exc:
+                errors.append({'source': path, 'error': exc.message})
+                return
+            for colab in data:
+                cpf, seg, nome, match_por = _iopoint_person(colab, matcher)
+                if not _keep(seg):
+                    continue
+                if seg and seg.get('filial_id') is not None:
+                    filial_ids.add(int(seg['filial_id']))
+                for row in builder(colab):
+                    row.update({'cpf': cpf, 'vinculado': bool(seg), 'colaborador': nome, 'match_por': match_por,
+                                'colaborador_id': (seg or {}).get('id'), 'filial_id': (seg or {}).get('filial_id')})
+                    itens.append(row)
+
+        _collect('tardiness', lambda colab: [{
+            'data': (t.get('date') or '')[:10], 'tipo': 'Atraso', 'valor': t.get('minutes_late'),
+            'severidade': 'info', 'status': None, 'fonte': 'atraso',
+            'detalhe': f"Jornada {t.get('journey_in') or '—'} · batida {t.get('punch_in') or '—'}",
+        } for t in (colab.get('tardiness') or [])])
+
+        _collect('point-inconsistency', lambda colab: [{
+            'data': (o.get('date') or '')[:10], 'tipo': o.get('type'), 'valor': o.get('value'),
+            'severidade': _iopoint_severity_for_type(o.get('type')), 'status': None, 'fonte': 'inconsistencia',
+            'detalhe': None,
+        } for o in (colab.get('occurrences') or [])])
+
+        _collect('inconsistency-justification', lambda colab: [{
+            'data': (o.get('date') or '')[:10], 'tipo': o.get('type'), 'valor': o.get('value'),
+            'severidade': ('warning' if (o.get('status') == 'pending') else 'info'),
+            'status': o.get('status'), 'fonte': 'justificativa',
+            'detalhe': o.get('justification'),
+        } for o in (colab.get('occurrences') or [])])
+
+        _collect('adjustment', lambda colab: [{
+            'data': (a.get('date') or '')[:10], 'tipo': a.get('type') or 'Ajuste de ponto', 'valor': None,
+            'severidade': ('warning' if (a.get('status') == 'Pendente') else 'info'),
+            'status': a.get('status'), 'fonte': 'ajuste',
+            'detalhe': a.get('collaborator_reason') or a.get('manager_observation'),
+        } for a in (colab.get('adjustments') or [])])
+
+        filial_map = _fetch_filial_map(filial_ids)
+        for it in itens:
+            it['filial_label'] = filial_map.get(int(it['filial_id'])) if it.get('filial_id') is not None else None
+        sev_rank = {'danger': 0, 'warning': 1, 'info': 2}
+        itens.sort(key=lambda i: ((i.get('data') or ''), sev_rank.get(i.get('severidade'), 3)), reverse=True)
+        resumo = {
+            'total': len(itens),
+            'danger': sum(1 for i in itens if i['severidade'] == 'danger'),
+            'warning': sum(1 for i in itens if i['severidade'] == 'warning'),
+            'info': sum(1 for i in itens if i['severidade'] == 'info'),
+            'atrasos': sum(1 for i in itens if i['fonte'] == 'atraso'),
+            'inconsistencias': sum(1 for i in itens if i['fonte'] in ('inconsistencia', 'justificativa')),
+            'ajustes_pendentes': sum(1 for i in itens if i['fonte'] == 'ajuste' and i.get('status') == 'Pendente'),
+        }
+        return jsonify({'enabled': True, 'inicio': ini.isoformat(), 'fim': fim.isoformat(),
+                        'resumo': resumo, 'itens': itens[:1000], 'errors': errors})
+
+    def _iopoint_absence_list(params):
+        """Lista (status, d0, d1, [colaborador blocks]) de absence/getFromPeriod
+        (usa datetime). Os colaboradores são resolvidos por CPF/nome no chamador."""
+        ab_params = dict(params)
+        ab_params['begin_date'] = f"{params['begin_date']} 00:00:00"
+        ab_params['end_date'] = f"{params['end_date']} 23:59:59"
+        try:
+            data = _iopoint_get('absence/getFromPeriod', ab_params) or []
+        except _IopointError:
+            return []
+        out = []
+        for ab in data:
+            d0 = _parse_iso_date((ab.get('begin_date') or '')[:10])
+            d1 = _parse_iso_date((ab.get('end_date') or '')[:10])
+            if d0 and d1 and d1 < d0:
+                d0, d1 = d1, d0
+            out.append((_iopoint_absence_status(ab.get('type')), d0, d1, ab.get('collaborators') or []))
+        return out
+
+    def _iopoint_pres_norm(status):
+        s = (status or '').strip().lower()
+        return 'presente' if s == 'atraso' else s
+
+    def _iopoint_presence_map(profile, ini, fim, filial_id=None):
+        """Deriva o status de presença do iopoint por (colaborador_id, data).
+        Retorna (iop, seg_of, match_of); iop[(sid, 'YYYY-MM-DD')] ∈
+        {'presente','atraso','falta','ferias','atestado','afastado'}.
+        Lança _IopointError se a API falhar. Fonte compartilhada pela conciliação
+        e pelo preenchimento automático do controle de presença."""
+        params = _iopoint_period_params(ini, fim)
+        matcher = _iopoint_matcher(profile, filial_id)
+        point_data = _iopoint_get('point/getFromPeriod', params) or []
+        tard_data = _iopoint_get('tardiness', params) or []
+        # Apuração: alguns clientes não expõem batidas brutas em getFromPeriod,
+        # mas a falta/atraso apurada vem aqui. É o sinal de presença nesses casos.
+        incons_data = _iopoint_get('point-inconsistency', params) or []
+        absence_list = _iopoint_absence_list(params)
+
+        iop = {}       # (colaborador_id, data) -> status iopoint
+        seg_of = {}    # colaborador_id -> colaborador SEG
+        match_of = {}  # colaborador_id -> 'cpf' | 'nome'
+        batida = set()     # (sid, data) com batida real (getFromPeriod) => presença
+        late_min = {}      # (sid, data) -> minutos de atraso apurados
+
+        def _reg(colab_block):
+            seg, mp = _iopoint_resolve(colab_block.get('national_registry'), colab_block.get('name'), matcher)
+            if not seg:
+                return None
+            sid = int(seg['id'])
+            seg_of[sid] = seg
+            match_of.setdefault(sid, mp)
+            return sid
+
+        # 1) Presença = SÓ batida real de ponto (getFromPeriod com points no dia).
+        #    Atraso/apuração NÃO cria presença — só decora quem realmente bateu.
+        for colab in point_data:
+            sid = _reg(colab)
+            if sid is None:
+                continue
+            for day in (colab.get('days') or []):
+                d = (day.get('date') or '')[:10]
+                if d and (day.get('points')):
+                    batida.add((sid, d))
+                    iop[(sid, d)] = 'presente'
+
+        # 2) Coleta minutos de atraso (tardiness + inconsistência de atraso).
+        def _mark_late(sid, d, minutos):
+            if minutos is None:
+                return
+            prev = late_min.get((sid, d))
+            late_min[(sid, d)] = minutos if prev is None else max(prev, minutos)
+
+        for colab in tard_data:
+            sid = _reg(colab)
+            if sid is None:
+                continue
+            for t in (colab.get('tardiness') or []):
+                d = (t.get('date') or '')[:10]
+                if d:
+                    _mark_late(sid, d, _iopoint_minutes(t.get('minutes_late')))
+
+        # 3) Inconsistências: falta só quando NÃO houve batida; atraso vira minutos.
+        for colab in incons_data:
+            sid = _reg(colab)
+            if sid is None:
+                continue
+            for o in (colab.get('occurrences') or []):
+                d = (o.get('date') or '')[:10]
+                if not d:
+                    continue
+                t = (o.get('type') or '').lower()
+                if 'falta' in t:
+                    if (sid, d) not in batida and iop.get((sid, d)) is None:
+                        iop[(sid, d)] = 'falta'
+                elif 'atraso' in t:
+                    _mark_late(sid, d, _iopoint_minutes(o.get('value')))
+
+        # 4) Ausências (férias/atestado/afastamento) — não apagam batida real.
+        for status, d0, d1, collaborators in absence_list:
+            if not d0 or not d1:
+                continue
+            for colab_block in collaborators:
+                sid = _reg(colab_block)
+                if sid is None:
+                    continue
+                dd = d0
+                while dd <= d1:
+                    key = (sid, dd.isoformat())
+                    if key not in batida:
+                        iop[key] = status  # ausência tem prioridade sobre falta/pendente
+                    dd += timedelta(days=1)
+
+        # 5) Aplica o atraso como decoração APENAS onde há batida real e passou da
+        #    tolerância. Sem batida, atraso apurado é ignorado (não vira presença).
+        for (sid, d), minutos in late_min.items():
+            if (sid, d) in batida and minutos > _IOPOINT_ATRASO_TOL_MIN and iop.get((sid, d)) == 'presente':
+                iop[(sid, d)] = 'atraso'
+        return iop, seg_of, match_of
+
+    def _iopoint_autofill_presenca(profile, target_date, filial_id, stored_rows):
+        """Preenche presencas_diarias a partir do iopoint. Sobrescreve o que ainda
+        está 'pendente'/vazio E o que o próprio iopoint gravou antes (mantém o dado
+        sempre atualizado), mas NUNCA toca ajuste manual (origem != 'iopoint' com
+        status decidido). Silencioso: falha de iopoint não quebra a listagem.
+        Batida → 'presente'; atraso → 'presente' + observação; falta/ausência →
+        o status correspondente."""
+        if not _iopoint_enabled():
+            return
+        if not profile_has_scope_permission(profile, 'manage.presenca'):
+            return
+        try:
+            iop, seg_of, _ = _iopoint_presence_map(profile, target_date, target_date, filial_id)
+        except _IopointError:
+            return
+        dia = target_date.isoformat()
+        # Bloqueia só ajuste manual: linha com status decidido e origem != iopoint.
+        # Linhas do próprio iopoint podem ser atualizadas a cada carga.
+        locked = {
+            int(r['colaborador_id'])
+            for r in stored_rows
+            if r.get('colaborador_id') is not None
+            and (r.get('status') or '').lower() not in ('', 'pendente')
+            and (r.get('origem') or '') != 'iopoint'
+        }
+        # Sinais do iopoint para o dia, por colaborador.
+        sinais = {sid: s for (sid, dd), s in iop.items() if dd == dia}
+
+        upserts = []
+        for sid, s_iop in sinais.items():
+            if sid in locked:
+                continue
+            fid = (seg_of.get(sid) or {}).get('filial_id')
+            if fid is None:
+                continue
+            row = {
+                'data_referencia': dia,
+                'colaborador_id': sid,
+                'filial_id': fid,
+                'status': 'presente' if s_iop == 'atraso' else s_iop,
+                'origem': 'iopoint',
+                'alterado_por': profile['user_id'],
+                'observacoes': 'Chegou atrasado (iopoint)' if s_iop == 'atraso' else None,
+            }
+            upserts.append(row)
+
+        # Reconciliação: linha que o iopoint gravou antes mas que hoje não tem mais
+        # sinal (ex.: presença criada por bug já corrigido) volta para 'pendente'.
+        for r in stored_rows:
+            cid = r.get('colaborador_id')
+            if cid is None or (r.get('origem') or '') != 'iopoint':
+                continue
+            cid = int(cid)
+            if cid in sinais or cid in locked:
+                continue
+            if (r.get('status') or '').lower() == 'pendente' and not r.get('observacoes'):
+                continue
+            upserts.append({
+                'data_referencia': dia,
+                'colaborador_id': cid,
+                'filial_id': r.get('filial_id'),
+                'status': 'pendente',
+                'origem': 'iopoint',
+                'alterado_por': profile['user_id'],
+                'observacoes': None,
+            })
+
+        if upserts:
+            try:
+                supabase.table('presencas_diarias').upsert(upserts, on_conflict='data_referencia,colaborador_id').execute()
+            except Exception as exc:
+                app.logger.warning('Autofill presença iopoint falhou: %s', exc)
+
+    @app.get('/api/iopoint/conciliacao-presenca')
+    @rate_limit_endpoint(max_requests=45)
+    @require_auth
+    def iopoint_conciliacao_presenca(profile):
+        scope_error = require_scope_permission(profile, 'menu.ponto', 'Sem permissão para ver o ponto.')
+        if scope_error:
+            return scope_error
+        if not _iopoint_enabled():
+            return jsonify({'enabled': False, 'itens': []})
+        if not table_exists_ready('presencas_diarias'):
+            return jsonify({'enabled': True, 'database_ready': False, 'itens': [], 'resumo': {}})
+        ini, fim, perr = _iopoint_period(request.args)
+        if perr:
+            return jsonify({'error': perr}), 422
+        filial_id = request.args.get('filial_id')
+        try:
+            iop, seg_of, match_of = _iopoint_presence_map(profile, ini, fim, filial_id)
+        except _IopointError as exc:
+            return jsonify({'error': exc.message, 'code': exc.code, 'source': 'iopoint'}), exc.status
+
+        # Presença lançada no SEG (por colaborador_id, data_referencia)
+        seg_pres = {}
+        ids = list(seg_of.keys())
+        if ids:
+            rows = (supabase.table('presencas_diarias')
+                    .select('colaborador_id, data_referencia, status')
+                    .gte('data_referencia', ini.isoformat())
+                    .lte('data_referencia', fim.isoformat())
+                    .in_('colaborador_id', ids)
+                    .execute().data or [])
+            for r in rows:
+                seg_pres[(int(r['colaborador_id']), r['data_referencia'][:10])] = (r.get('status') or '').lower()
+
+        # União das datas por colaborador
+        dates_by_sid = {}
+        for (sid, d) in iop.keys():
+            dates_by_sid.setdefault(sid, set()).add(d)
+        for (sid, d) in seg_pres.keys():
+            if sid in seg_of:
+                dates_by_sid.setdefault(sid, set()).add(d)
+
+        itens = []
+        resumo = {'dias_comparados': 0, 'ok': 0, 'divergencias': 0, 'so_seg': 0, 'so_iopoint': 0}
+        filial_ids = set()
+        for sid, datas in dates_by_sid.items():
+            seg = seg_of.get(sid)
+            if not seg:
+                continue
+            if seg.get('filial_id') is not None:
+                filial_ids.add(int(seg['filial_id']))
+            for d in datas:
+                s_iop = iop.get((sid, d))
+                s_seg = seg_pres.get((sid, d))
+                resumo['dias_comparados'] += 1
+                if s_iop and s_seg and _iopoint_pres_norm(s_iop) == _iopoint_pres_norm(s_seg):
+                    resumo['ok'] += 1
+                    continue
+                if s_iop and not s_seg:
+                    resumo['so_iopoint'] += 1
+                    tipo, sev = 'SEG sem lançamento', 'info'
+                elif s_seg and not s_iop:
+                    resumo['so_seg'] += 1
+                    if s_seg == 'presente':
+                        tipo, sev = 'SEG presente, iopoint sem registro', 'warning'
+                    else:
+                        tipo, sev = 'Sem registro no iopoint', 'info'
+                else:
+                    resumo['divergencias'] += 1
+                    if s_iop in ('presente', 'atraso') and s_seg == 'falta':
+                        tipo, sev = 'iopoint com registro × SEG falta', 'danger'
+                    elif s_iop == 'falta' and s_seg in ('presente', 'atraso'):
+                        tipo, sev = 'iopoint falta × SEG presente', 'danger'
+                    else:
+                        tipo, sev = 'Status divergente', 'warning'
+                itens.append({
+                    'data': d, 'cpf': _iopoint_cpf_digits(seg.get('cpf')), 'colaborador': seg.get('nome_completo'),
+                    'colaborador_id': sid, 'vinculado': True, 'match_por': match_of.get(sid),
+                    'filial_id': seg.get('filial_id'),
+                    'status_seg': s_seg, 'status_iopoint': s_iop, 'tipo': tipo, 'severidade': sev,
+                })
+        filial_map = _fetch_filial_map(filial_ids)
+        for it in itens:
+            it['filial_label'] = filial_map.get(int(it['filial_id'])) if it.get('filial_id') is not None else None
+        sev_rank = {'danger': 0, 'warning': 1, 'info': 2}
+        itens.sort(key=lambda i: (sev_rank.get(i['severidade'], 3), i['data']), reverse=False)
+        return jsonify({'enabled': True, 'database_ready': True, 'inicio': ini.isoformat(),
+                        'fim': fim.isoformat(), 'resumo': resumo, 'itens': itens[:1000]})
+
+    @app.get('/api/iopoint/conciliacao-he')
+    @rate_limit_endpoint(max_requests=45)
+    @require_auth
+    def iopoint_conciliacao_he(profile):
+        scope_error = require_scope_permission(profile, 'menu.ponto', 'Sem permissão para ver o ponto.')
+        if scope_error:
+            return scope_error
+        if not _iopoint_enabled():
+            return jsonify({'enabled': False, 'itens': []})
+        if not table_exists_ready('horas_extras'):
+            return jsonify({'enabled': True, 'database_ready': False, 'itens': [], 'resumo': {}})
+        ini, fim, perr = _iopoint_period(request.args, default_days=30)
+        if perr:
+            return jsonify({'error': perr}), 422
+        try:
+            tolerancia = max(0.0, float(request.args.get('tolerancia', '0.25')))
+        except (TypeError, ValueError):
+            tolerancia = 0.25
+        filial_id = request.args.get('filial_id')
+        scoped = _iopoint_scoped(profile, filial_id)
+
+        # SEG: HE aprovada (status final 'aprovado') por colaborador no período.
+        he_query = (supabase.table('horas_extras')
+                    .select('colaborador_id, qtd_horas, filial_id')
+                    .eq('status', 'aprovado')
+                    .gte('data_solicitacao', ini.isoformat())
+                    .lte('data_solicitacao', fim.isoformat()))
+        if str(filial_id).isdigit():
+            he_query = he_query.eq('filial_id', int(filial_id))
+        elif profile_has_filial_scope(profile):
+            he_query = he_query.in_('filial_id', profile.get('allowed_filial_ids') or [-1])
+        he_rows = he_query.execute().data or []
+        seg_he = {}
+        for r in he_rows:
+            cid = r.get('colaborador_id')
+            if cid is None:
+                continue
+            seg_he[int(cid)] = seg_he.get(int(cid), 0.0) + float(r.get('qtd_horas') or 0)
+
+        # Nomes/CPF/filial dos colaboradores com HE
+        colmap = {}
+        if seg_he:
+            crows = (supabase.table('colaboradores')
+                     .select('id, nome_completo, cpf, filial_id')
+                     .in_('id', list(seg_he.keys()))
+                     .execute().data or [])
+            colmap = {int(c['id']): c for c in crows}
+
+        by_key = {}
+        filial_ids = set()
+        for cid, hrs in seg_he.items():
+            c = colmap.get(cid, {})
+            cpf = _iopoint_cpf_digits(c.get('cpf'))
+            if c.get('filial_id') is not None:
+                filial_ids.add(int(c['filial_id']))
+            by_key[f'id:{cid}'] = {'cpf': cpf, 'colaborador': c.get('nome_completo') or f'Colaborador {cid}',
+                                   'colaborador_id': cid, 'filial_id': c.get('filial_id'), 'vinculado': True,
+                                   'match_por': ('cpf' if cpf else None),
+                                   'he_seg': round(hrs, 2), 'he_iopoint': 0.0}
+
+        # iopoint: HE apurada = MESMO cálculo da aba "Batidas & horas" (espelho).
+        # Soma de extra_horas/dia = trabalhado além do esperado pela escala+carga
+        # do cadastro SEG. Fonte única -> conciliação e espelho sempre coerentes.
+        # (extra_horas None = sem escala/carga no SEG p/ apurar -> conta 0.)
+        try:
+            espelho = _iopoint_espelho_data(profile, request.args)
+        except _IopointError as exc:
+            return jsonify({'error': exc.message, 'code': exc.code, 'source': 'iopoint'}), exc.status
+        for it in (espelho.get('items') or []):
+            he_iop = round(sum((d.get('extra_horas') or 0.0) for d in (it.get('dias') or [])), 2)
+            cid = it.get('colaborador_id')
+            mp = it.get('match_por')
+            if cid is not None:
+                key = f'id:{int(cid)}'
+                if key in by_key:
+                    by_key[key]['he_iopoint'] = he_iop
+                    if mp and by_key[key].get('match_por') in (None, 'nome'):
+                        by_key[key]['match_por'] = mp
+                else:
+                    if it.get('filial_id') is not None:
+                        filial_ids.add(int(it['filial_id']))
+                    by_key[key] = {'cpf': it.get('cpf'), 'colaborador': it.get('nome'),
+                                   'colaborador_id': int(cid), 'filial_id': it.get('filial_id'),
+                                   'vinculado': True, 'match_por': mp, 'he_seg': 0.0, 'he_iopoint': he_iop}
+            else:
+                if scoped:
+                    continue
+                cpf = it.get('cpf')
+                key = 'iop:' + (cpf or _iopoint_norm_name(it.get('nome')) or '?')
+                by_key[key] = {'cpf': cpf, 'colaborador': it.get('nome') or cpf or '—',
+                               'colaborador_id': None, 'filial_id': None, 'vinculado': False,
+                               'match_por': None, 'he_seg': 0.0, 'he_iopoint': he_iop}
+
+        filial_map = _fetch_filial_map(filial_ids)
+        itens = []
+        resumo = {'colaboradores': 0, 'bate': 0, 'diverge': 0, 'so_seg': 0, 'so_iopoint': 0, 'delta_total_horas': 0.0}
+        for row in by_key.values():
+            he_seg = round(row['he_seg'], 2)
+            he_iop = round(row['he_iopoint'], 2)
+            if he_seg == 0 and he_iop == 0:
+                continue
+            diff = round(he_iop - he_seg, 2)
+            if he_seg > 0 and he_iop == 0:
+                status = 'so_seg'
+            elif he_iop > 0 and he_seg == 0:
+                status = 'so_iopoint'
+            elif abs(diff) <= tolerancia:
+                status = 'bate'
+            else:
+                status = 'diverge'
+            resumo['colaboradores'] += 1
+            resumo[status] = resumo.get(status, 0) + 1
+            resumo['delta_total_horas'] += diff
+            row['filial_label'] = filial_map.get(int(row['filial_id'])) if row.get('filial_id') is not None else None
+            itens.append({**row, 'he_seg': he_seg, 'he_iopoint': he_iop, 'diferenca': diff, 'status': status})
+        resumo['delta_total_horas'] = round(resumo['delta_total_horas'], 2)
+        status_rank = {'diverge': 0, 'so_iopoint': 1, 'so_seg': 2, 'bate': 3}
+        itens.sort(key=lambda i: (status_rank.get(i['status'], 9), -abs(i['diferenca'])))
+        return jsonify({'enabled': True, 'database_ready': True, 'inicio': ini.isoformat(), 'fim': fim.isoformat(),
+                        'tolerancia': tolerancia, 'resumo': resumo, 'itens': itens})
+
+    @app.get('/api/iopoint/horas-extras-apuradas')
+    @rate_limit_endpoint(max_requests=45)
+    @require_auth
+    def iopoint_horas_extras_apuradas(profile):
+        """HE apurada pelo ponto por colaborador, dividida em 50% (dia útil) e
+        100% (DSR/feriado). MESMA fonte da aba 'Batidas & horas' e da Conciliação:
+        extra/dia = trabalhado (batidas reais) − jornada do cadastro SEG. NÃO usa
+        os buckets over_time do iopoint (calculados sobre o worked_time furado e
+        sensíveis à janela). Estável: estender o período só adiciona dias."""
+        scope_error = require_scope_permission(profile, 'menu.ponto', 'Sem permissão para ver o ponto.')
+        if scope_error:
+            return scope_error
+        if not _iopoint_enabled():
+            return jsonify({'enabled': False, 'itens': []})
+        try:
+            espelho = _iopoint_espelho_data(profile, request.args)
+        except _IopointError as exc:
+            return jsonify({'error': exc.message, 'code': exc.code, 'source': 'iopoint'}), exc.status
+        if not espelho.get('enabled', True):
+            return jsonify({'enabled': False, 'itens': []})
+        ini, fim = espelho.get('inicio'), espelho.get('fim')
+
+        # Domingo/feriado trabalhado = 100% (DSR/feriado). Resto = 50%.
+        feriados_set = set()
+        try:
+            _fr = (supabase.table('feriados').select('data')
+                   .gte('data', ini).lte('data', fim).execute().data) or []
+            feriados_set = {str(x.get('data'))[:10] for x in _fr if x.get('data')}
+        except Exception:
+            feriados_set = set()
+
+        itens = []
+        nao_vinculados = 0
+        for it in (espelho.get('items') or []):
+            h50 = h100 = 0.0
+            for d in (it.get('dias') or []):
+                extra = d.get('extra_horas')
+                if not extra or extra <= 0:
+                    continue
+                dt = (d.get('data') or '')[:10]
+                try:
+                    is_dom = date_class.fromisoformat(dt).weekday() == 6
+                except ValueError:
+                    is_dom = False
+                if is_dom or dt in feriados_set:
+                    h100 += extra
+                else:
+                    h50 += extra
+            h50, h100 = round(h50, 2), round(h100, 2)
+            if h50 == 0 and h100 == 0:
+                continue
+            if not it.get('vinculado'):
+                nao_vinculados += 1
+            itens.append({
+                'cpf': it.get('cpf'),
+                'vinculado': bool(it.get('vinculado')),
+                'match_por': it.get('match_por'),
+                'colaborador_id': it.get('colaborador_id'),
+                'colaborador': it.get('nome'),
+                'filial_id': it.get('filial_id'),
+                'filial_label': it.get('filial_label'),
+                'horas_normais': h50,
+                'horas_extra_100': h100,
+                'horas_dom_feriado': h100,
+                'horas_trabalhadas': it.get('total_worked_horas') or 0.0,
+            })
+        itens.sort(key=lambda i: (not i['vinculado'], (i['colaborador'] or '').lower()))
+        return jsonify({
+            'enabled': True,
+            'inicio': ini,
+            'fim': fim,
+            'itens': itens,
+            'meta': {'total': len(itens), 'nao_vinculados': nao_vinculados},
+        })
+
+    @app.get('/api/iopoint/dashboard')
+    @rate_limit_endpoint(max_requests=45)
+    @require_auth
+    def iopoint_dashboard(profile):
+        scope_error = require_scope_permission(profile, 'menu.ponto', 'Sem permissão para ver o ponto.')
+        if scope_error:
+            return scope_error
+        if not _iopoint_enabled():
+            return jsonify({'enabled': False})
+        ini, fim, perr = _iopoint_period(request.args, default_days=30)
+        if perr:
+            return jsonify({'error': perr}), 422
+        filial_id = request.args.get('filial_id')
+        matcher = _iopoint_matcher(profile, filial_id)
+        scoped = _iopoint_scoped(profile, filial_id)
+        params = _iopoint_period_params(ini, fim)
+        params['decimal_format'] = 1
+        try:
+            data = _iopoint_get('collaborator/totalHours', params) or []
+            tard = _iopoint_get('tardiness', _iopoint_period_params(ini, fim)) or []
+        except _IopointError as exc:
+            return jsonify({'error': exc.message, 'code': exc.code, 'source': 'iopoint'}), exc.status
+        rows = []
+        by_sid = {}
+        filial_ids = set()
+        for colab in data:
+            th = colab.get('total_hours') or {}
+            seg, mp = _iopoint_resolve(colab.get('national_registry'), colab.get('name'), matcher)
+            if scoped and not seg:
+                continue
+            fid = (seg or {}).get('filial_id')
+            if fid is not None:
+                filial_ids.add(int(fid))
+            row = {
+                'colaborador': (seg or {}).get('nome_completo') or colab.get('name') or '—',
+                'colaborador_id': (seg or {}).get('id'), 'filial_id': fid,
+                'vinculado': bool(seg), 'match_por': mp,
+                'worked': round(_iopoint_dur_to_hours(th.get('worked_time')), 2),
+                'he': _iopoint_sum_overtime(th),
+                'faltas': round(_iopoint_dur_to_hours(th.get('fault_full_time')) + _iopoint_dur_to_hours(th.get('fault_partial_time')), 2),
+                'noturno': round(_iopoint_dur_to_hours(th.get('night_time')), 2),
+                'atrasos': 0,
+            }
+            rows.append(row)
+            if seg:
+                by_sid[int(seg['id'])] = row
+        for colab in tard:
+            seg, _mp = _iopoint_resolve(colab.get('national_registry'), colab.get('name'), matcher)
+            if not seg:
+                continue
+            r = by_sid.get(int(seg['id']))
+            if r:
+                r['atrasos'] += len(colab.get('tardiness') or [])
+        filial_map = _fetch_filial_map(filial_ids)
+        for r in rows:
+            r['filial_label'] = filial_map.get(int(r['filial_id'])) if r.get('filial_id') is not None else None
+        totais = {
+            'colaboradores': len(rows),
+            'worked': round(sum(r['worked'] for r in rows), 1),
+            'he': round(sum(r['he'] for r in rows), 1),
+            'faltas': round(sum(r['faltas'] for r in rows), 1),
+            'noturno': round(sum(r['noturno'] for r in rows), 1),
+            'atrasos': sum(r['atrasos'] for r in rows),
+        }
+
+        def _top(key, n=10):
+            return sorted([r for r in rows if (r.get(key) or 0) > 0], key=lambda r: r[key], reverse=True)[:n]
+
+        return jsonify({'enabled': True, 'inicio': ini.isoformat(), 'fim': fim.isoformat(),
+                        'totais': totais, 'top_horas': _top('worked'), 'top_he': _top('he'),
+                        'top_faltas': _top('faltas'), 'top_atrasos': _top('atrasos')})
+
+    @app.get('/api/iopoint/fora-cerca')
+    @rate_limit_endpoint(max_requests=45)
+    @require_auth
+    def iopoint_fora_cerca(profile):
+        scope_error = require_scope_permission(profile, 'menu.ponto', 'Sem permissão para ver o ponto.')
+        if scope_error:
+            return scope_error
+        if not _iopoint_enabled():
+            return jsonify({'enabled': False, 'itens': []})
+        ini, fim, perr = _iopoint_period(request.args)
+        if perr:
+            return jsonify({'error': perr}), 422
+        filial_id = request.args.get('filial_id')
+        matcher = _iopoint_matcher(profile, filial_id)
+        # Cercas por filial — só as que têm coordenada. Tolera coluna ausente (migration não rodada).
+        cercas = {}
+        cercas_ok = True
+        try:
+            for f in (supabase.table('filiais').select('id, latitude, longitude, raio_metros').execute().data or []):
+                if f.get('latitude') is not None and f.get('longitude') is not None:
+                    cercas[int(f['id'])] = f
+        except Exception:
+            cercas_ok = False
+        params = _iopoint_period_params(ini, fim)
+        try:
+            data = _iopoint_get('point/getFromPeriod', params) or []
+        except _IopointError as exc:
+            return jsonify({'error': exc.message, 'code': exc.code, 'source': 'iopoint'}), exc.status
+        itens = []
+        sem_cerca = set()
+        filial_ids = set()
+        for colab in data:
+            seg, mp = _iopoint_resolve(colab.get('national_registry'), colab.get('name'), matcher)
+            if not seg:
+                continue
+            fid = seg.get('filial_id')
+            if fid is None:
+                continue
+            cerca = cercas.get(int(fid))
+            for day in (colab.get('days') or []):
+                for p in (day.get('points') or []):
+                    lat, lng = _iop_latlng(p.get('geolocation'))
+                    if lat is None:
+                        continue
+                    if not cerca:
+                        sem_cerca.add(int(fid))
+                        continue
+                    dist = _iop_haversine_m(lat, lng, float(cerca['latitude']), float(cerca['longitude']))
+                    raio = int(cerca.get('raio_metros') or 150)
+                    if dist > raio:
+                        filial_ids.add(int(fid))
+                        itens.append({
+                            'colaborador': seg.get('nome_completo'), 'colaborador_id': int(seg['id']),
+                            'vinculado': True, 'match_por': mp, 'filial_id': int(fid),
+                            'data': (day.get('date') or '')[:10], 'hora': p.get('hour'),
+                            'address': p.get('address'), 'geoloc': p.get('geolocation'),
+                            'distancia_m': round(dist), 'raio_m': raio, 'accuracy': p.get('accuracy_meters'),
+                        })
+        filial_map = _fetch_filial_map(filial_ids)
+        for it in itens:
+            it['filial_label'] = filial_map.get(int(it['filial_id']))
+        itens.sort(key=lambda i: ((i.get('data') or ''), (i.get('hora') or '')), reverse=True)
+        return jsonify({'enabled': True, 'inicio': ini.isoformat(), 'fim': fim.isoformat(),
+                        'total': len(itens), 'sem_cerca_filiais': len(sem_cerca),
+                        'cercas_configuradas': cercas_ok and bool(cercas), 'itens': itens[:1000]})
 
     def _find_auth_user_by_email(email):
         """Busca um usuário no auth.users pelo e-mail. Retorna o objeto ou None."""
@@ -6880,7 +8510,7 @@ def create_app():
         try:
             cur = supabase.table('ordens_servico_motorista').select('*').eq('id', item_id).limit(1).execute().data or []
         except Exception as exc:
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
         if not cur:
             return jsonify({'error': 'OS não encontrada.'}), 404
         os_row = cur[0]
@@ -6948,7 +8578,7 @@ def create_app():
             rows = supabase.table('planos').select('*').eq('ativo', True).order('preco_mensal_brl').execute().data or []
             return jsonify(rows)
         except Exception as exc:
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.post('/api/assinatura/checkout')
     @require_auth
@@ -7119,6 +8749,25 @@ def create_app():
         mes_inicio = f'{ano:04d}-{m:02d}-01'
         _, ultimo_dia = calendar.monthrange(ano, m)
         mes_fim = f'{ano:04d}-{m:02d}-{ultimo_dia:02d}'
+        # início do mês seguinte — limite superior exclusivo (cobre DATE e TIMESTAMP)
+        prox_ano, prox_m = (ano + 1, 1) if m == 12 else (ano, m + 1)
+        mes_prox_inicio = f'{prox_ano:04d}-{prox_m:02d}-01'
+
+        # Período livre (opcional): ?inicio=YYYY-MM-DD&fim=YYYY-MM-DD tem
+        # prioridade sobre `mes`. Cobre qualquer intervalo (ex.: trimestre).
+        p_ini = (request.args.get('inicio') or '').strip()[:10]
+        p_fim = (request.args.get('fim') or '').strip()[:10]
+        if p_ini and p_fim:
+            try:
+                d_ini = date(int(p_ini[:4]), int(p_ini[5:7]), int(p_ini[8:10]))
+                d_fim = date(int(p_fim[:4]), int(p_fim[5:7]), int(p_fim[8:10]))
+                if d_ini > d_fim:
+                    d_ini, d_fim = d_fim, d_ini
+                mes_inicio = d_ini.isoformat()
+                mes_fim = d_fim.isoformat()
+                mes_prox_inicio = (d_fim + timedelta(days=1)).isoformat()  # exclusivo
+            except (ValueError, IndexError):
+                return jsonify({'error': 'Período inválido. Use inicio/fim = YYYY-MM-DD.'}), 400
 
         def q(table, filters=None, select='*', count_only=False):
             query = supabase.table(table).select(select, count='exact' if count_only else None)
@@ -7128,6 +8777,8 @@ def create_app():
                         query = query.gte(k, v[1])
                     elif isinstance(v, tuple) and v[0] == 'lte':
                         query = query.lte(k, v[1])
+                    elif isinstance(v, tuple) and v[0] == 'range':
+                        query = query.gte(k, v[1]).lt(k, v[2])
                     else:
                         query = query.eq(k, v)
             r = query.execute()
@@ -7143,7 +8794,7 @@ def create_app():
         em_manut = sum(1 for v in veiculos_rows if v.get('status') == 'manutencao')
 
         # Manutenções do mês
-        manut_fil = {**fil, 'data_abertura': ('gte', mes_inicio)}
+        manut_fil = {**fil, 'data_abertura': ('range', mes_inicio, mes_prox_inicio)}
         manut_r = q('manutencoes', {**manut_fil, 'ativo': True})
         manut_rows = manut_r.data or []
         os_abertas = sum(1 for m in manut_rows if m.get('status') not in ('concluida', 'cancelada'))
@@ -7153,13 +8804,150 @@ def create_app():
         # Abastecimentos do mês
         abastec_fil = {
             **fil,
-            'data_abastecimento': ('gte', mes_inicio),
+            'data_abastecimento': ('range', mes_inicio, mes_prox_inicio),
             'ativo': True,
         }
         abastec_r = q('veiculos_abastecimentos', abastec_fil)
         abastec_rows = abastec_r.data or []
-        litros_mes = sum(float(a.get('litros') or 0) for a in abastec_rows)
-        gasto_combustivel = sum(float(a.get('valor_total') or 0) for a in abastec_rows)
+        gasto_total_abast = sum(float(a.get('valor_total') or 0) for a in abastec_rows)
+
+        # ── Consumo detalhado por veículo (mês) ──
+        # Só o combustível PRINCIPAL entra no consumo/custo-km — ARLA é aditivo,
+        # não move o veículo. Um abastecimento pode ter Diesel + ARLA no mesmo
+        # lançamento (itens); aqui somamos apenas o não-ARLA.
+        def _split_arla(a):
+            """(litros_diesel, gasto_diesel, litros_arla, gasto_arla)."""
+            itens = a.get('itens')
+            if isinstance(itens, list) and itens:
+                dl = dv = al = av = 0.0
+                for it in itens:
+                    li = float(it.get('litros') or 0)
+                    val = li * float(it.get('valor_litro') or 0)
+                    if 'arla' in (it.get('tipo_combustivel') or '').lower():
+                        al += li; av += val
+                    else:
+                        dl += li; dv += val
+                return dl, round(dv, 2), al, round(av, 2)
+            if 'arla' in (a.get('tipo_combustivel') or '').lower():
+                return 0.0, 0.0, float(a.get('litros') or 0), float(a.get('valor_total') or 0)
+            return float(a.get('litros') or 0), float(a.get('valor_total') or 0), 0.0, 0.0
+
+        placa_por_id = {v.get('id'): v.get('placa') for v in veiculos_rows}
+        litros_mes = gasto_combustivel = 0.0   # diesel/principal
+        arla_litros_mes = arla_gasto_mes = 0.0
+        agg = {}
+        for a in abastec_rows:
+            vid = a.get('veiculo_id')
+            g = agg.setdefault(vid, {'litros': 0.0, 'gasto': 0.0, 'n': 0, 'leituras': []})
+            litros_p, gasto_p, litros_a, gasto_a = _split_arla(a)  # diesel vs ARLA
+            litros_mes += litros_p; gasto_combustivel += gasto_p
+            arla_litros_mes += litros_a; arla_gasto_mes += gasto_a
+            g['litros'] += litros_p
+            g['gasto'] += gasto_p
+            g['n'] += 1
+            try:
+                odo = float(a.get('odometro_km')) if a.get('odometro_km') is not None else None
+            except (TypeError, ValueError):
+                odo = None
+            g['leituras'].append({'odo': odo, 'litros': litros_p, 'gasto': gasto_p, 'data': a.get('data_abastecimento') or ''})
+
+        # Salto por intervalo acima disso = odômetro anterior errado (o 65-83).
+        # Alto o bastante p/ não cortar abastecimento parcial legítimo.
+        LIMITE_KM_L = 20.0
+
+        def _km_valido(leituras):
+            """Σ km (diferença de odômetro por data), descartando intervalo que
+            não avança ou salto impossível. Retorna (km, inconsistente)."""
+            seq = sorted([l for l in leituras if l.get('odo') and l['odo'] > 0], key=lambda x: x['data'])
+            km = 0.0
+            incons = False
+            prev = None
+            for l in seq:
+                if prev is not None:
+                    d = l['odo'] - prev
+                    if d <= 0:
+                        incons = True
+                    elif l['litros'] > 0 and (d / l['litros']) > LIMITE_KM_L:
+                        incons = True
+                    else:
+                        km += d
+                prev = l['odo']
+            return km, incons
+
+        # ── Baseline: consumo histórico de cada veículo (janela ampla até o fim do
+        # período) pra alertar quem está gastando ACIMA do próprio normal. ──
+        from datetime import date as _dc
+        try:
+            base_ini = (_dc.fromisoformat(mes_inicio[:10]) - timedelta(days=180)).isoformat()
+        except (ValueError, TypeError):
+            base_ini = mes_inicio
+        base_consumo = {}  # vid -> km/L histórico
+        try:
+            base_rows = q('veiculos_abastecimentos', {
+                **fil, 'data_abastecimento': ('range', base_ini, mes_prox_inicio), 'ativo': True,
+            }).data or []
+            base_agg = {}
+            for a in base_rows:
+                litros_p, gasto_p, _la, _ga = _split_arla(a)
+                bg = base_agg.setdefault(a.get('veiculo_id'), {'litros': 0.0, 'leituras': []})
+                bg['litros'] += litros_p
+                try:
+                    odo = float(a.get('odometro_km')) if a.get('odometro_km') is not None else None
+                except (TypeError, ValueError):
+                    odo = None
+                bg['leituras'].append({'odo': odo, 'litros': litros_p, 'gasto': gasto_p, 'data': a.get('data_abastecimento') or ''})
+            for vid_b, bg in base_agg.items():
+                bkm, _ = _km_valido(bg['leituras'])
+                if bg['litros'] > 0 and bkm > 0:
+                    base_consumo[vid_b] = bkm / bg['litros']
+        except Exception as exc:
+            app.logger.warning('andamento baseline consumo: %s', exc)
+
+        LIMIAR_ALERTA = 0.85  # período pior que 85% do histórico = gastando demais
+
+        combustivel_por_veiculo = []
+        frota_km_total = frota_litros_total = frota_gasto_total = 0.0
+        veiculos_alerta = 0
+        for vid, g in agg.items():
+            # Abastecem SEMPRE parcial (40/70/150L, nunca tanque cheio) → não dá
+            # pra usar tanque-a-tanque. Método correto p/ frota:
+            #   km = Σ (odômetro atual − anterior) na ordem de DATA
+            #   consumo = km ÷ TODOS os litros de diesel do período (ARLA já fora)
+            #   R$/km   = gasto diesel total ÷ km
+            # Intervalo com odômetro que não avança (≤0) ou salto impossível
+            # (>20 km/L = digitação errada) não soma no km e marca inconsistência.
+            km_rodados, odometro_inconsistente = _km_valido(g['leituras'])
+            consumo = round(km_rodados / g['litros'], 2) if (g['litros'] > 0 and km_rodados > 0) else None
+            custo_km = round(g['gasto'] / km_rodados, 2) if km_rodados > 0 else None
+            frota_km_total += km_rodados
+            frota_litros_total += g['litros']
+            frota_gasto_total += g['gasto']
+
+            # Alerta: gastando acima do próprio histórico (consome mais = km/L menor).
+            baseline = base_consumo.get(vid)
+            alerta_consumo = False
+            desvio_pct = None
+            if consumo and baseline and baseline > 0:
+                desvio_pct = round((consumo - baseline) / baseline * 100, 1)  # negativo = pior
+                if consumo < baseline * LIMIAR_ALERTA:
+                    alerta_consumo = True
+                    veiculos_alerta += 1
+            combustivel_por_veiculo.append({
+                'veiculo_id': vid,
+                'placa': placa_por_id.get(vid) or f'#{vid}',
+                'litros': round(g['litros'], 2),
+                'gasto': round(g['gasto'], 2),
+                'abastecimentos': g['n'],
+                'media_preco_litro': round(g['gasto'] / g['litros'], 3) if g['litros'] else 0,
+                'km_rodados': round(km_rodados),
+                'consumo_km_l': consumo,
+                'consumo_baseline': round(baseline, 2) if baseline else None,
+                'desvio_pct': desvio_pct,
+                'alerta_consumo': alerta_consumo,
+                'custo_por_km': custo_km,
+                'odometro_inconsistente': odometro_inconsistente,
+            })
+        combustivel_por_veiculo.sort(key=lambda x: x['gasto'], reverse=True)
 
         # Pneus com status crítico
         pneu_r = q('veiculos_pneus', {**fil, 'ativo': True})
@@ -7186,7 +8974,20 @@ def create_app():
                 'gasto_mes': round(gasto_combustivel, 2),
                 'media_preco_litro': round(gasto_combustivel / litros_mes, 3) if litros_mes else 0,
                 'abastecimentos_count': len(abastec_rows),
+                # Média real da frota (só km/litros válidos, sem ARLA)
+                'media_km_l': round(frota_km_total / frota_litros_total, 2) if frota_litros_total else None,
+                'media_custo_km': round(frota_gasto_total / frota_km_total, 2) if frota_km_total else None,
+                'km_total': round(frota_km_total),
+                'veiculos_alerta_consumo': veiculos_alerta,
+                'por_veiculo': combustivel_por_veiculo,
             },
+            'arla': {
+                'litros_mes': round(arla_litros_mes, 2),
+                'gasto_mes': round(arla_gasto_mes, 2),
+                'media_preco_litro': round(arla_gasto_mes / arla_litros_mes, 3) if arla_litros_mes else 0,
+                'pct_do_diesel': round(arla_litros_mes / litros_mes * 100, 1) if litros_mes else 0,
+            },
+            'gasto_total_abastecimento': round(gasto_total_abast, 2),
             'pneus': {
                 'total_montados': len(pneu_rows),
                 'para_trocar': pneus_trocar,
@@ -7310,6 +9111,17 @@ def create_app():
             'profile': profile,
         })
 
+    @app.get('/api/dashboard/carregamento')
+    @require_auth
+    def dashboard_carregamento(profile):
+        """Resumo de carregamento para uma data específica (filtro por período na aba)."""
+        data_arg = request.args.get('data')
+        try:
+            target_date = date_class.fromisoformat(data_arg) if data_arg else date_class.today()
+        except (TypeError, ValueError):
+            target_date = date_class.today()
+        return jsonify(build_loading_dashboard_summary(profile, target_date))
+
     @app.get('/api/dashboard/andamento-filiais')
     @require_auth
     def dashboard_andamento_filiais(profile):
@@ -7326,6 +9138,13 @@ def create_app():
         if not mes:
             mes = date_class.today().strftime('%Y-%m')
         mes_prefix = mes[:7]
+        # Intervalo [início, próximo mês) para filtrar colunas date no SQL.
+        try:
+            _y, _m = int(mes_prefix[:4]), int(mes_prefix[5:7])
+            mes_inicio = f"{_y:04d}-{_m:02d}-01"
+            mes_fim = f"{_y + 1:04d}-01-01" if _m == 12 else f"{_y:04d}-{_m + 1:02d}-01"
+        except (ValueError, IndexError):
+            mes_inicio, mes_fim = f"{mes_prefix}-01", f"{mes_prefix}-31"
 
         filial_id_param = request.args.get('filial_id', type=int)
         if filial_id_param and not ensure_profile_can_access_filial(profile, filial_id_param):
@@ -7337,20 +9156,22 @@ def create_app():
                 'faturamento_pago': 0.0, 'faturamento_pendente': 0.0,
                 'contas_receber_faturado': 0.0, 'contas_receber_aberto': 0.0,
                 'he_calculado': 0.0, 'he_real': 0.0, 'he_margem': 0.0, 'he_horas': 0.0,
+                'despesas_total': 0.0, 'despesas_pago': 0.0,
                 'receita_total': 0.0, 'saida_total': 0.0, 'saldo': 0.0,
             }
 
         def he_valor_real(col, h50, h100):
             salary = parse_float_or_default(col.get('salario_base_mensal'), 0.0)
             weekly = parse_float_or_default(col.get('carga_horaria_semanal'), 44.0) or 44.0
-            monthly = weekly * (52.0 / 12.0)
+            monthly = weekly * 5.0  # divisor CLT 220h (44h/sem), não 52/12
             if salary <= 0 or monthly <= 0:
                 return 0.0
             pct_peric = parse_float_or_default(col.get('percentual_periculosidade'), 0.0)
             pct_noturno = parse_float_or_default(col.get('percentual_adicional_clt'), 0.0)
             valor_peric = salary * (pct_peric / 100.0)
             base_hora = (salary + valor_peric) / monthly
-            fator_noturno = 1.0 + pct_noturno / 100.0
+            # Adicional noturno só na fração 22h–5h do turno.
+            fator_noturno = 1.0 + (pct_noturno / 100.0) * fracao_noturna_turno(col)
             hora50 = base_hora * 1.5 * fator_noturno
             hora100 = base_hora * 2.0 * fator_noturno
             return parse_float_or_default(h50, 0.0) * hora50 + parse_float_or_default(h100, 0.0) * hora100
@@ -7385,7 +9206,37 @@ def create_app():
                 'faturamento_pago': 0.0, 'faturamento_pendente': 0.0,
                 'contas_receber_faturado': 0.0, 'contas_receber_aberto': 0.0,
                 'he_calculado': 0.0, 'he_real': 0.0, 'he_horas': 0.0,
+                'despesas_total': 0.0, 'despesas_pago': 0.0,
             }
+
+        # Mapa nome_da_cidade → filial_id, para casar linhas antigas que só têm
+        # filial_nome (RTM e contas a receber importadas foram chaveadas por nome
+        # de texto livre; filial_id só foi adicionado depois e fica NULL nelas).
+        nome_to_fid = {}
+        for f in filiais_rows:
+            cidade = (f.get('cidade') or '').upper().strip()
+            if cidade:
+                nome_to_fid[cidade] = int(f['id'])
+
+        def _resolve_fid(row):
+            """Resolve a filial de uma linha por filial_id; se ausente/fora de
+            escopo, cai para casamento por filial_nome (exato e por contém)."""
+            fid = row.get('filial_id')
+            if fid is not None:
+                try:
+                    ifid = int(fid)
+                    if ifid in agg:
+                        return ifid
+                except (TypeError, ValueError):
+                    pass
+            nome = (row.get('filial_nome') or '').upper().strip()
+            if nome:
+                if nome in nome_to_fid:
+                    return nome_to_fid[nome]
+                for cidade, cfid in nome_to_fid.items():
+                    if cidade and (nome == cidade or nome in cidade or cidade in nome):
+                        return cfid
+            return None
 
         # 1) Pedidos de compra finalizados no mês
         try:
@@ -7408,13 +9259,16 @@ def create_app():
         # 2) Notas CT-e / Nota Fiscal — pago vs pendente
         try:
             nq = (supabase.table('notas_cte')
-                  .select('filial_id, tipo, status, valor_total, data_emissao, data_vencimento')
+                  .select('filial_id, tipo, natureza, status, valor_total, data_emissao, data_vencimento')
                   .eq('ativo', True)
                   .in_('tipo', ['cte', 'nota_fiscal'])
                   .in_('filial_id', filial_ids))
             for row in (nq.execute().data or []):
                 fid = row.get('filial_id')
                 if fid is None or int(fid) not in agg:
+                    continue
+                # natureza='pagar' é DESPESA (nota de custo), não faturamento/receita.
+                if (row.get('natureza') or '').lower() == 'pagar':
                     continue
                 ref = (row.get('data_emissao') or row.get('data_vencimento') or '')[:7]
                 if ref != mes_prefix:
@@ -7431,20 +9285,20 @@ def create_app():
         # 3) Contas a receber — faturado vs em aberto
         try:
             cq = (supabase.table('contas_a_receber')
-                  .select('filial_id, status_fat, cobrado_wm, valor_gold, competencia')
-                  .in_('filial_id', filial_ids))
+                  .select('filial_id, filial_nome, status_fat, cobrado_wm, valor_gold, competencia')
+                  .gte('competencia', mes_inicio).lt('competencia', mes_fim))
             for row in (cq.execute().data or []):
-                fid = row.get('filial_id')
-                if fid is None or int(fid) not in agg:
-                    continue
                 if (row.get('competencia') or '')[:7] != mes_prefix:
                     continue
-                # HE fixo grava só valor_gold; usa cobrado_wm e cai p/ valor_gold se vazio
+                fid = _resolve_fid(row)
+                if fid is None:
+                    continue
+                # grava só valor_gold em alguns casos; usa cobrado_wm e cai p/ valor_gold se vazio
                 valor = parse_float_or_default(row.get('cobrado_wm'), 0.0) or parse_float_or_default(row.get('valor_gold'), 0.0)
                 if (row.get('status_fat') or '').upper() == 'FATURADO':
-                    agg[int(fid)]['contas_receber_faturado'] += valor
+                    agg[fid]['contas_receber_faturado'] += valor
                 else:
-                    agg[int(fid)]['contas_receber_aberto'] += valor
+                    agg[fid]['contas_receber_aberto'] += valor
         except Exception as exc:
             app.logger.warning('andamento_filiais contas_receber: %s', exc)
 
@@ -7454,7 +9308,8 @@ def create_app():
             try:
                 cresp = (supabase.table('colaboradores')
                          .select('id, salario_base_mensal, carga_horaria_semanal, '
-                                 'percentual_periculosidade, percentual_adicional_clt')
+                                 'percentual_periculosidade, percentual_adicional_clt, '
+                                 'horario_padrao_inicio, horario_padrao_fim')
                          .in_('filial_id', filial_ids)
                          .execute())
                 for c in (cresp.data or []):
@@ -7463,16 +9318,16 @@ def create_app():
                 colab_fin = {}
 
             rq = (supabase.table('horas_extras_rtm_registros')
-                  .select('filial_id, colaborador_id, mes_referencia, total_geral, '
+                  .select('filial_id, filial_nome, colaborador_id, mes_referencia, total_geral, '
                           'horas_normais, horas_extra_100')
-                  .in_('filial_id', filial_ids))
+                  .gte('mes_referencia', mes_inicio).lt('mes_referencia', mes_fim))
             for row in (rq.execute().data or []):
-                fid = row.get('filial_id')
-                if fid is None or int(fid) not in agg:
-                    continue
                 if (row.get('mes_referencia') or '')[:7] != mes_prefix:
                     continue
-                bucket = agg[int(fid)]
+                fid = _resolve_fid(row)
+                if fid is None:
+                    continue
+                bucket = agg[fid]
                 h50 = row.get('horas_normais')
                 h100 = row.get('horas_extra_100')
                 bucket['he_calculado'] += parse_float_or_default(row.get('total_geral'), 0.0)
@@ -7484,20 +9339,42 @@ def create_app():
         except Exception as exc:
             app.logger.warning('andamento_filiais HE: %s', exc)
 
+        # 5) Contas a pagar — DESPESAS do mês (fonte real; é a "saída" do saldo).
+        #    Inclui hora extra, fornecedores, compras, notas a pagar e espelhos de
+        #    pedido. Ignora CANCELADO. Substitui a antiga "saída" de pedidos.
+        try:
+            dq = (supabase.table('contas_a_pagar')
+                  .select('filial_id, filial_nome, valor, valor_pago, status, competencia')
+                  .gte('competencia', mes_inicio).lt('competencia', mes_fim))
+            for row in (dq.execute().data or []):
+                if (row.get('competencia') or '')[:7] != mes_prefix:
+                    continue
+                if (row.get('status') or '').upper() == 'CANCELADO':
+                    continue
+                fid = _resolve_fid(row)
+                if fid is None:
+                    continue
+                agg[fid]['despesas_total'] += parse_float_or_default(row.get('valor'), 0.0)
+                agg[fid]['despesas_pago'] += parse_float_or_default(row.get('valor_pago'), 0.0)
+        except Exception as exc:
+            app.logger.warning('andamento_filiais contas_pagar: %s', exc)
+
         filiais_out = []
         totais = empty_totais()
         for fid in filial_ids:
             bucket = agg[fid]
             receita = (bucket['faturamento_pago'] + bucket['faturamento_pendente']
                        + bucket['contas_receber_faturado'] + bucket['contas_receber_aberto'])
-            saida = bucket['pedidos_finalizados_valor']
+            # Saída do saldo = DESPESAS reais (contas a pagar), não mais pedidos.
+            saida = bucket['despesas_total']
             bucket['he_margem'] = round(bucket['he_calculado'] - bucket['he_real'], 2)
             bucket['receita_total'] = round(receita, 2)
             bucket['saida_total'] = round(saida, 2)
             bucket['saldo'] = round(receita - saida, 2)
             for key in ('pedidos_finalizados_valor', 'faturamento_pago', 'faturamento_pendente',
                         'contas_receber_faturado', 'contas_receber_aberto',
-                        'he_calculado', 'he_real', 'he_horas'):
+                        'he_calculado', 'he_real', 'he_horas',
+                        'despesas_total', 'despesas_pago'):
                 bucket[key] = round(bucket[key], 2)
             for key in totais:
                 totais[key] = round(totais[key] + bucket.get(key, 0.0), 2)
@@ -7541,7 +9418,7 @@ def create_app():
             return jsonify(build_workforce_board(profile, filial_id, target_date))
         except Exception as exc:
             app.logger.error('Erro ao carregar quadro de funcionários: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.get('/api/custos-rh')
     @require_auth
@@ -7563,7 +9440,7 @@ def create_app():
             return jsonify(build_costs_dashboard(profile, month_reference, filial_id))
         except Exception as exc:
             app.logger.error('Erro ao carregar painel de custos RH: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.get('/api/<resource_name>')
     @require_auth
@@ -7597,6 +9474,13 @@ def create_app():
 
                 for key, value in request.args.items():
                     if key in ('page', 'per_page'):
+                        continue
+                    # Operadores de intervalo: <campo>__gte / <campo>__lte (ex.: período de datas)
+                    if key.endswith('__gte') or key.endswith('__lte'):
+                        base_key, op = key[:-5], key[-3:]
+                        if base_key not in _allowed_filter_fields or value == '':
+                            continue
+                        query = query.gte(base_key, value) if op == 'gte' else query.lte(base_key, value)
                         continue
                     if key not in _allowed_filter_fields:
                         continue
@@ -7804,7 +9688,7 @@ def create_app():
             return jsonify(rows)
         except Exception as exc:
             app.logger.error('Erro ao listar recurso %s: %s', resource_name, exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.post('/api/<resource_name>')
     @rate_limit_endpoint(max_requests=60)
@@ -7906,16 +9790,25 @@ def create_app():
                         break
 
         try:
-            removed_columns = []
-            if resource_name == 'colaborador_beneficios':
-                response, removed_columns = execute_mutation_with_schema_fallback(
-                    config['table'],
-                    payload,
-                    action='insert',
-                )
-            else:
-                response = supabase.table(config['table']).insert(payload).execute()
+            # Self-healing de schema para QUALQUER recurso: se uma coluna do payload
+            # ainda não existe no banco (migration não rodada / cache PGRST204), a
+            # coluna é descartada e o insert é repetido, em vez de estourar 400.
+            response, removed_columns = execute_mutation_with_schema_fallback(
+                config['table'],
+                payload,
+                action='insert',
+            )
             created = response.data[0] if response.data else {}
+
+            # Motor financeiro: espelha documento fiscal → conta a pagar/receber.
+            if resource_name == 'notas_cte':
+                gerada = _ensure_conta_from_nota_cte(created)
+                if gerada:
+                    created['_conta_gerada'] = gerada
+            elif resource_name == 'notas_fiscais_servico':
+                cr_id = _ensure_conta_receber_from_nfse(created)
+                if cr_id:
+                    created['_conta_gerada'] = {'conta_tipo': 'receber', 'conta_id': cr_id}
 
             # Invalida cache do dashboard quando muda algo que afeta cálculo de custo do contrato
             if resource_name in {
@@ -7942,13 +9835,22 @@ def create_app():
             write_audit_event(profile, 'create', resource_name, status='error', details={'error': str(exc)[:300]}, filial_id=payload.get('filial_id'))
             return jsonify({'error': translate_database_error(exc)}), 400
 
-    @app.patch('/api/<resource_name>/<int:item_id>')
+    @app.patch('/api/<resource_name>/<item_id>')
     @rate_limit_endpoint(max_requests=60)
     @require_auth
     def update_resource(profile, resource_name, item_id):
         config = RESOURCE_DEFINITIONS.get(resource_name)
         if not config:
             return jsonify({'error': 'Recurso não encontrado.'}), 404
+
+        # Aceitar tanto IDs numéricos quanto UUIDs/strings.
+        # Quando o ID for um número em formato string, converter para int
+        # para manter compatibilidade com consultas que esperam inteiros.
+        if isinstance(item_id, str) and item_id.isdigit():
+            try:
+                item_id = int(item_id)
+            except Exception:
+                pass
 
         scope_error = require_scope_permission(profile, config.get('view_scope'))
         if scope_error:
@@ -7981,17 +9883,26 @@ def create_app():
             return jsonify({'error': 'Sem permissão para mover ou alterar dados para uma base não autorizada.'}), 403
 
         try:
-            removed_columns = []
-            if resource_name == 'colaborador_beneficios':
-                response, removed_columns = execute_mutation_with_schema_fallback(
-                    config['table'],
-                    payload,
-                    action='update',
-                    item_id=item_id,
-                )
-            else:
-                response = supabase.table(config['table']).update(payload).eq('id', item_id).execute()
+            # Self-healing de schema para QUALQUER recurso: se uma coluna do payload
+            # ainda não existe no banco (migration não rodada / cache PGRST204), a
+            # coluna é descartada e o update é repetido, em vez de estourar 400.
+            response, removed_columns = execute_mutation_with_schema_fallback(
+                config['table'],
+                payload,
+                action='update',
+                item_id=item_id,
+            )
             updated = response.data[0] if response.data else {'id': item_id}
+
+            # Motor financeiro: mantém a conta espelhada em dia após editar o documento.
+            if resource_name == 'notas_cte':
+                gerada = _ensure_conta_from_nota_cte(updated)
+                if gerada:
+                    updated['_conta_gerada'] = gerada
+            elif resource_name == 'notas_fiscais_servico':
+                cr_id = _ensure_conta_receber_from_nfse(updated)
+                if cr_id:
+                    updated['_conta_gerada'] = {'conta_tipo': 'receber', 'conta_id': cr_id}
 
             # Cascata de status: reflete ativo/inativo do colaborador nos vínculos de contrato
             if resource_name == 'colaboradores' and ('data_desligamento' in payload or 'ativo' in payload):
@@ -8069,13 +9980,20 @@ def create_app():
             write_audit_event(profile, 'update', resource_name, item_id, status='error', details={'error': str(exc)[:300]}, filial_id=payload.get('filial_id'))
             return jsonify({'error': translate_database_error(exc)}), 400
 
-    @app.delete('/api/<resource_name>/<int:item_id>')
+    @app.delete('/api/<resource_name>/<item_id>')
     @rate_limit_endpoint(max_requests=30)
     @require_auth
     def delete_resource(profile, resource_name, item_id):
         config = RESOURCE_DEFINITIONS.get(resource_name)
         if not config:
             return jsonify({'error': 'Recurso não encontrado.'}), 404
+
+        # Aceitar tanto IDs numéricos quanto UUIDs/strings.
+        if isinstance(item_id, str) and item_id.isdigit():
+            try:
+                item_id = int(item_id)
+            except Exception:
+                pass
 
         scope_error = require_scope_permission(profile, config.get('view_scope'))
         if scope_error:
@@ -8140,7 +10058,7 @@ def create_app():
             return jsonify(rows)
         except Exception as exc:
             app.logger.error('Erro ao carregar modelos de cargo: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.get('/api/estoque/resumo')
     @require_auth
@@ -8164,7 +10082,7 @@ def create_app():
             return jsonify(rows)
         except Exception as exc:
             app.logger.error('Erro ao carregar resumo de estoque: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.post('/api/estoque_movimentos')
     @require_auth
@@ -8353,7 +10271,7 @@ def create_app():
         try:
             itens_db = supabase.table('estoque_itens').select('id, filial_id, estoque_atual, nome, unidade').in_('id', item_ids).eq('ativo', True).execute().data or []
         except Exception as exc:
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
         itens_map = {int(r['id']): r for r in itens_db}
 
         for idx, l in enumerate(linhas):
@@ -8472,7 +10390,7 @@ def create_app():
             return jsonify(rows)
         except Exception as exc:
             app.logger.error('Erro ao carregar histórico de estoque: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.get('/api/pedidos_compra/pre-alocar-numero')
     @require_auth
@@ -8600,7 +10518,7 @@ def create_app():
             })
         except Exception as exc:
             app.logger.error('Erro ao carregar detalhes do pedido %s: %s', pedido_id, exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     # Formas de pagamento à vista: precisam quitar o Contas a Pagar antes de liberar
     # a compra (aí o valor real p/ a empresa já é conhecido). As demais (cartão de
@@ -8720,6 +10638,327 @@ def create_app():
             app.logger.warning('Falha ao criar contas_a_pagar para pedido %s: %s', item_id, cp_exc)
         return None
 
+    # ══════════════════════════════════════════════════════════════════════
+    # MOTOR FINANCEIRO — espelho documento fiscal → conta a pagar/receber
+    # ══════════════════════════════════════════════════════════════════════
+
+    _CATEG_TO_DESPESA = {
+        'servico': 'SERVIÇO', 'produto': 'PRODUTO', 'frete': 'FRETE',
+        'pedido_compra': 'COMPRAS', 'outro': 'FORNECEDOR',
+    }
+
+    def _competencia_from(*dates):
+        """Primeiro dia do mês (YYYY-MM-01) a partir da 1ª data válida."""
+        from datetime import date as _date
+        for d in dates:
+            s = str(d or '')
+            if len(s) >= 7 and s[4] == '-':
+                return s[:7] + '-01'
+        return _date.today().strftime('%Y-%m-01')
+
+    def _filial_nome(filial_id):
+        if not filial_id:
+            return ''
+        try:
+            r = supabase.table('filiais').select('cidade, uf').eq('id', filial_id).limit(1).execute().data or []
+            if r:
+                return f"{r[0].get('cidade','')}/{r[0].get('uf','')}"
+        except Exception:
+            pass
+        return ''
+
+    def _conta_ja_gerada(table, marker):
+        """Idempotência robusta: procura conta auto pelo marcador em observacoes."""
+        try:
+            ja = (supabase.table(table).select('id')
+                  .ilike('observacoes', f'%{marker}%').limit(1).execute().data) or []
+            return ja[0].get('id') if ja else None
+        except Exception:
+            return None
+
+    def _ensure_conta_from_nota_cte(nota):
+        """Espelha uma nota_cte em contas_a_pagar (natureza=pagar, default) ou
+        contas_a_receber (natureza=receber). Idempotente. Devolve
+        {'conta_tipo','conta_id'} ou None. Nunca levanta exceção."""
+        try:
+            if not nota:
+                return None
+            nid = nota.get('id')
+            gera = nota.get('gera_financeiro')
+            if gera is False:
+                return None
+            natureza = (nota.get('natureza') or 'nenhum').strip().lower()
+            if natureza == 'nenhum':
+                return None
+            if (nota.get('status') or '').strip().lower() in ('cancelado', 'cancelada'):
+                return None
+            valor = float(nota.get('valor_total') or 0)
+            filial_id = nota.get('filial_id')
+            filial_nome = _filial_nome(filial_id)
+            competencia = _competencia_from(nota.get('data_emissao'), nota.get('data_vencimento'))
+            venc = nota.get('data_vencimento') or nota.get('data_emissao')
+            num_doc = nota.get('numero_documento')
+            desc_base = nota.get('descricao') or nota.get('emitente') or 'Documento fiscal'
+
+            if natureza == 'receber':
+                marker = f"[auto:nota_cte_cr:{nid}]"
+                existing = nota.get('conta_receber_id') or _conta_ja_gerada('contas_a_receber', marker)
+                row = {
+                    'filial_id': filial_id, 'filial_nome': filial_nome,
+                    'competencia': competencia, 'obrigacao': 'OUTRO',
+                    'descricao': desc_base, 'cliente_nome': nota.get('destinatario') or None,
+                    'cobrado_wm': valor, 'cte': nota.get('numero_documento') if nota.get('tipo') == 'cte' else None,
+                    'data_vencimento': venc, 'status': 'AGUARDANDO', 'status_fat': 'NÃO FATURADO',
+                    'origem_tipo': 'nota_cte', 'origem_id': str(nid),
+                    'observacoes': f"{marker} Gerado da nota/CT-e {num_doc or nid}",
+                }
+                if existing:
+                    execute_mutation_with_schema_fallback('contas_a_receber',
+                        {k: v for k, v in row.items() if k not in ('observacoes',)},
+                        action='update', item_id=existing)
+                    conta_id = existing
+                else:
+                    resp, _ = execute_mutation_with_schema_fallback('contas_a_receber', row, action='insert')
+                    conta_id = (resp.data or [{}])[0].get('id')
+                if conta_id:
+                    execute_mutation_with_schema_fallback('notas_cte',
+                        {'conta_receber_id': conta_id}, action='update', item_id=nid)
+                return {'conta_tipo': 'receber', 'conta_id': conta_id} if conta_id else None
+
+            # natureza == 'pagar' (default)
+            marker = f"[auto:nota_cte:{nid}]"
+            existing = nota.get('conta_pagar_id') or _conta_ja_gerada('contas_a_pagar', marker)
+            tipo_desp = _CATEG_TO_DESPESA.get((nota.get('categoria') or 'outro').lower(), 'FORNECEDOR')
+            row = {
+                'filial_id': filial_id, 'filial_nome': filial_nome,
+                'competencia': competencia, 'tipo_despesa': tipo_desp,
+                'descricao': desc_base, 'fornecedor_nome': nota.get('emitente') or None,
+                'valor': valor, 'data_vencimento': venc,
+                'status': 'PAGO' if (nota.get('status') or '').lower() == 'pago' else 'PENDENTE',
+                'data_pagamento': nota.get('data_pagamento'),
+                'valor_pago': valor if (nota.get('status') or '').lower() == 'pago' else 0,
+                'tipo_documento': nota.get('tipo'), 'numero_documento': num_doc,
+                'origem_tipo': 'nota_cte', 'origem_id': str(nid),
+                'observacoes': f"{marker} Gerado da nota/CT-e {num_doc or nid}",
+            }
+            if existing:
+                execute_mutation_with_schema_fallback('contas_a_pagar',
+                    {k: v for k, v in row.items() if k not in ('observacoes',)},
+                    action='update', item_id=existing)
+                conta_id = existing
+            else:
+                resp, _ = execute_mutation_with_schema_fallback('contas_a_pagar', row, action='insert')
+                conta_id = (resp.data or [{}])[0].get('id')
+            if conta_id:
+                execute_mutation_with_schema_fallback('notas_cte',
+                    {'conta_pagar_id': conta_id}, action='update', item_id=nid)
+            return {'conta_tipo': 'pagar', 'conta_id': conta_id} if conta_id else None
+        except Exception as exc:
+            app.logger.warning('espelho nota_cte %s: %s', (nota or {}).get('id'), exc)
+            return None
+
+    def _ensure_conta_receber_from_nfse(nfse):
+        """Espelha uma NFSe (Gold prestadora) em contas_a_receber. Idempotente.
+        Devolve conta_id ou None. Nunca levanta exceção."""
+        try:
+            if not nfse:
+                return None
+            if nfse.get('gera_financeiro') is False:
+                return None
+            if (nfse.get('status') or '').strip().lower() in ('cancelada', 'cancelado', 'substituida'):
+                return None
+            nid = nfse.get('id')
+            valor = float(nfse.get('valor_liquido') or nfse.get('valor_servicos') or 0)
+            if valor <= 0:
+                return None
+            filial_id = nfse.get('filial_id')
+            competencia = _competencia_from(nfse.get('competencia'), nfse.get('data_emissao'))
+            marker = f"[auto:nfse:{nid}]"
+            existing = nfse.get('conta_receber_id') or _conta_ja_gerada('contas_a_receber', marker)
+            # tipo_servico da NFSe (HORA EXTRA | SERVIÇO | CONTRATO...) vira a
+            # obrigacao da Conta a Receber — classifica o que está sendo cobrado.
+            obrigacao = (nfse.get('tipo_servico') or 'SERVIÇO').strip().upper() or 'SERVIÇO'
+            row = {
+                'filial_id': filial_id, 'filial_nome': _filial_nome(filial_id),
+                'competencia': competencia, 'obrigacao': obrigacao,
+                'descricao': (nfse.get('discriminacao') or 'Serviço prestado')[:200],
+                'cliente_nome': nfse.get('tomador_nome') or None,
+                'contrato_operacional_id': nfse.get('contrato_operacional_id'),
+                'cobrado_wm': valor, 'nd': nfse.get('numero'),
+                'tipo_documento': 'NFSE', 'status': 'AGUARDANDO', 'status_fat': 'NÃO FATURADO',
+                'origem_tipo': 'nfse', 'origem_id': str(nid),
+                'observacoes': f"{marker} Gerado da NFSe {nfse.get('numero') or nid}",
+            }
+            if existing:
+                execute_mutation_with_schema_fallback('contas_a_receber',
+                    {k: v for k, v in row.items() if k not in ('observacoes',)},
+                    action='update', item_id=existing)
+                conta_id = existing
+            else:
+                resp, _ = execute_mutation_with_schema_fallback('contas_a_receber', row, action='insert')
+                conta_id = (resp.data or [{}])[0].get('id')
+            if conta_id:
+                execute_mutation_with_schema_fallback('notas_fiscais_servico',
+                    {'conta_receber_id': conta_id}, action='update', item_id=nid)
+            return conta_id
+        except Exception as exc:
+            app.logger.warning('espelho nfse %s: %s', (nfse or {}).get('id'), exc)
+            return None
+
+    # ── Espelho: abastecimento (combustível) aprovado → contas_a_pagar ──────────
+    # Combustível é despesa confirmada só após aprovação final ('aprovado').
+    # valor = litros × valor_litro (consolidado; itens Diesel+ARLA já somados).
+    def _abastecimento_valor(ab):
+        try:
+            return round(float(ab.get('litros') or 0) * float(ab.get('valor_litro') or 0), 2)
+        except (TypeError, ValueError):
+            return 0.0
+
+    def _abastecimento_cp_row(ab, posto_nome='', placa=''):
+        ab_id = ab.get('id')
+        data_ab = ab.get('data_abastecimento')
+        fornecedor = (ab.get('fornecedor') or posto_nome or 'Posto de combustível').strip()
+        tipo = (ab.get('tipo_combustivel') or '').strip()
+        desc = (f"Combustível {placa}" if placa else 'Combustível').strip()
+        if tipo:
+            desc += ' — vários' if tipo.lower() == 'multiplo' else f' — {tipo}'
+        return {
+            'filial_id': ab.get('filial_id'),
+            'filial_nome': _filial_nome(ab.get('filial_id')),
+            'competencia': _competencia_from(data_ab),
+            'tipo_despesa': 'COMBUSTÍVEL',
+            'descricao': desc,
+            'fornecedor_nome': fornecedor,
+            'valor': _abastecimento_valor(ab),
+            'data_vencimento': data_ab,
+            'status': 'PENDENTE', 'valor_pago': 0,
+            'numero_documento': ab.get('numero_nota'),
+            'origem_tipo': 'abastecimento', 'origem_id': str(ab_id),
+            'observacoes': f"[auto:abastecimento:{ab_id}] Combustível {placa} {data_ab or ''} — {ab.get('litros')}L".strip(),
+        }
+
+    def _ensure_conta_from_abastecimento(ab):
+        """Espelha um abastecimento APROVADO em contas_a_pagar. Idempotente via
+        marker em observacoes. Nunca levanta. Devolve conta_id ou None."""
+        try:
+            if not ab or (ab.get('status') or '').strip().lower() != 'aprovado':
+                return None
+            if _abastecimento_valor(ab) <= 0:
+                return None
+            ab_id = ab.get('id')
+            existing = _conta_ja_gerada('contas_a_pagar', f"[auto:abastecimento:{ab_id}]")
+            posto_nome = ''
+            if ab.get('posto_id'):
+                try:
+                    pr = supabase.table('postos_combustivel').select('nome').eq('id', ab['posto_id']).limit(1).execute().data or []
+                    posto_nome = (pr[0].get('nome') if pr else '') or ''
+                except Exception:
+                    pass
+            placa = ''
+            if ab.get('veiculo_id'):
+                try:
+                    vr = supabase.table('veiculos').select('placa').eq('id', ab['veiculo_id']).limit(1).execute().data or []
+                    placa = (vr[0].get('placa') if vr else '') or ''
+                except Exception:
+                    pass
+            row = _abastecimento_cp_row(ab, posto_nome=posto_nome, placa=placa)
+            if existing:
+                execute_mutation_with_schema_fallback('contas_a_pagar',
+                    {k: v for k, v in row.items() if k != 'observacoes'},
+                    action='update', item_id=existing)
+                return existing
+            resp, _ = execute_mutation_with_schema_fallback('contas_a_pagar', row, action='insert')
+            return (resp.data or [{}])[0].get('id')
+        except Exception as exc:
+            app.logger.warning('espelho abastecimento %s: %s', (ab or {}).get('id'), exc)
+            return None
+
+    def _backfill_abastecimentos_contas_pagar(profile):
+        """Self-heal: cria contas_a_pagar p/ abastecimentos aprovados no escopo do
+        perfil que ainda não têm espelho (ex.: aprovados antes do recurso existir).
+        Idempotente via marker. Steady-state: 2 SELECTs, 0 INSERT. Não altera a
+        tela de combustível — só cria o lançamento financeiro."""
+        try:
+            ab_q = (supabase.table('veiculos_abastecimentos')
+                    .select('id, filial_id, veiculo_id, data_abastecimento, litros, valor_litro, '
+                            'tipo_combustivel, fornecedor, posto_id, numero_nota, status, ativo')
+                    .eq('status', 'aprovado').eq('ativo', True))
+            ab_q = apply_filial_scope(ab_q, profile, RESOURCE_DEFINITIONS['veiculos_abastecimentos'])
+            abastecimentos = supabase_retry(ab_q.execute).data or []
+            if not abastecimentos:
+                return
+            cp_q = (supabase.table('contas_a_pagar').select('observacoes')
+                    .ilike('observacoes', '%[auto:abastecimento:%'))
+            ja_txt = ' '.join((r.get('observacoes') or '') for r in (supabase_retry(cp_q.execute).data or []))
+            faltantes = [a for a in abastecimentos
+                         if f"[auto:abastecimento:{a.get('id')}]" not in ja_txt
+                         and _abastecimento_valor(a) > 0]
+            if not faltantes:
+                return
+            posto_ids = sorted({a['posto_id'] for a in faltantes if a.get('posto_id')})
+            veic_ids = sorted({a['veiculo_id'] for a in faltantes if a.get('veiculo_id')})
+            postos, veics = {}, {}
+            if posto_ids:
+                pr = supabase.table('postos_combustivel').select('id, nome').in_('id', posto_ids).execute().data or []
+                postos = {r['id']: r.get('nome') for r in pr}
+            if veic_ids:
+                vr = supabase.table('veiculos').select('id, placa').in_('id', veic_ids).execute().data or []
+                veics = {r['id']: r.get('placa') for r in vr}
+            for a in faltantes:
+                row = _abastecimento_cp_row(a, posto_nome=postos.get(a.get('posto_id'), ''),
+                                            placa=veics.get(a.get('veiculo_id'), ''))
+                try:
+                    execute_mutation_with_schema_fallback('contas_a_pagar', row, action='insert')
+                except Exception as ins_exc:
+                    app.logger.warning('backfill abastecimento %s: %s', a.get('id'), ins_exc)
+        except Exception as exc:
+            app.logger.warning('backfill abastecimento->contas_pagar: %s', exc)
+
+    def _gerar_parcelas(conta_tipo, conta_id, filial_id, valor_total, qtd,
+                        primeiro_vencimento, intervalo_dias=30):
+        """Cria N parcelas para uma conta. Apaga parcelas antigas da mesma conta
+        antes de regerar. Devolve a lista criada. Nunca levanta exceção."""
+        from datetime import date as _date, timedelta
+        try:
+            qtd = max(1, int(qtd or 1))
+            valor_total = round(float(valor_total or 0), 2)
+            fk = 'conta_pagar_id' if conta_tipo == 'pagar' else 'conta_receber_id'
+            # limpa parcelas anteriores desta conta
+            try:
+                supabase.table('financeiro_parcelas').delete().eq(fk, conta_id).execute()
+            except Exception:
+                pass
+            base = str(primeiro_vencimento or _date.today().isoformat())[:10]
+            try:
+                y, m, d = (int(x) for x in base.split('-'))
+                base_date = _date(y, m, d)
+            except Exception:
+                base_date = _date.today()
+            valor_parcela = round(valor_total / qtd, 2)
+            rows = []
+            acumulado = 0.0
+            for i in range(1, qtd + 1):
+                venc = base_date + timedelta(days=intervalo_dias * (i - 1))
+                v = valor_parcela if i < qtd else round(valor_total - acumulado, 2)
+                acumulado += valor_parcela
+                rows.append({
+                    'conta_tipo': conta_tipo, fk: conta_id, 'filial_id': filial_id,
+                    'numero': i, 'total': qtd, 'valor': v,
+                    'data_vencimento': venc.isoformat(), 'status': 'PENDENTE',
+                })
+            resp = supabase.table('financeiro_parcelas').insert(rows).execute()
+            # marca a conta como parcelada
+            tbl = 'contas_a_pagar' if conta_tipo == 'pagar' else 'contas_a_receber'
+            try:
+                execute_mutation_with_schema_fallback(tbl,
+                    {'parcelado': True, 'parcelas_total': qtd}, action='update', item_id=conta_id)
+            except Exception:
+                pass
+            return resp.data or []
+        except Exception as exc:
+            app.logger.warning('gerar_parcelas %s %s: %s', conta_tipo, conta_id, exc)
+            return []
+
     @app.patch('/api/pedidos_compra/<int:pedido_id>/status')
     @require_auth
     def update_pedido_status(profile, pedido_id):
@@ -8770,7 +11009,7 @@ def create_app():
             return jsonify({'status': 'ok', 'novo_status': novo_status, 'contas_pagar_id': contas_pagar_id})
         except Exception as exc:
             app.logger.error('Erro ao atualizar status do pedido %s: %s', pedido_id, exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.post('/api/pedidos_compra/sincronizar-financeiro')
     @require_auth
@@ -8800,7 +11039,7 @@ def create_app():
             return jsonify({'ok': True, 'criados': criados, 'avaliados': len(pedidos)})
         except Exception as exc:
             app.logger.error('sincronizar_financeiro_pedidos: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.get('/api/permissoes/config')
     @require_auth
@@ -8825,7 +11064,7 @@ def create_app():
             })
         except Exception as exc:
             app.logger.error('Erro ao carregar configuração de permissões: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.get('/api/permissoes/por-escopo')
     @require_auth
@@ -8850,7 +11089,7 @@ def create_app():
             return jsonify({'scope': scope_name, 'collab_ids': collab_ids})
         except Exception as exc:
             app.logger.error('permissoes_por_escopo: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.get('/api/colaboradores/com-escopo')
     @require_auth
@@ -8887,7 +11126,7 @@ def create_app():
             return jsonify(collab_rows)
         except Exception as exc:
             app.logger.error('colaboradores_com_escopo: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.get('/api/filiais/disponiveis')
     @require_auth
@@ -8899,7 +11138,7 @@ def create_app():
             return jsonify([{'id': f['id'], 'cidade': f['cidade'], 'uf': f.get('uf', '')} for f in filiais])
         except Exception as exc:
             app.logger.error('filiais_disponiveis: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.post('/api/permissoes/toggle-escopo')
     @require_auth
@@ -8949,7 +11188,7 @@ def create_app():
             return jsonify({'ok': True, 'colaborador_id': colaborador_id, 'scope_name': scope_name, 'ativo': ativo})
         except Exception as exc:
             app.logger.error('toggle_escopo: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.get('/api/permissoes/<int:collaborator_id>')
     @require_auth
@@ -8985,7 +11224,7 @@ def create_app():
             })
         except Exception as exc:
             app.logger.error('Erro ao carregar permissões do colaborador %s: %s', collaborator_id, exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.put('/api/permissoes/<int:collaborator_id>')
     @rate_limit_endpoint(max_requests=20)
@@ -9137,7 +11376,7 @@ def create_app():
             })
         except Exception as exc:
             app.logger.error('Erro ao carregar configuração de presença: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.get('/api/presenca')
     @require_auth
@@ -9158,14 +11397,21 @@ def create_app():
             rh_events = []
 
             if database_ready:
-                presence_query = (
-                    supabase.table('presencas_diarias')
-                    .select('*')
-                    .eq('data_referencia', target_date.isoformat())
-                )
-                if filial_id:
-                    presence_query = presence_query.eq('filial_id', filial_id)
-                stored_rows = presence_query.execute().data or []
+                def _fetch_presenca():
+                    q = (
+                        supabase.table('presencas_diarias')
+                        .select('*')
+                        .eq('data_referencia', target_date.isoformat())
+                    )
+                    if filial_id:
+                        q = q.eq('filial_id', filial_id)
+                    return q.execute().data or []
+
+                stored_rows = _fetch_presenca()
+                # Preenche automaticamente a partir do iopoint (não sobrescreve
+                # ajuste manual) e relê para refletir o que foi gravado.
+                _iopoint_autofill_presenca(profile, target_date, filial_id, stored_rows)
+                stored_rows = _fetch_presenca()
 
             rh_filial_ids = [filial_id] if filial_id else [int(item['id']) for item in fetch_accessible_filiais(profile)]
             rh_events = fetch_active_rh_events_for_date(target_date, rh_filial_ids)
@@ -9196,7 +11442,7 @@ def create_app():
                     'date': target_date.isoformat(),
                     'items': build_presence_items(target_date, collaborators),
                 })
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.put('/api/presenca')
     @rate_limit_endpoint(max_requests=30)
@@ -9339,7 +11585,7 @@ def create_app():
             return jsonify({'database_ready': True, 'month_reference': month_reference.isoformat(), 'items': items})
         except Exception as exc:
             app.logger.error('Erro ao listar presenças mensais: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.get('/api/presenca-mes-xlsx')
     @require_auth
@@ -9515,7 +11761,7 @@ def create_app():
             return response_stream
         except Exception as exc:
             app.logger.error('Erro ao gerar XLSX de presenças mensais: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.get('/api/presenca-colaborador-calendario')
     @require_auth
@@ -9707,7 +11953,7 @@ def create_app():
             return response_stream
         except Exception as exc:
             app.logger.error('Erro ao gerar calendário de presença por colaborador: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.get('/api/presenca-calendario-massa-xlsx')
     @require_auth
@@ -10170,7 +12416,7 @@ def create_app():
 
         except Exception as exc:
             app.logger.error('Erro ao gerar calendário em massa: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.get('/api/presenca-calendario-pdf')
     @require_auth
@@ -10517,7 +12763,7 @@ def create_app():
 
         except Exception as exc:
             app.logger.error('Erro ao gerar calendário PDF: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.get('/api/presenca-colaborador-xlsx')
     @require_auth
@@ -10766,7 +13012,7 @@ def create_app():
             return response_stream
         except Exception as exc:
             app.logger.error('Erro ao gerar XLSX de presença por colaborador: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.get('/api/bonificacao')
     @require_auth
@@ -10808,7 +13054,7 @@ def create_app():
             return jsonify(build_bonificacao_board(profile, month_reference, filial_id))
         except Exception as exc:
             app.logger.error('Erro ao carregar controle de bonificação: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.put('/api/bonificacao')
     @rate_limit_endpoint(max_requests=10)
@@ -10890,18 +13136,20 @@ def create_app():
             })
 
         try:
-            delete_query = (
-                supabase.table('bonificacao_lancamentos')
-                .delete()
-                .eq('mes_referencia', month_reference.isoformat())
-            )
-
-            if filial_id:
-                delete_query = delete_query.eq('filial_id', filial_id)
-            elif profile_has_filial_scope(profile):
-                delete_query = delete_query.in_('filial_id', profile.get('allowed_filial_ids') or [])
-
-            delete_query.execute()
+            # Substitui os lançamentos do mês para os colaboradores EM ESCOPO.
+            # Filtrar por colaborador (e não por filial) casa com a constraint
+            # única (mes_referencia, colaborador_id, metrica_id) e evita o 23505
+            # quando a linha antiga está com outra filial ou filial nula
+            # (colaborador que mudou de base, salvamento anterior sem filial etc.).
+            scope_colaborador_ids = sorted(colaboradores_by_id.keys())
+            if scope_colaborador_ids:
+                (
+                    supabase.table('bonificacao_lancamentos')
+                    .delete()
+                    .eq('mes_referencia', month_reference.isoformat())
+                    .in_('colaborador_id', scope_colaborador_ids)
+                    .execute()
+                )
 
             if normalized_entries:
                 (
@@ -11088,7 +13336,7 @@ def create_app():
             return response_stream
         except Exception as exc:
             app.logger.error('Erro ao gerar PDF de bonificacao: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.get('/api/auditoria/config')
     @require_auth
@@ -11128,7 +13376,7 @@ def create_app():
             return jsonify({'database_ready': True, 'items': items})
         except Exception as exc:
             app.logger.error('Erro ao listar auditoria: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.post('/api/colaboradores/importar')
     @rate_limit_endpoint(max_requests=5)
@@ -11671,7 +13919,7 @@ def create_app():
             })
         except Exception as exc:
             app.logger.error('Erro ao carregar configuração de carregamento: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.get('/api/carregamento/jornadas')
     @require_auth
@@ -11705,7 +13953,43 @@ def create_app():
             })
         except Exception as exc:
             app.logger.error('Erro ao listar jornadas de carregamento: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
+
+    @app.get('/api/carregamento/metricas')
+    @require_auth
+    def loading_metrics(profile):
+        scope_error = require_scope_permission(profile, 'menu.carregamento')
+        if scope_error:
+            return scope_error
+
+        today = date_class.today()
+        data_fim = parse_iso_date(request.args.get('data_fim')) or today
+        data_inicio = parse_iso_date(request.args.get('data_inicio')) or data_fim.replace(day=1)
+        if data_inicio > data_fim:
+            data_inicio, data_fim = data_fim, data_inicio
+
+        filial_id = request.args.get('filial_id', type=int)
+        turno = (request.args.get('turno') or '').strip().lower() or None
+
+        if filial_id and not ensure_profile_can_access_filial(profile, filial_id):
+            return jsonify({'error': 'Sem permissão para consultar esta base.'}), 403
+        if turno and turno not in LOADING_SHIFT_OPTIONS:
+            return jsonify({'error': 'Turno informado é inválido.'}), 400
+
+        try:
+            if not loading_tables_ready():
+                return jsonify({
+                    'database_ready': False,
+                    'data_inicio': data_inicio.isoformat(),
+                    'data_fim': data_fim.isoformat(),
+                })
+
+            metrics = aggregate_loading_metrics(profile, data_inicio, data_fim, filial_id, turno)
+            metrics['database_ready'] = True
+            return jsonify(metrics)
+        except Exception as exc:
+            app.logger.error('Erro ao calcular métricas de carregamento: %s', exc)
+            return db_error_response(exc)
 
     @app.post('/api/carregamento/jornadas')
     @require_auth
@@ -12317,7 +14601,7 @@ def create_app():
             # Busca todos os colaboradores com user_id vinculado
             rows = (
                 supabase.table('colaboradores')
-                .select('id, nome_completo, cargo, filial_id, user_id, tipo_acesso, permissao_app, permissao_desktop, ativo')
+                .select('id, nome_completo, cargo, filial_id, user_id, email, tipo_acesso, permissao_app, permissao_desktop, ativo')
                 .not_.is_('user_id', 'null')
                 .order('nome_completo')
                 .execute()
@@ -12332,21 +14616,42 @@ def create_app():
             except Exception:
                 pass
 
-            # Busca dados do Auth por colaborador (get_user_by_id é mais confiável que list_users)
+            # Dados do Auth: 1 varredura paginada (list_users) em vez de N+1
+            # get_user_by_id — muito mais rápido e sem a tempestade de 500 que
+            # ocorria com user_id órfão (auth deletado).
             auth_users_map = {}
-            for _row in rows:
-                _uid = str(_row.get('user_id') or '').strip()
-                if not _uid:
-                    continue
-                if _uid in auth_users_map:
-                    continue
-                try:
-                    _res = supabase.auth.admin.get_user_by_id(_uid)
-                    _u = getattr(_res, 'user', None) or _res
-                    if _u and getattr(_u, 'id', None):
-                        auth_users_map[_uid] = _u
-                except Exception as _e:
-                    app.logger.debug('admin_listar_acessos: get_user_by_id(%s) falhou: %s', _uid, _e)
+            try:
+                _page = 1
+                while _page <= 50:
+                    _res = supabase.auth.admin.list_users(page=_page, per_page=100)
+                    _users = getattr(_res, 'users', None)
+                    if _users is None:
+                        _users = _res if isinstance(_res, list) else []
+                    if not _users:
+                        break
+                    for _u in _users:
+                        _uid = getattr(_u, 'id', None)
+                        if _uid:
+                            auth_users_map[str(_uid)] = _u
+                    if len(_users) < 100:
+                        break
+                    _page += 1
+            except Exception as _e:
+                app.logger.warning('admin_listar_acessos: list_users falhou: %s', _e)
+
+            # Fallback: se o list_users (bulk) falhar/vier vazio, busca 1 a 1.
+            if not auth_users_map:
+                for _row in rows:
+                    _uid = str(_row.get('user_id') or '').strip()
+                    if not _uid or _uid in auth_users_map:
+                        continue
+                    try:
+                        _res = supabase.auth.admin.get_user_by_id(_uid)
+                        _u = getattr(_res, 'user', None) or _res
+                        if _u and getattr(_u, 'id', None):
+                            auth_users_map[str(getattr(_u, 'id'))] = _u
+                    except Exception:
+                        pass
 
             result = []
             for row in rows:
@@ -12632,7 +14937,7 @@ def create_app():
             return jsonify({'status': 'ok', 'novo_status': novo_status})
         except Exception as exc:
             app.logger.error('Erro ao atualizar status nota %s: %s', nota_id, exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     # ═══════════════════════════════════════════════════════════════════════════════
     # ENDPOINTS GENÉRICOS DE APROVAÇÃO E ACOMPANHAMENTO
@@ -12734,7 +15039,10 @@ def create_app():
                 'pending_statuses': ['pendente'],
                 'approved_status': 'aprovado', 'rejected_status': 'reprovado',
                 'check_scope': 'menu.diarias', 'permission': 'aprovar.diarias',
-                'approval_fields': ['cidade_destino', 'uf_destino', 'data_inicio', 'data_fim', 'rota', 'valor_total', 'banco'],
+                'approval_fields': ['numero_solicitacao', 'tipo', 'cidade_destino', 'uf_destino',
+                                    'data_inicio', 'data_fim', 'rota', 'valor_total', 'banco',
+                                    'chave_pix', 'favorecido', 'dados_bancarios', 'observacoes',
+                                    'criado_por', 'aprovado_lider_por', 'aprovado_por'],
                 'approve_update': lambda p: {},
                 'reject_update': lambda p, m: {'observacoes': m},
                 'require_comment_on_approve': False, 'require_comment_on_reject': True, 'ativo': True,
@@ -12948,6 +15256,78 @@ def create_app():
             except Exception as _exc:
                 app.logger.warning('Enriquecimento itens/valor (approvals): %s', _exc)
 
+        # Enriquece abastecimentos com placa do veículo + nome do colaborador.
+        # Sem isso, o Acompanhamento mostra só "Veículo #<id>" e nenhum solicitante.
+        abastec_results = [r for r in results if r['resource_type'] == 'abastecimentos']
+        if abastec_results:
+            try:
+                veic_ids = sorted({r['full_item'].get('veiculo_id') for r in abastec_results if r['full_item'].get('veiculo_id')})
+                colab_ids = sorted({r['full_item'].get('motorista_id') for r in abastec_results if r['full_item'].get('motorista_id')})
+                placa_por_veic = {}
+                if veic_ids:
+                    veic_rows = supabase.table('veiculos').select('id, placa').in_('id', veic_ids).execute().data or []
+                    placa_por_veic = {v['id']: v.get('placa') for v in veic_rows}
+                nome_por_colab = {}
+                if colab_ids:
+                    colab_rows = supabase.table('colaboradores').select('id, nome_completo').in_('id', colab_ids).execute().data or []
+                    nome_por_colab = {c['id']: c.get('nome_completo') for c in colab_rows}
+                for r in abastec_results:
+                    fi = r['full_item']
+                    placa = placa_por_veic.get(fi.get('veiculo_id'))
+                    nome = nome_por_colab.get(fi.get('motorista_id'))
+                    fi['placa'] = placa
+                    fi['colaborador_nome'] = nome
+                    litros = fi.get('litros') or ''
+                    combustivel = fi.get('tipo_combustivel') or 'combustível'
+                    r['titulo'] = f"{litros}L de {combustivel} – {placa or ('Veículo #' + str(fi.get('veiculo_id', '')))}"
+            except Exception as _exc:
+                app.logger.warning('Enriquecimento placa/colaborador (approvals abastecimentos): %s', _exc)
+
+        # Enriquece diárias/hotelaria com os itens (motorista, placa, hotel) e os
+        # nomes dos atores — pra montar a "Solicitação de Depósito Bancário".
+        diaria_results = [r for r in results if r['resource_type'] == 'diarias_solicitacoes']
+        if diaria_results:
+            try:
+                from collections import defaultdict
+                sol_ids = [r['id'] for r in diaria_results if r.get('id')]
+                itens_por_sol = defaultdict(list)
+                if sol_ids:
+                    itens_raw = (
+                        supabase.table('diarias_itens')
+                        .select('solicitacao_id, motorista_nome, placa, hotel_nome, qtd_pernoites, qtd_diarias, valor_total, colaborador_id')
+                        .in_('solicitacao_id', sol_ids)
+                        .execute().data or []
+                    )
+                    for it in itens_raw:
+                        sid = it.get('solicitacao_id')
+                        if sid:
+                            itens_por_sol[sid].append(it)
+                # Nomes dos atores (solicitante / aprovador etapa 1 / etapa 2).
+                actor_ids = set()
+                for r in diaria_results:
+                    for f in ('criado_por', 'aprovado_lider_por', 'aprovado_por'):
+                        v = r['full_item'].get(f)
+                        if v:
+                            actor_ids.add(v)
+                nomes = {}
+                if actor_ids:
+                    crows = supabase.table('colaboradores').select('id, nome_completo').in_('id', list(actor_ids)).execute().data or []
+                    nomes = {c['id']: c.get('nome_completo') for c in crows}
+                for r in diaria_results:
+                    fi = r['full_item']
+                    itens = itens_por_sol.get(r['id'], [])
+                    fi['itens'] = itens
+                    prim = itens[0] if itens else {}
+                    fi['criado_por_nome'] = nomes.get(fi.get('criado_por'))
+                    # Diárias criadas no app não têm itens: motorista = quem solicitou.
+                    fi['motorista_nome'] = prim.get('motorista_nome') or fi['criado_por_nome']
+                    fi['placa'] = prim.get('placa')
+                    fi['hotel_nome'] = prim.get('hotel_nome')
+                    fi['aprovado_lider_por_nome'] = nomes.get(fi.get('aprovado_lider_por'))
+                    fi['aprovado_por_nome'] = nomes.get(fi.get('aprovado_por'))
+            except Exception as _exc:
+                app.logger.warning('Enriquecimento itens/atores (approvals diarias): %s', _exc)
+
         return jsonify({
             'total': len(results),
             'items': results,
@@ -13009,7 +15389,7 @@ def create_app():
             })
         except Exception as exc:
             app.logger.error('aprovar_lider %s %d: %s', resource_type, item_id, exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.post('/api/approvals/<int:item_id>/approve')
     @rate_limit_endpoint(max_requests=30)
@@ -13102,6 +15482,10 @@ def create_app():
             contas_pagar_id = None
             if resource_type == 'pedidos_compra':
                 contas_pagar_id = _ensure_pedido_payable(item)
+            elif resource_type == 'abastecimentos':
+                # Combustível aprovado vira conta a pagar (item já com status final).
+                contas_pagar_id = _ensure_conta_from_abastecimento(
+                    {**item, config['status_field']: config['approved_status']})
 
             # Registrar auditoria
             write_audit_event(
@@ -13129,7 +15513,7 @@ def create_app():
             })
         except Exception as exc:
             app.logger.error('Erro ao aprovar %s %d: %s', resource_type, item_id, exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.post('/api/approvals/<int:item_id>/reject')
     @rate_limit_endpoint(max_requests=30)
@@ -13216,7 +15600,7 @@ def create_app():
             })
         except Exception as exc:
             app.logger.error('Erro ao rejeitar %s %d: %s', resource_type, item_id, exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.get('/api/approvals/history')
     @rate_limit_endpoint(max_requests=60)
@@ -13267,7 +15651,7 @@ def create_app():
             })
         except Exception as exc:
             app.logger.error('Erro ao carregar histórico de aprovações: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.post('/api/approvals/<int:item_id>/em-analise')
     @rate_limit_endpoint(max_requests=30)
@@ -13311,7 +15695,7 @@ def create_app():
             return jsonify({'status': 'ok', 'message': 'Pedido enviado para análise.'})
         except Exception as exc:
             app.logger.error('set_em_analise %d: %s', item_id, exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     # ═══════════════════════════════════════════════════════════════════════════════
     # PORTAL CLIENTE — login externo e aprovação etapa 2 de HE
@@ -13339,7 +15723,9 @@ def create_app():
                 if exp < datetime.now(exp.tzinfo):
                     return None
             except Exception:
-                pass
+                # fail-closed: se não der pra confirmar a validade da expiração,
+                # nega a sessão em vez de tratá-la como válida.
+                return None
             cli_resp = (supabase.table('clientes')
                         .select('*').eq('id', sess['cliente_id']).limit(1).execute())
             if not cli_resp.data:
@@ -13703,7 +16089,7 @@ def create_app():
             })
         except Exception as exc:
             app.logger.error('pedidos_compra_metricas: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     # ─── Configuração do workflow de aprovações (tela de Permissões) ─────────────
 
@@ -13719,7 +16105,7 @@ def create_app():
             return jsonify({'items': resp.data or []})
         except Exception as exc:
             app.logger.error('get_approval_configs_api: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.put('/api/approval-configs/<string:resource_type>')
     @rate_limit_endpoint(max_requests=20)
@@ -13754,15 +16140,35 @@ def create_app():
             return jsonify({'status': 'ok', 'resource_type': resource_type})
         except Exception as exc:
             app.logger.error('update_approval_config_api: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     # ============ HORAS EXTRAS RTM — FECHAMENTOS ============
 
+    def rtm_custo_real(col, h50, h100):
+        """Custo real da folha p/ horas extras de um colaborador — FONTE ÚNICA.
+        Usada tanto no Contas a Pagar quanto na coluna "Valor Real" do detalhe,
+        pra nunca divergirem. base = (salário + periculosidade) ÷ divisor 220
+        (carga semanal × 5, Súmula 132), × 1,5 (50%) / × 2 (100%). Adicional
+        noturno entra SÓ na fração de horas 22h–5h do turno (não em tudo)."""
+        sal = parse_float_or_default((col or {}).get('salario_base_mensal'), 0.0)
+        weekly = parse_float_or_default((col or {}).get('carga_horaria_semanal'), 44.0) or 44.0
+        divisor = weekly * 5.0
+        if sal <= 0 or divisor <= 0:
+            return 0.0
+        base = (sal + sal * parse_float_or_default((col or {}).get('percentual_periculosidade'), 0.0) / 100.0) / divisor
+        fator = 1.0 + (parse_float_or_default((col or {}).get('percentual_adicional_clt'), 0.0) / 100.0) * fracao_noturna_turno(col)
+        return (parse_float_or_default(h50, 0.0) * base * 1.5
+                + parse_float_or_default(h100, 0.0) * base * 2.0) * fator
+
     def _rebuild_financeiro_rtm(mes_referencia):
-        """Regenera Contas a Receber (horas fixo) e Contas a Pagar (horas extra)
-        de um mês RTM a partir dos registros gravados em horas_extras_rtm_registros.
-        Idempotente: apaga as linhas auto-geradas do mês e recria a partir da fonte
-        de verdade (registros). Retorna (cr_count, cp_count)."""
+        """Regenera SOMENTE Contas a Pagar de um mês RTM. O valor lançado é o
+        CUSTO REAL dos colaboradores — (salário + periculosidade) ÷ divisor 220
+        (carga semanal × 5, Súmula 132), ×1,5 (50%) / ×2 (100%), com adicional
+        noturno do cadastro — de TODA hora extra (no contrato E fora), pois é o
+        que a Gold efetivamente paga em folha. O COBRADO do cliente (valor_hora
+        do RTM) NÃO entra aqui; cobrança é Contas a Receber (manual/NFSe).
+        Idempotente: apaga as linhas auto-geradas do mês e recria da fonte de
+        verdade (registros). Retorna (cr_count=0, cp_count)."""
         if not mes_referencia:
             return (0, 0)
         mes_prefix = mes_referencia[:7]
@@ -13770,49 +16176,31 @@ def create_app():
         from collections import defaultdict
 
         regs = (supabase.table('horas_extras_rtm_registros')
-                .select('colaborador_id, filial_id, filial_nome, total_geral, tipo_hora')
+                .select('colaborador_id, filial_id, filial_nome, total_geral, '
+                        'horas_normais, horas_extra_100, tipo_hora')
                 .eq('mes_referencia', mes_referencia)
                 .execute().data) or []
 
-        # Sem registros: ainda limpa qualquer linha auto-gerada órfã do mês.
+        # Sem registros: ainda limpa qualquer linha auto-gerada órfã do mês (só CP).
         if not regs:
-            supabase.table('contas_a_receber').delete().eq('horas_extras_rtm_mes', mes_referencia).execute()
             supabase.table('contas_a_pagar').delete().eq('horas_extras_rtm_mes', mes_referencia).execute()
             return (0, 0)
 
-        # Mapa colaborador → contrato (apenas fixo) para resolver cliente/contrato.
-        colab_contrato_map = {}
-        try:
-            cc_resp = supabase.table('contratos_colaboradores').select(
-                'colaborador_id, tipo_item, inicio_vigencia, contrato_operacional_id'
-            ).execute()
-            for cc in (cc_resp.data or []):
-                cid_cc = cc.get('colaborador_id')
-                if cid_cc is None:
-                    continue
-                iv = cc.get('inicio_vigencia')
-                if iv is not None and iv[:7] > mes_prefix:
-                    continue
-                ti = (cc.get('tipo_item') or '').lower()
-                if ti in ('colaborador', 'pacote_motorista_veiculo') and cc.get('contrato_operacional_id'):
-                    colab_contrato_map[str(cid_cc)] = cc['contrato_operacional_id']
-        except Exception:
-            pass
-
-        contrato_cliente_map = {}
-        fixo_contrato_ids = list({v for v in colab_contrato_map.values() if v})
-        if fixo_contrato_ids:
+        # Custo real por colaborador (cadastro): base = salário + periculosidade,
+        # divisor contratual fixo = carga semanal × 5 (44h → 220h).
+        colab_fin = {}
+        cids = sorted({int(r['colaborador_id']) for r in regs if r.get('colaborador_id') is not None})
+        if cids:
             try:
-                cont_resp = supabase.table('contratos_operacionais').select(
-                    'id, cliente_nome, nome_contrato'
-                ).in_('id', fixo_contrato_ids).execute()
-                for c in (cont_resp.data or []):
-                    contrato_cliente_map[c['id']] = {
-                        'cliente_nome': c.get('cliente_nome') or c.get('nome_contrato', ''),
-                        'contrato_nome': c.get('nome_contrato', ''),
-                    }
+                cresp = supabase.table('colaboradores').select(
+                    'id, salario_base_mensal, carga_horaria_semanal, '
+                    'percentual_periculosidade, percentual_adicional_clt, '
+                    'horario_padrao_inicio, horario_padrao_fim'
+                ).in_('id', cids).execute()
+                for c in (cresp.data or []):
+                    colab_fin[int(c['id'])] = c
             except Exception:
-                pass
+                colab_fin = {}
 
         # Lookup de filial por nome (fallback quando o registro não tem filial_id).
         filiais_cadastradas = []
@@ -13837,84 +16225,72 @@ def create_app():
                     return f['id']
             return None
 
-        fixo_groups = defaultdict(lambda: {
-            'total': 0.0, 'count': 0, 'filial_nome': '', 'filial_id': None,
-            'contrato_id': None, 'cliente_nome': '', 'contrato_nome': '',
-        })
-        extra_groups = defaultdict(lambda: {'total': 0.0, 'count': 0, 'filial_nome': '', 'filial_id': None})
+        # Agrupa por filial o CUSTO REAL (folha) de toda hora extra do mês.
+        # cobrado fica só como referência na descrição (auditoria da margem).
+        groups = defaultdict(lambda: {'custo': 0.0, 'cobrado': 0.0, 'count': 0,
+                                      'sem_cadastro': 0, 'filial_nome': '', 'filial_id': None})
         for r in regs:
             fname = r.get('filial_nome') or 'Sem filial'
-            total = float(r.get('total_geral') or 0)
+            info = groups[fname]
+            info['count'] += 1
+            info['cobrado'] += float(r.get('total_geral') or 0)
+            info['filial_nome'] = r.get('filial_nome', '') or fname
+            info['filial_id'] = r.get('filial_id')
             cid = r.get('colaborador_id')
-            if (r.get('tipo_hora') or 'extra') == 'fixo':
-                contrato_id = colab_contrato_map.get(str(cid)) if cid else None
-                key = (fname, contrato_id)
-                info = fixo_groups[key]
-                info['total'] += total
-                info['count'] += 1
-                info['filial_nome'] = r.get('filial_nome', '') or fname
-                info['filial_id'] = r.get('filial_id')
-                info['contrato_id'] = contrato_id
-                if contrato_id and contrato_id in contrato_cliente_map:
-                    info['cliente_nome'] = contrato_cliente_map[contrato_id]['cliente_nome']
-                    info['contrato_nome'] = contrato_cliente_map[contrato_id]['contrato_nome']
+            col = colab_fin.get(int(cid)) if cid is not None else None
+            if col:
+                info['custo'] += rtm_custo_real(col, r.get('horas_normais'), r.get('horas_extra_100'))
             else:
-                info = extra_groups[fname]
-                info['total'] += total
-                info['count'] += 1
-                info['filial_nome'] = r.get('filial_nome', '') or fname
-                info['filial_id'] = r.get('filial_id')
+                info['sem_cadastro'] += 1
 
-        supabase.table('contas_a_receber').delete().eq('horas_extras_rtm_mes', mes_referencia).execute()
+        # Contas a Receber NÃO é gerada/apagada por hora extra (desacoplado).
         supabase.table('contas_a_pagar').delete().eq('horas_extras_rtm_mes', mes_referencia).execute()
 
-        cr_rows, cp_rows = [], []
-        # FIXO → Contas a Receber (cliente reembolsa a Gold)
-        for _key, info in fixo_groups.items():
-            if info['total'] <= 0:
-                continue
-            fid_cr = _find_fid(info.get('filial_nome', '')) or info['filial_id']
-            valor = round(info['total'], 2)
-            cr_rows.append({
-                'filial_id': fid_cr,
-                'filial_nome': info['filial_nome'],
-                'competencia': mes_referencia,
-                'obrigacao': 'HORA EXTRA',
-                'descricao': f"Horas Extras – Fixo Contrato ({mes_label}) – {info['filial_nome']}",
-                'cliente_nome': info.get('cliente_nome') or '',
-                'contrato_operacional_id': info.get('contrato_id'),
-                'contrato_nome': info.get('contrato_nome', ''),
-                'valor_gold': valor,
-                'cobrado_wm': valor,
-                'status_fat': 'NÃO FATURADO',
-                'status': 'FALTA COBRAR',
-                'horas_extras_rtm_mes': mes_referencia,
-                'tipo_hora': 'fixo',
-                'limite_dia': 10,
-                'prazo_envio': 'ATÉ O DIA 10 - SUB',
-            })
-        # EXTRA → Contas a Pagar (Gold absorve o custo, sem CR)
-        for _fid, info in extra_groups.items():
-            if info['total'] <= 0:
+        cp_rows = []
+        for _fname, info in groups.items():
+            if info['custo'] <= 0:
                 continue
             fid_cp = _find_fid(info.get('filial_nome', '')) or info['filial_id']
+            aviso = f" – {info['sem_cadastro']} sem cadastro (custo não incluído)" if info['sem_cadastro'] else ''
             cp_rows.append({
                 'filial_id': fid_cp,
                 'filial_nome': info['filial_nome'],
                 'competencia': mes_referencia,
                 'tipo_despesa': 'HORAS EXTRAS',
-                'descricao': f"Horas Extras Fora Contrato ({mes_label}) – {info['filial_nome']} – {info['count']} funcionários",
-                'valor': round(info['total'], 2),
+                'descricao': (f"Horas Extras – Custo Colaboradores ({mes_label}) – {info['filial_nome']} "
+                              f"– {info['count']} funcionários (cobrado do cliente: R$ {info['cobrado']:.2f}){aviso}"),
+                'valor': round(info['custo'], 2),
                 'status': 'PENDENTE',
                 'horas_extras_rtm_mes': mes_referencia,
                 'colaboradores_count': info['count'],
             })
 
-        if cr_rows:
-            supabase.table('contas_a_receber').insert(cr_rows).execute()
         if cp_rows:
             supabase.table('contas_a_pagar').insert(cp_rows).execute()
-        return (len(cr_rows), len(cp_rows))
+        return (0, len(cp_rows))
+
+    @app.route('/api/horas-extras-rtm/reprocessar-financeiro', methods=['POST'])
+    @require_auth
+    def reprocessar_financeiro_rtm(profile):
+        """Re-executa o cálculo financeiro do RTM de um mês (custo real da folha
+        -> Contas a Pagar). Idempotente: apaga as linhas auto-geradas do mês e
+        recria a partir dos registros. Apenas administrador. Contas a Receber é
+        desacoplada (manual/NFSe) e NÃO é tocada aqui — igual ao fluxo do salvar."""
+        if not profile.get('is_super_admin'):
+            return jsonify({'error': 'Apenas administrador pode reprocessar o financeiro.'}), 403
+        data = request.get_json() or {}
+        mes = (data.get('mes') or '').strip()
+        if not mes:
+            return jsonify({'error': 'Parâmetro mes obrigatório.'}), 400
+        try:
+            cr_count, cp_count = _rebuild_financeiro_rtm(mes)
+            return jsonify({
+                'ok': True, 'mes': mes[:7],
+                'contas_pagar': cp_count, 'contas_receber': cr_count,
+            })
+        except Exception as exc:
+            app.logger.error('reprocessar_financeiro_rtm %s: %s', mes, exc)
+            return db_error_response(exc)
 
     @app.route('/api/horas-extras-rtm/salvar', methods=['POST'])
     @require_auth
@@ -14148,17 +16524,31 @@ def create_app():
                     'tipo_hora': tipo_hora,
                 })
 
-            # Delete only records for filiais present in this import batch (never touch other filiais)
-            importing_nomes = list({r.get('filial_nome') for r in rows if r.get('filial_nome')})
-            del_query = supabase.table('horas_extras_rtm_registros').delete().eq('mes_referencia', mes_referencia)
-            if importing_nomes:
-                del_query = del_query.in_('filial_nome', importing_nomes)
-            if profile_has_filial_scope(profile):
-                allowed_ids = profile.get('allowed_filial_ids') or []
-                if not allowed_ids:
-                    return jsonify({'error': 'Sem filiais permitidas para salvar.'}), 403
-                del_query = del_query.in_('filial_id', allowed_ids)
-            del_query.execute()
+            # Substitui o fechamento do mês SEM criar duplicatas ao reimportar.
+            # A chave do replace é a identidade ESTÁVEL (filial_id, colaborador_id,
+            # funcionario_nome) — nunca o filial_nome (texto livre da planilha).
+            # Antes, o delete filtrava por filial_nome; um reimport com a filial
+            # escrita de outro jeito (ou vazia) escapava do filtro e duplicava a pessoa.
+            scoped = profile_has_filial_scope(profile)
+            allowed_ids = (profile.get('allowed_filial_ids') or []) if scoped else None
+            if scoped and not allowed_ids:
+                return jsonify({'error': 'Sem filiais permitidas para salvar.'}), 403
+
+            def _del_rtm(coluna, valores):
+                if not valores:
+                    return
+                q = supabase.table('horas_extras_rtm_registros').delete().eq('mes_referencia', mes_referencia).in_(coluna, valores)
+                if scoped:
+                    q = q.in_('filial_id', allowed_ids)
+                q.execute()
+
+            # 1) Limpa o fechamento das filiais presentes no lote (por filial_id estável;
+            #    nunca toca em filiais fora do lote).
+            _del_rtm('filial_id', list({r['filial_id'] for r in rows if r.get('filial_id') is not None}))
+            # 2) Rede de segurança: remove qualquer registro anterior das MESMAS pessoas
+            #    neste mês, mesmo que a filial tenha sido gravada diferente ou nula.
+            _del_rtm('colaborador_id', list({r['colaborador_id'] for r in rows if r.get('colaborador_id') is not None}))
+            _del_rtm('funcionario_nome', list({r['funcionario_nome'] for r in rows if r.get('funcionario_nome')}))
 
             if rows:
                 supabase.table('horas_extras_rtm_registros').insert(rows).execute()
@@ -14185,7 +16575,7 @@ def create_app():
             return jsonify({'ok': True, 'count': len(rows)})
         except Exception as exc:
             app.logger.error('salvar_horas_extras_rtm: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/horas-extras-rtm/meses', methods=['GET'])
     @require_auth
@@ -14212,7 +16602,7 @@ def create_app():
             return jsonify({'data': lista})
         except Exception as exc:
             app.logger.error('listar_meses_horas_extras_rtm: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/horas-extras-rtm/meses-filiais', methods=['GET'])
     @require_auth
@@ -14246,7 +16636,7 @@ def create_app():
             return jsonify({'data': lista})
         except Exception as exc:
             app.logger.error('listar_meses_filiais_horas_extras_rtm: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/horas-extras-rtm/detalhe', methods=['GET'])
     @require_auth
@@ -14262,10 +16652,32 @@ def create_app():
                     return jsonify({'data': []})
                 query = query.in_('filial_id', allowed_ids)
             result = supabase_retry(query.execute)
-            return jsonify({'data': result.data or []})
+            registros = result.data or []
+
+            # Anexa o custo real da folha por registro (MESMA fórmula do Contas a
+            # Pagar), pra a coluna "Valor Real" bater com o que é lançado.
+            cids = sorted({int(r['colaborador_id']) for r in registros if r.get('colaborador_id') is not None})
+            colab_fin = {}
+            if cids:
+                try:
+                    cresp = supabase.table('colaboradores').select(
+                        'id, salario_base_mensal, carga_horaria_semanal, '
+                        'percentual_periculosidade, percentual_adicional_clt, '
+                        'horario_padrao_inicio, horario_padrao_fim'
+                    ).in_('id', cids).execute()
+                    for c in (cresp.data or []):
+                        colab_fin[int(c['id'])] = c
+                except Exception as _cfe:
+                    app.logger.warning('detalhe_rtm custo_real colaboradores: %s', _cfe)
+            for r in registros:
+                cid = r.get('colaborador_id')
+                col = colab_fin.get(int(cid)) if cid is not None else None
+                r['valor_real'] = round(rtm_custo_real(col, r.get('horas_normais'), r.get('horas_extra_100')), 2) if col else None
+
+            return jsonify({'data': registros})
         except Exception as exc:
             app.logger.error('detalhe_horas_extras_rtm: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/horas-extras-rtm/tipo-hora-mapa', methods=['GET'])
     @require_auth
@@ -14329,7 +16741,7 @@ def create_app():
             return jsonify({'data': result})
         except Exception as exc:
             app.logger.error('tipo_hora_mapa_rtm: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/horas-extras-rtm/registro/<registro_id>', methods=['PUT'])
     @require_auth
@@ -14371,7 +16783,7 @@ def create_app():
             return jsonify({'ok': True})
         except Exception as exc:
             app.logger.error('editar_registro_horas_extras_rtm: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/horas-extras-rtm/recalcular-tipo-hora', methods=['POST'])
     @require_auth
@@ -14534,7 +16946,7 @@ def create_app():
             return jsonify({'ok': True, 'updated': updated, 'fixo': len(fixo_ids), 'extra': len(extra_ids), 'detalhes_extra': detalhes_extra})
         except Exception as exc:
             app.logger.error('recalcular_tipo_hora_rtm: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/horas-extras-rtm/mes/<mes>', methods=['DELETE'])
     @require_auth
@@ -14553,15 +16965,28 @@ def create_app():
             return jsonify({'ok': True})
         except Exception as exc:
             app.logger.error('deletar_mes_horas_extras_rtm: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/horas-extras-rtm/metricas', methods=['GET'])
     @require_auth
     def metricas_horas_extras_rtm(profile):
         try:
             query = supabase.table('horas_extras_rtm_registros').select(
-                'mes_referencia, funcionario_nome, filial_nome, estado, horas_normais, horas_extra_100, total_50, total_100, total_geral'
+                'mes_referencia, funcionario_nome, filial_nome, filial_id, colaborador_id, estado, '
+                'horas_normais, horas_extra_100, total_50, total_100, total_geral'
             )
+            # Filtros opcionais: ?filial_id=N  ?mes=YYYY-MM  ?ano=YYYY
+            filial_id_f = request.args.get('filial_id', type=int)
+            mes_f = (request.args.get('mes') or '').strip()[:7]
+            ano_f = (request.args.get('ano') or '').strip()[:4]
+            if filial_id_f:
+                query = query.eq('filial_id', filial_id_f)
+            if mes_f:
+                _y, _m = int(mes_f[:4]), int(mes_f[5:7])
+                fim_m = f"{_y + 1:04d}-01-01" if _m == 12 else f"{_y:04d}-{_m + 1:02d}-01"
+                query = query.gte('mes_referencia', f'{mes_f}-01').lt('mes_referencia', fim_m)
+            elif ano_f.isdigit():
+                query = query.gte('mes_referencia', f'{ano_f}-01-01').lt('mes_referencia', f'{int(ano_f) + 1}-01-01')
             if profile_has_filial_scope(profile):
                 allowed_ids = profile.get('allowed_filial_ids') or []
                 if not allowed_ids:
@@ -14569,12 +16994,52 @@ def create_app():
                 query = query.in_('filial_id', allowed_ids)
             result = query.execute()
             rows = result.data or []
+
+            # Custo real por colaborador (folha): base = (salário + peric) ÷ (carga×5),
+            # ×1,5/×2 + noturno — mesma regra do lançamento em Contas a Pagar.
+            colab_fin = {}
+            _cids = sorted({int(r['colaborador_id']) for r in rows if r.get('colaborador_id') is not None})
+            if _cids:
+                try:
+                    _cresp = supabase.table('colaboradores').select(
+                        'id, salario_base_mensal, carga_horaria_semanal, '
+                        'percentual_periculosidade, percentual_adicional_clt, '
+                        'horario_padrao_inicio, horario_padrao_fim'
+                    ).in_('id', _cids).execute()
+                    for c in (_cresp.data or []):
+                        colab_fin[int(c['id'])] = c
+                except Exception:
+                    colab_fin = {}
+
+            def _custo_row(r):
+                cid = r.get('colaborador_id')
+                col = colab_fin.get(int(cid)) if cid is not None else None
+                if not col:
+                    return None
+                sal = parse_float_or_default(col.get('salario_base_mensal'), 0.0)
+                weekly = parse_float_or_default(col.get('carga_horaria_semanal'), 44.0) or 44.0
+                div = weekly * 5.0
+                if sal <= 0 or div <= 0:
+                    return None
+                base = (sal + sal * parse_float_or_default(col.get('percentual_periculosidade'), 0.0) / 100.0) / div
+                # Adicional noturno só na fração 22h–5h do turno.
+                fator = 1.0 + (parse_float_or_default(col.get('percentual_adicional_clt'), 0.0) / 100.0) * fracao_noturna_turno(col)
+                return (parse_float_or_default(r.get('horas_normais'), 0.0) * base * 1.5
+                        + parse_float_or_default(r.get('horas_extra_100'), 0.0) * base * 2.0) * fator
             from collections import defaultdict
             filiais = defaultdict(lambda: {'horas_normais': 0.0, 'horas_extra_100': 0.0, 'total_50': 0.0, 'total_100': 0.0, 'total': 0.0, 'funcionarios': 0})
             funcionarios = defaultdict(lambda: {'horas_normais': 0.0, 'horas_extra_100': 0.0, 'total_50': 0.0, 'total_100': 0.0, 'total': 0.0, 'meses': 0})
-            meses_map = defaultdict(lambda: {'horas_normais': 0.0, 'horas_extra_100': 0.0, 'total_50': 0.0, 'total_100': 0.0, 'total': 0.0, 'funcionarios': 0})
+            meses_map = defaultdict(lambda: {'horas_normais': 0.0, 'horas_extra_100': 0.0, 'total_50': 0.0, 'total_100': 0.0, 'total': 0.0, 'custo': 0.0, 'funcionarios': 0})
             anos_map = defaultdict(lambda: {'horas_normais': 0.0, 'horas_extra_100': 0.0, 'total_50': 0.0, 'total_100': 0.0, 'total': 0.0, 'meses': set()})
+            resumo = {'cobrado_total': 0.0, 'custo_total': 0.0, 'sem_cadastro': 0, 'registros': 0}
             for r in rows:
+                _custo = _custo_row(r)
+                resumo['registros'] += 1
+                resumo['cobrado_total'] += float(r.get('total_geral') or 0)
+                if _custo is None:
+                    resumo['sem_cadastro'] += 1
+                else:
+                    resumo['custo_total'] += _custo
                 f = r.get('filial_nome') or 'Sem filial'
                 filiais[f]['horas_normais'] += float(r.get('horas_normais') or 0)
                 filiais[f]['horas_extra_100'] += float(r.get('horas_extra_100') or 0)
@@ -14595,6 +17060,7 @@ def create_app():
                 meses_map[m]['total_50'] += float(r.get('total_50') or 0)
                 meses_map[m]['total_100'] += float(r.get('total_100') or 0)
                 meses_map[m]['total'] += float(r.get('total_geral') or 0)
+                meses_map[m]['custo'] += (_custo or 0.0)
                 meses_map[m]['funcionarios'] += 1
                 ano = m[:4] if m else ''
                 if ano:
@@ -14609,16 +17075,25 @@ def create_app():
             top_func_50 = sorted([{'funcionario': k, **v} for k, v in funcionarios.items()], key=lambda x: x['horas_normais'], reverse=True)[:10]
             evolucao = sorted([{'mes': k, **v} for k, v in meses_map.items()], key=lambda x: x['mes'])
             resumo_por_ano = sorted([{'ano': k, 'meses': len(v.pop('meses')), **v} for k, v in anos_map.items()], key=lambda x: x['ano'], reverse=True)
+            margem = resumo['cobrado_total'] - resumo['custo_total']
             return jsonify({
                 'top_filiais': top_filiais,
                 'top_funcionarios_100': top_func_100,
                 'top_funcionarios_50': top_func_50,
                 'evolucao_mensal': evolucao,
                 'resumo_por_ano': resumo_por_ano,
+                'resumo_financeiro': {
+                    'cobrado_total': round(resumo['cobrado_total'], 2),
+                    'custo_total': round(resumo['custo_total'], 2),
+                    'margem_total': round(margem, 2),
+                    'margem_pct': round(margem / resumo['cobrado_total'] * 100, 1) if resumo['cobrado_total'] > 0 else 0,
+                    'sem_cadastro': resumo['sem_cadastro'],
+                    'registros': resumo['registros'],
+                },
             })
         except Exception as exc:
             app.logger.error('metricas_horas_extras_rtm: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     # ============ CONTAS A RECEBER ============
 
@@ -14648,7 +17123,7 @@ def create_app():
             return jsonify({'data': result.data or []})
         except Exception as exc:
             app.logger.error('listar_contas_receber: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/contas-receber/alertas', methods=['GET'])
     @require_auth
@@ -14680,7 +17155,7 @@ def create_app():
             })
         except Exception as exc:
             app.logger.error('alertas_contas_receber: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/contas-receber', methods=['POST'])
     @require_auth
@@ -14710,7 +17185,7 @@ def create_app():
             return jsonify({'ok': True, 'data': (result.data or [{}])[0]})
         except Exception as exc:
             app.logger.error('criar_conta_receber: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/contas-receber/<cr_id>', methods=['PUT'])
     @require_auth
@@ -14738,7 +17213,7 @@ def create_app():
             return jsonify({'ok': True})
         except Exception as exc:
             app.logger.error('editar_conta_receber: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/contas-receber/<cr_id>', methods=['DELETE'])
     @require_auth
@@ -14753,7 +17228,7 @@ def create_app():
             return jsonify({'ok': True})
         except Exception as exc:
             app.logger.error('deletar_conta_receber: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     # ============ CONTAS A PAGAR ============
 
@@ -14761,6 +17236,8 @@ def create_app():
     @require_auth
     def listar_contas_pagar(profile):
         try:
+            # Puxa abastecimentos aprovados p/ Contas a Pagar (idempotente, self-heal).
+            _backfill_abastecimentos_contas_pagar(profile)
             query = supabase.table('contas_a_pagar').select('*').order('competencia', desc=True).order('filial_nome')
             if profile_has_filial_scope(profile):
                 allowed_ids = profile.get('allowed_filial_ids') or []
@@ -14780,7 +17257,7 @@ def create_app():
             return jsonify({'data': result.data or []})
         except Exception as exc:
             app.logger.error('listar_contas_pagar: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/contas-pagar/alertas', methods=['GET'])
     @require_auth
@@ -14809,7 +17286,7 @@ def create_app():
             })
         except Exception as exc:
             app.logger.error('alertas_contas_pagar: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/contas-pagar', methods=['POST'])
     @require_auth
@@ -14834,7 +17311,7 @@ def create_app():
             return jsonify({'ok': True, 'data': (result.data or [{}])[0]})
         except Exception as exc:
             app.logger.error('criar_conta_pagar: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/contas-pagar/<cp_id>', methods=['PUT'])
     @require_auth
@@ -14857,7 +17334,7 @@ def create_app():
             return jsonify({'ok': True})
         except Exception as exc:
             app.logger.error('editar_conta_pagar: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/contas-pagar/<cp_id>', methods=['DELETE'])
     @require_auth
@@ -14872,7 +17349,7 @@ def create_app():
             return jsonify({'ok': True})
         except Exception as exc:
             app.logger.error('deletar_conta_pagar: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     # ============ BANCO ============
 
@@ -14899,7 +17376,7 @@ def create_app():
             return jsonify({'data': contas})
         except Exception as exc:
             app.logger.error('listar_banco_contas: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/banco/contas', methods=['POST'])
     @require_auth
@@ -14918,7 +17395,7 @@ def create_app():
             return jsonify({'ok': True, 'data': (result.data or [{}])[0]})
         except Exception as exc:
             app.logger.error('criar_banco_conta: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/banco/contas/<conta_id>', methods=['PUT'])
     @require_auth
@@ -14931,7 +17408,7 @@ def create_app():
             return jsonify({'ok': True})
         except Exception as exc:
             app.logger.error('editar_banco_conta: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/banco/contas/<conta_id>', methods=['DELETE'])
     @require_auth
@@ -14941,7 +17418,7 @@ def create_app():
             return jsonify({'ok': True})
         except Exception as exc:
             app.logger.error('deletar_banco_conta: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/banco/lancamentos', methods=['GET'])
     @require_auth
@@ -14966,7 +17443,7 @@ def create_app():
             return jsonify({'data': result.data or []})
         except Exception as exc:
             app.logger.error('listar_banco_lancamentos: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/banco/lancamentos', methods=['POST'])
     @require_auth
@@ -14993,7 +17470,7 @@ def create_app():
             return jsonify({'ok': True, 'data': inserted})
         except Exception as exc:
             app.logger.error('criar_banco_lancamento: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/banco/lancamentos/<lancamento_id>', methods=['PUT'])
     @require_auth
@@ -15006,7 +17483,7 @@ def create_app():
             return jsonify({'ok': True})
         except Exception as exc:
             app.logger.error('editar_banco_lancamento: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/banco/lancamentos/<lancamento_id>/conciliar', methods=['POST'])
     @require_auth
@@ -15027,7 +17504,7 @@ def create_app():
             return jsonify({'ok': True})
         except Exception as exc:
             app.logger.error('conciliar_lancamento: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
 
     @app.route('/api/banco/saldos', methods=['GET'])
     @require_auth
@@ -15059,7 +17536,338 @@ def create_app():
             return jsonify({'saldo_total': round(saldo_total, 2), 'nao_conciliados': nao_conciliados, 'contas': contas})
         except Exception as exc:
             app.logger.error('saldos_banco: %s', exc)
-            return jsonify({'error': translate_database_error(exc)}), 500
+            return db_error_response(exc)
+
+    # ============ MOTOR FINANCEIRO — sincronização, parcelas, painel ============
+
+    def _fin_allowed_or_none(profile):
+        """Devolve (lista_ids | None, bloqueado?). None = sem restrição de filial."""
+        if profile_has_filial_scope(profile):
+            ids = profile.get('allowed_filial_ids') or []
+            return ids, (len(ids) == 0)
+        return None, False
+
+    @app.route('/api/notas-cte/sincronizar-financeiro', methods=['POST'])
+    @require_auth
+    def sincronizar_notas_cte_financeiro(profile):
+        scope_error = require_scope_permission(profile, 'menu.notas_cte')
+        if scope_error:
+            return scope_error
+        allowed, blocked = _fin_allowed_or_none(profile)
+        if blocked:
+            return jsonify({'ok': True, 'processadas': 0, 'geradas': 0})
+        try:
+            q = supabase.table('notas_cte').select('*').eq('ativo', True)
+            if allowed is not None:
+                q = q.in_('filial_id', allowed)
+            notas = supabase_retry(q.execute).data or []
+            geradas = 0
+            for nota in notas:
+                if nota.get('gera_financeiro') is False:
+                    continue
+                if (nota.get('natureza') or 'nenhum').lower() == 'nenhum':
+                    continue
+                res = _ensure_conta_from_nota_cte(nota)
+                if res and res.get('conta_id'):
+                    geradas += 1
+            return jsonify({'ok': True, 'processadas': len(notas), 'geradas': geradas})
+        except Exception as exc:
+            app.logger.error('sincronizar_notas_cte_financeiro: %s', exc)
+            return db_error_response(exc)
+
+    @app.route('/api/notas-fiscais-servico/sincronizar-financeiro', methods=['POST'])
+    @require_auth
+    def sincronizar_nfse_financeiro(profile):
+        scope_error = require_scope_permission(profile, 'menu.notas_fiscais_servico')
+        if scope_error:
+            return scope_error
+        allowed, blocked = _fin_allowed_or_none(profile)
+        if blocked:
+            return jsonify({'ok': True, 'processadas': 0, 'geradas': 0})
+        try:
+            q = supabase.table('notas_fiscais_servico').select('*').eq('ativo', True)
+            if allowed is not None:
+                q = q.in_('filial_id', allowed)
+            notas = supabase_retry(q.execute).data or []
+            geradas = 0
+            for nfse in notas:
+                if _ensure_conta_receber_from_nfse(nfse):
+                    geradas += 1
+            return jsonify({'ok': True, 'processadas': len(notas), 'geradas': geradas})
+        except Exception as exc:
+            app.logger.error('sincronizar_nfse_financeiro: %s', exc)
+            return db_error_response(exc)
+
+    @app.route('/api/financeiro/parcelas', methods=['GET'])
+    @require_auth
+    def listar_parcelas(profile):
+        try:
+            q = supabase.table('financeiro_parcelas').select('*').order('data_vencimento')
+            allowed, blocked = _fin_allowed_or_none(profile)
+            if blocked:
+                return jsonify({'data': []})
+            if allowed is not None:
+                q = q.in_('filial_id', allowed)
+            conta_tipo = request.args.get('conta_tipo')
+            conta_id = request.args.get('conta_id')
+            status = request.args.get('status')
+            mes = request.args.get('mes')
+            if conta_tipo == 'pagar' and conta_id:
+                q = q.eq('conta_pagar_id', conta_id)
+            elif conta_tipo == 'receber' and conta_id:
+                q = q.eq('conta_receber_id', conta_id)
+            if status:
+                q = q.eq('status', status)
+            if mes:
+                q = q.gte('data_vencimento', mes + '-01').lte('data_vencimento', mes + '-31')
+            result = supabase_retry(q.execute)
+            return jsonify({'data': result.data or []})
+        except Exception as exc:
+            app.logger.error('listar_parcelas: %s', exc)
+            return db_error_response(exc)
+
+    @app.route('/api/financeiro/parcelas/gerar', methods=['POST'])
+    @require_auth
+    def gerar_parcelas_endpoint(profile):
+        data = request.get_json() or {}
+        conta_tipo = (data.get('conta_tipo') or '').strip().lower()
+        conta_id = data.get('conta_id')
+        if conta_tipo not in ('pagar', 'receber') or not conta_id:
+            return jsonify({'error': 'conta_tipo (pagar|receber) e conta_id são obrigatórios.'}), 400
+        tbl = 'contas_a_pagar' if conta_tipo == 'pagar' else 'contas_a_receber'
+        try:
+            reg = supabase.table(tbl).select('*').eq('id', conta_id).limit(1).execute().data or []
+            if not reg:
+                return jsonify({'error': 'Conta não encontrada.'}), 404
+            conta = reg[0]
+            if profile_has_filial_scope(profile):
+                fid = conta.get('filial_id')
+                if fid and int(fid) not in set(profile.get('allowed_filial_ids') or []):
+                    return jsonify({'error': 'Sem permissão para esta filial.'}), 403
+            if conta_tipo == 'pagar':
+                valor_total = float(data.get('valor_total') or conta.get('valor') or 0)
+                venc_base = data.get('primeiro_vencimento') or conta.get('data_vencimento')
+            else:
+                valor_total = float(data.get('valor_total') or conta.get('cobrado_wm') or conta.get('valor_gold') or 0)
+                venc_base = data.get('primeiro_vencimento') or conta.get('data_vencimento') or conta.get('data_limite')
+            qtd = int(data.get('parcelas') or 1)
+            intervalo = int(data.get('intervalo_dias') or 30)
+            parcelas = _gerar_parcelas(conta_tipo, conta_id, conta.get('filial_id'),
+                                       valor_total, qtd, venc_base, intervalo)
+            return jsonify({'ok': True, 'data': parcelas})
+        except Exception as exc:
+            app.logger.error('gerar_parcelas_endpoint: %s', exc)
+            return db_error_response(exc)
+
+    @app.route('/api/financeiro/parcelas/<parcela_id>', methods=['PATCH'])
+    @require_auth
+    def editar_parcela(profile, parcela_id):
+        data = request.get_json() or {}
+        try:
+            reg = supabase.table('financeiro_parcelas').select('*').eq('id', parcela_id).limit(1).execute().data or []
+            if not reg:
+                return jsonify({'error': 'Parcela não encontrada.'}), 404
+            parcela = reg[0]
+            if profile_has_filial_scope(profile):
+                fid = parcela.get('filial_id')
+                if fid and int(fid) not in set(profile.get('allowed_filial_ids') or []):
+                    return jsonify({'error': 'Sem permissão.'}), 403
+            allowed = ['status', 'data_pagamento', 'valor_pago', 'valor', 'data_vencimento', 'observacoes']
+            update = {k: data[k] for k in allowed if k in data}
+            if update.get('status') == 'PAGO' and 'valor_pago' not in update:
+                update['valor_pago'] = float(parcela.get('valor') or 0)
+            if update.get('status') == 'PAGO' and 'data_pagamento' not in update and not parcela.get('data_pagamento'):
+                update['data_pagamento'] = date_class.today().isoformat()
+            update['updated_at'] = datetime.utcnow().isoformat()
+            supabase.table('financeiro_parcelas').update(update).eq('id', parcela_id).execute()
+
+            # Se todas as parcelas da conta ficarem pagas, quita a conta-mãe.
+            fk = 'conta_pagar_id' if parcela.get('conta_tipo') == 'pagar' else 'conta_receber_id'
+            conta_id = parcela.get(fk)
+            if conta_id:
+                irmas = supabase.table('financeiro_parcelas').select('status').eq(fk, conta_id).execute().data or []
+                ativas = [p for p in irmas if (p.get('status') or '').upper() != 'CANCELADO']
+                if ativas and all((p.get('status') or '').upper() == 'PAGO' for p in ativas):
+                    if parcela.get('conta_tipo') == 'pagar':
+                        try:
+                            supabase.table('contas_a_pagar').update({'status': 'PAGO'}).eq('id', conta_id).execute()
+                        except Exception:
+                            pass
+                    else:
+                        try:
+                            supabase.table('contas_a_receber').update({'status': 'RECEBIDO', 'status_fat': 'FATURADO'}).eq('id', conta_id).execute()
+                        except Exception:
+                            pass
+            return jsonify({'ok': True})
+        except Exception as exc:
+            app.logger.error('editar_parcela: %s', exc)
+            return db_error_response(exc)
+
+    @app.route('/api/financeiro/parcelas/<parcela_id>', methods=['DELETE'])
+    @require_auth
+    def deletar_parcela(profile, parcela_id):
+        try:
+            if profile_has_filial_scope(profile):
+                reg = supabase.table('financeiro_parcelas').select('filial_id').eq('id', parcela_id).limit(1).execute().data or []
+                fid = (reg[0].get('filial_id') if reg else None)
+                if fid and int(fid) not in set(profile.get('allowed_filial_ids') or []):
+                    return jsonify({'error': 'Sem permissão.'}), 403
+            supabase.table('financeiro_parcelas').delete().eq('id', parcela_id).execute()
+            return jsonify({'ok': True})
+        except Exception as exc:
+            app.logger.error('deletar_parcela: %s', exc)
+            return db_error_response(exc)
+
+    @app.route('/api/financeiro/painel', methods=['GET'])
+    @require_auth
+    def financeiro_painel(profile):
+        """Painel consolidado: a pagar × a receber, vencimentos, fluxo e saldo."""
+        scope_error = require_scope_permission(profile, 'menu.financeiro_painel')
+        if scope_error:
+            return scope_error
+        from datetime import date as _date, timedelta
+        hoje = _date.today()
+        hoje_iso = hoje.isoformat()
+        limite_7d = (hoje + timedelta(days=7)).isoformat()
+        mes = (request.args.get('mes') or hoje.strftime('%Y-%m'))[:7]
+
+        allowed, blocked = _fin_allowed_or_none(profile)
+
+        def _empty():
+            return {
+                'mes': mes,
+                'a_pagar': {'aberto': 0.0, 'qtd': 0, 'vencido': 0.0, 'vencido_qtd': 0, 'vence_hoje': 0.0, 'vence_7d': 0.0, 'pago_mes': 0.0},
+                'a_receber': {'aberto': 0.0, 'qtd': 0, 'vencido': 0.0, 'vencido_qtd': 0, 'vence_hoje': 0.0, 'vence_7d': 0.0, 'recebido_mes': 0.0},
+                'saldo_bancario': 0.0,
+                'saldo_previsto': 0.0,
+                'agenda': [],
+                'evolucao': [],
+            }
+        if blocked:
+            return jsonify(_empty())
+
+        PAGO_CP = {'PAGO', 'FINALIZADO'}
+        try:
+            cpq = supabase.table('contas_a_pagar').select(
+                'descricao, fornecedor_nome, status, valor, valor_pago, data_vencimento, data_pagamento, competencia, filial_nome')
+            if allowed is not None:
+                cpq = cpq.in_('filial_id', allowed)
+            cp_rows = supabase_retry(cpq.execute).data or []
+
+            crq = supabase.table('contas_a_receber').select(
+                'descricao, cliente_nome, obrigacao, status, status_fat, cobrado_wm, valor_gold, data_vencimento, data_limite, competencia, filial_nome')
+            if allowed is not None:
+                crq = crq.in_('filial_id', allowed)
+            cr_rows = supabase_retry(crq.execute).data or []
+        except Exception as exc:
+            app.logger.error('financeiro_painel query: %s', exc)
+            return jsonify(_empty())
+
+        ap = {'aberto': 0.0, 'qtd': 0, 'vencido': 0.0, 'vencido_qtd': 0, 'vence_hoje': 0.0, 'vence_7d': 0.0, 'pago_mes': 0.0}
+        agenda = []
+        for r in cp_rows:
+            status = (r.get('status') or '').upper()
+            saldo = float(r.get('valor') or 0) - float(r.get('valor_pago') or 0)
+            venc = r.get('data_vencimento') or ''
+            if status in PAGO_CP:
+                if (r.get('data_pagamento') or r.get('competencia') or '')[:7] == mes:
+                    ap['pago_mes'] += float(r.get('valor_pago') or r.get('valor') or 0)
+                continue
+            if status == 'CANCELADO':
+                continue
+            ap['aberto'] += saldo
+            ap['qtd'] += 1
+            if venc and venc < hoje_iso:
+                ap['vencido'] += saldo
+                ap['vencido_qtd'] += 1
+            elif venc == hoje_iso:
+                ap['vence_hoje'] += saldo
+            elif venc and hoje_iso < venc <= limite_7d:
+                ap['vence_7d'] += saldo
+            if venc and venc >= hoje_iso:
+                agenda.append({'tipo': 'pagar', 'data': venc, 'valor': round(saldo, 2),
+                               'descricao': r.get('fornecedor_nome') or r.get('descricao') or 'A pagar',
+                               'filial': r.get('filial_nome')})
+
+        ar = {'aberto': 0.0, 'qtd': 0, 'vencido': 0.0, 'vencido_qtd': 0, 'vence_hoje': 0.0, 'vence_7d': 0.0, 'recebido_mes': 0.0}
+        for r in cr_rows:
+            faturado = (r.get('status_fat') or '').upper() == 'FATURADO'
+            valor = float(r.get('cobrado_wm') or 0) or float(r.get('valor_gold') or 0)
+            venc = r.get('data_vencimento') or r.get('data_limite') or ''
+            if faturado or (r.get('status') or '').upper() == 'RECEBIDO':
+                if (r.get('competencia') or '')[:7] == mes:
+                    ar['recebido_mes'] += valor
+                continue
+            ar['aberto'] += valor
+            ar['qtd'] += 1
+            if venc and venc < hoje_iso:
+                ar['vencido'] += valor
+                ar['vencido_qtd'] += 1
+            elif venc == hoje_iso:
+                ar['vence_hoje'] += valor
+            elif venc and hoje_iso < venc <= limite_7d:
+                ar['vence_7d'] += valor
+            if venc and venc >= hoje_iso:
+                agenda.append({'tipo': 'receber', 'data': venc, 'valor': round(valor, 2),
+                               'descricao': r.get('cliente_nome') or r.get('descricao') or r.get('obrigacao') or 'A receber',
+                               'filial': r.get('filial_nome')})
+
+        # Saldo bancário
+        saldo_bancario = 0.0
+        try:
+            bcq = supabase.table('banco_contas').select('id, saldo_inicial').eq('ativo', True)
+            if allowed is not None:
+                bcq = bcq.in_('filial_id', allowed)
+            contas = bcq.execute().data or []
+            ids = [c['id'] for c in contas]
+            saldo_bancario = sum(float(c.get('saldo_inicial') or 0) for c in contas)
+            if ids:
+                lq = supabase.table('banco_lancamentos').select('conta_id, tipo, valor').in_('conta_id', ids).execute().data or []
+                for l in lq:
+                    v = float(l.get('valor') or 0)
+                    saldo_bancario += v if l.get('tipo') == 'ENTRADA' else -v
+        except Exception as exc:
+            app.logger.warning('financeiro_painel saldo: %s', exc)
+
+        # Evolução — últimos 6 meses (competência)
+        meses = []
+        y, m = hoje.year, hoje.month
+        for _ in range(6):
+            meses.append(f"{y:04d}-{m:02d}")
+            m -= 1
+            if m == 0:
+                m = 12
+                y -= 1
+        meses = list(reversed(meses))
+        evol = {mm: {'mes': mm, 'pagar': 0.0, 'receber': 0.0} for mm in meses}
+        for r in cp_rows:
+            comp = (r.get('competencia') or '')[:7]
+            if comp in evol:
+                evol[comp]['pagar'] += float(r.get('valor') or 0)
+        for r in cr_rows:
+            comp = (r.get('competencia') or '')[:7]
+            if comp in evol:
+                evol[comp]['receber'] += float(r.get('cobrado_wm') or 0) or float(r.get('valor_gold') or 0)
+
+        agenda.sort(key=lambda x: (x.get('data') or '', x.get('tipo')))
+        saldo_previsto = round(saldo_bancario + ar['aberto'] - ap['aberto'], 2)
+
+        for k in ap:
+            if isinstance(ap[k], float):
+                ap[k] = round(ap[k], 2)
+        for k in ar:
+            if isinstance(ar[k], float):
+                ar[k] = round(ar[k], 2)
+
+        return jsonify({
+            'mes': mes,
+            'a_pagar': ap,
+            'a_receber': ar,
+            'saldo_bancario': round(saldo_bancario, 2),
+            'saldo_previsto': saldo_previsto,
+            'agenda': agenda[:20],
+            'evolucao': [dict(evol[mm], pagar=round(evol[mm]['pagar'], 2), receber=round(evol[mm]['receber'], 2)) for mm in meses],
+        })
 
     # ============ SERVIR FRONTEND REACT ============
     @app.route('/', defaults={'path': ''})

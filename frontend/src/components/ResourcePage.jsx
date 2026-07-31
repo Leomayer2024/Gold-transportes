@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { canCreateResource } from '../lib/permissions'
 import { uploadRhDocumentFile } from '../lib/supabase'
 import { api } from '../services/api'
+import FuelItemsEditor from './FuelItemsEditor'
 
 const EMPTY_RELATIONS = {}
 const EMPTY_FORCED_MAP = {}
@@ -95,7 +96,13 @@ function normalizeInitialState(fields) {
 
 function normalizeFilterState(filters = []) {
   return filters.reduce((accumulator, filter) => {
-    accumulator[filter.name] = filter.defaultValue ?? ''
+    if (filter.type === 'daterange') {
+      // Intervalo de datas vira dois parâmetros de query: campo__gte e campo__lte
+      accumulator[`${filter.name}__gte`] = ''
+      accumulator[`${filter.name}__lte`] = ''
+    } else {
+      accumulator[filter.name] = filter.defaultValue ?? ''
+    }
     return accumulator
   }, {})
 }
@@ -113,12 +120,22 @@ function normalizeComparableValue(field, value) {
   if (field.type === 'checkbox') {
     return Boolean(value)
   }
+  if (Array.isArray(value)) {
+    return JSON.stringify(value)
+  }
   return value ?? ''
 }
 
 function buildFormStateFromItem(fields, item) {
   return fields.reduce((accumulator, field) => {
-    accumulator[field.name] = normalizeComparableValue(field, item[field.name])
+    const raw = item[field.name]
+    if (field.type === 'checkbox') {
+      accumulator[field.name] = Boolean(raw)
+    } else if (Array.isArray(raw)) {
+      accumulator[field.name] = raw
+    } else {
+      accumulator[field.name] = raw ?? ''
+    }
     return accumulator
   }, {})
 }
@@ -129,6 +146,27 @@ function isFormDirty(fields, currentState, baselineState) {
     const baselineValue = normalizeComparableValue(field, baselineState[field.name])
     return currentValue !== baselineValue
   })
+}
+
+// Deriva o local-part do e-mail a partir do nome completo. Sem acento, minúsculo,
+// só letras. mode 'lastNameOrName' pega o sobrenome (último token); se só houver
+// um nome, usa ele. Ex.: "João da Silva Santos" -> "santos", "Maria" -> "maria".
+function deriveEmailLocalPart(fullName, mode = 'lastNameOrName') {
+  // NFD separa o acento da letra base; [^a-zA-Z\s] remove os acentos (e dígitos/
+  // pontuação), preservando a letra. Ex.: "João" -> "Joao".
+  const tokens = String(fullName || '')
+    .normalize('NFD')
+    .replace(/[^a-zA-Z\s]/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+
+  if (tokens.length === 0) {
+    return ''
+  }
+
+  const token = mode === 'firstNameOrName' ? tokens[0] : tokens[tokens.length - 1]
+  return token.toLowerCase()
 }
 
 function resolveAutoFillValue(field, formState, relations) {
@@ -143,7 +181,19 @@ function resolveAutoFillValue(field, formState, relations) {
     return formState[field.name]
   }
 
-  const nextValue = relationItem[field.autoFill.sourceField]
+  // sourceField pode ser fixo (sourceField) ou escolhido dinamicamente a partir
+  // do valor de outro campo (sourceFieldFrom + sourceFieldMap). Ex.: o preço do
+  // litro vem da coluna do posto correspondente ao tipo de combustível escolhido.
+  let sourceField = field.autoFill.sourceField
+  if (field.autoFill.sourceFieldMap) {
+    const mapKey = formState[field.autoFill.sourceFieldFrom]
+    sourceField = field.autoFill.sourceFieldMap[mapKey]
+  }
+  if (!sourceField) {
+    return formState[field.name]
+  }
+
+  const nextValue = relationItem[sourceField]
   return nextValue ?? formState[field.name]
 }
 
@@ -151,7 +201,13 @@ function applyAutoFill(fields, formState, changedFieldName, relations, manualOve
   let nextFormState = formState
 
   for (const field of fields) {
-    if (!field.autoFill || field.autoFill.triggerField !== changedFieldName || manualOverrides[field.name]) {
+    if (!field.autoFill || manualOverrides[field.name]) {
+      continue
+    }
+    // Reavalia o auto-preenchimento quando muda o gatilho (ex.: posto) OU o campo
+    // que seleciona a coluna de origem (ex.: tipo de combustível).
+    const autoFillTriggers = [field.autoFill.triggerField, field.autoFill.sourceFieldFrom].filter(Boolean)
+    if (!autoFillTriggers.includes(changedFieldName)) {
       continue
     }
 
@@ -240,9 +296,25 @@ function resolveStatusTone(value) {
   return 'neutral'
 }
 
+function statusTokenTone(token) {
+  const t = String(token || '').toLowerCase()
+  if (t.includes('reprov') || t.includes('cancel')) return 'danger'
+  if (t === 'aprovado' || t.includes('finaliz') || t.includes('recebid') || t.includes('concl')) return 'success'
+  if (t.includes('pendente') || t.includes('analise') || t.includes('lider') || t.includes('andamento') || t.includes('compra')) return 'warning'
+  return resolveStatusTone(token)
+}
+
 function formatValue(item, column, relations) {
   if (column.type === 'currency') {
     return formatCurrency(item[column.key])
+  }
+
+  if (column.valueLabels) {
+    const token = item[column.key]
+    const label = column.valueLabels[token]
+    if (label) {
+      return <span className={`status-chip tone-${statusTokenTone(token)}`}>{label}</span>
+    }
   }
 
   if (column.type === 'month') {
@@ -734,6 +806,7 @@ export default function ResourcePage({
       const entityIdField = field.upload?.entityIdField
       const entityId = entityIdField ? formState[entityIdField] : undefined
       const uploaded = await uploadRhDocumentFile(file, {
+        bucket: field.upload?.bucket,
         folder: field.upload?.folder || config.resource,
         entityId,
       })
@@ -753,14 +826,17 @@ export default function ResourcePage({
   function handleChange(field, value) {
     const transformedValue = field.transform === 'uppercase' && typeof value === 'string' ? value.toUpperCase() : value
     const normalizedValue = field.type === 'checkbox' ? Boolean(transformedValue) : transformedValue
-    const nextManualOverrides = field.autoFill
+    // Editar diretamente um campo auto-preenchido (autoFill) OU derivado (deriveFrom,
+    // ex.: e-mail sugerido pelo nome) trava a sugestão automática daquele campo.
+    const marksManualOverride = Boolean(field.autoFill || field.deriveFrom)
+    const nextManualOverrides = marksManualOverride
       ? {
           ...manualAutoFillOverrides,
           [field.name]: true,
         }
       : manualAutoFillOverrides
 
-    if (field.autoFill) {
+    if (marksManualOverride) {
       setManualAutoFillOverrides(nextManualOverrides)
     }
 
@@ -796,6 +872,31 @@ export default function ResourcePage({
             ...currentSearch,
             [dependentField.name]: '',
           }))
+        }
+      }
+
+      // Campos derivados de outro campo (deriveFrom): reavalia quando o campo de
+      // origem muda e a sugestão ainda não foi editada à mão. Ex.: e-mail do
+      // Supabase Auth sugerido pelo sobrenome do colaborador, com @gold.com.
+      // Só no cadastro (createOnly): na edição não se mexe no e-mail do Auth.
+      for (const derivedField of editingId ? [] : config.fields) {
+        if (!derivedField.deriveFrom || derivedField.name === field.name) {
+          continue
+        }
+        if (nextManualOverrides[derivedField.name] || derivedField.deriveFrom.sourceField !== field.name) {
+          continue
+        }
+
+        const localPart = deriveEmailLocalPart(
+          nextStateWithDependencies[derivedField.deriveFrom.sourceField],
+          derivedField.deriveFrom.mode,
+        )
+        const nextValue = localPart ? `${localPart}${derivedField.deriveFrom.domain}` : ''
+        if (nextValue !== nextStateWithDependencies[derivedField.name]) {
+          nextStateWithDependencies = {
+            ...nextStateWithDependencies,
+            [derivedField.name]: nextValue,
+          }
         }
       }
 
@@ -842,6 +943,11 @@ export default function ResourcePage({
 
       return nextState
     })
+  }
+
+  // Define diretamente uma chave de filtro (usado pelo intervalo de datas: campo__gte / campo__lte)
+  function handleFilterKeyChange(key, value) {
+    setFilterState((current) => ({ ...current, [key]: value }))
   }
 
   async function refreshList() {
@@ -1043,7 +1149,16 @@ export default function ResourcePage({
 
       const payload = config.fields.reduce((accumulator, field) => {
         const currentValue = formState[field.name]
-        accumulator[field.name] = field.type === 'checkbox' ? Boolean(currentValue) : currentValue
+        if (field.type === 'checkbox') {
+          accumulator[field.name] = Boolean(currentValue)
+        } else if (field.integer && currentValue !== '' && currentValue !== null && currentValue !== undefined) {
+          // Campos inteiros (ex.: odômetro em km) — arredonda para não estourar
+          // "invalid input syntax for type integer" no banco.
+          const numeric = Number(currentValue)
+          accumulator[field.name] = Number.isFinite(numeric) ? Math.round(numeric) : currentValue
+        } else {
+          accumulator[field.name] = currentValue
+        }
         return accumulator
       }, {})
 
@@ -1076,6 +1191,33 @@ export default function ResourcePage({
           base_dias: 'escala',
           valor_mensal: 0,
         })
+      }
+
+      // Abastecimento com vários itens: consolida os itens em litros (soma),
+      // valor_litro (média ponderada) e tipo_combustivel ('multiplo' se >1), pra
+      // que valor_total (litros * valor_litro) e os relatórios sigam corretos.
+      const fuelItemsField = config.fields.find((f) => f.type === 'fuelItems')
+      if (fuelItemsField) {
+        const rawItems = Array.isArray(formState[fuelItemsField.name]) ? formState[fuelItemsField.name] : []
+        const validItems = rawItems
+          .map((item) => ({
+            tipo_combustivel: item.tipo_combustivel,
+            litros: Number(item.litros) || 0,
+            valor_litro: Number(item.valor_litro) || 0,
+          }))
+          .filter((item) => item.tipo_combustivel && item.litros > 0)
+
+        if (validItems.length === 0) {
+          throw new Error('Adicione ao menos um combustível com litros e preço.')
+        }
+
+        const litrosTotal = validItems.reduce((sum, item) => sum + item.litros, 0)
+        const valorTotal = validItems.reduce((sum, item) => sum + item.litros * item.valor_litro, 0)
+
+        payload[fuelItemsField.name] = validItems
+        payload.litros = Number(litrosTotal.toFixed(3))
+        payload.valor_litro = litrosTotal ? Number((valorTotal / litrosTotal).toFixed(4)) : 0
+        payload.tipo_combustivel = validItems.length === 1 ? validItems[0].tipo_combustivel : 'multiplo'
       }
 
       Object.assign(payload, normalizedForcedFormValues)
@@ -1114,6 +1256,19 @@ export default function ResourcePage({
     }
 
     const nextEditState = buildFormStateFromItem(config.fields, item)
+
+    // Registros antigos (1 combustível, sem "itens") viram 1 item para o editor.
+    const fuelField = config.fields.find((f) => f.type === 'fuelItems')
+    if (fuelField) {
+      const existing = Array.isArray(nextEditState[fuelField.name]) ? nextEditState[fuelField.name] : []
+      if (existing.length === 0 && item.litros != null && item.litros !== '') {
+        nextEditState[fuelField.name] = [{
+          tipo_combustivel: item.tipo_combustivel || 'diesel',
+          litros: item.litros,
+          valor_litro: item.valor_litro,
+        }]
+      }
+    }
 
     setEditingId(item.id)
     setSelectedItem(item)
@@ -1448,17 +1603,26 @@ export default function ResourcePage({
             <>
               <div className="detail-grid">
                 {detailFields.map((field) => (
-                  <div className={`detail-field${field.type === 'textarea' ? ' span-2' : ''}`} key={`detail-left-${field.name}`}>
+                  <div className={`detail-field${field.type === 'textarea' || field.type === 'fuelItems' ? ' span-2' : ''}`} key={`detail-left-${field.name}`}>
                     <span>{field.label}</span>
-                    <div className="readonly-box">
-                      {field.type === 'file' && selectedItem[field.name] ? (
-                        <a href={selectedItem[field.name]} rel="noreferrer" target="_blank">
-                          Abrir arquivo
-                        </a>
-                      ) : (
-                        formatFieldValue(field, selectedItem[field.name])
-                      )}
-                    </div>
+                    {field.type === 'fuelItems' ? (
+                      <FuelItemsEditor
+                        value={Array.isArray(selectedItem[field.name]) ? selectedItem[field.name] : []}
+                        onChange={() => {}}
+                        readOnly
+                        tipoOptions={field.tipoOptions || []}
+                      />
+                    ) : (
+                      <div className="readonly-box">
+                        {field.type === 'file' && selectedItem[field.name] ? (
+                          <a href={selectedItem[field.name]} rel="noreferrer" target="_blank">
+                            Abrir arquivo
+                          </a>
+                        ) : (
+                          formatFieldValue(field, selectedItem[field.name])
+                        )}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1614,6 +1778,23 @@ export default function ResourcePage({
                         )
                       }
 
+                      if (field.type === 'fuelItems') {
+                        return (
+                          <div className="field span-2" key={field.name}>
+                            <span>{field.label}</span>
+                            <FuelItemsEditor
+                              value={Array.isArray(value) ? value : []}
+                              onChange={(next) => handleChange(field, next)}
+                              disabled={isDisabled}
+                              postos={relations[field.relation] || []}
+                              postoId={formState[field.postoField || 'posto_id']}
+                              tipoOptions={field.tipoOptions || []}
+                              priceMap={field.priceMap || {}}
+                            />
+                          </div>
+                        )
+                      }
+
                       if (field.type === 'select-text') {
                         // Como select convencional mas salva o TEXT (optionLabel), não o ID
                         const optRows = (relations[field.relation] || []).filter((item) => item.ativo !== false)
@@ -1656,6 +1837,7 @@ export default function ResourcePage({
                             placeholder={field.placeholder}
                             readOnly={field.readOnly}
                             required={isFieldRequired(field, formState)}
+                            step={field.type === 'number' ? (field.integer ? '1' : (field.step || 'any')) : undefined}
                             style={field.transform === 'uppercase' ? { textTransform: 'uppercase' } : undefined}
                             title={field.tooltip || undefined}
                             type={field.type}
@@ -1664,6 +1846,11 @@ export default function ResourcePage({
                           {field.helpLink && (
                             <small className="field-help-text" style={{ fontSize: 11 }}>
                               <Link to={field.helpLink.to}>{field.helpLink.label} →</Link>
+                            </small>
+                          )}
+                          {field.helperText && (
+                            <small className="field-help-text" style={{ fontSize: 11, color: 'var(--text-muted, #888)' }}>
+                              {field.helperText}
                             </small>
                           )}
                         </label>
@@ -1737,6 +1924,31 @@ export default function ResourcePage({
                             </option>
                           ))}
                         </select>
+                      </label>
+                    )
+                  }
+
+                  if (filter.type === 'daterange') {
+                    const gteKey = `${filter.name}__gte`
+                    const lteKey = `${filter.name}__lte`
+                    return (
+                      <label className="field filter-field" key={`filter-${filter.name}`}>
+                        <span>{filter.label}</span>
+                        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                          <input
+                            type="date"
+                            aria-label={`${filter.label} — de`}
+                            value={filterState[gteKey] ?? ''}
+                            onChange={(event) => handleFilterKeyChange(gteKey, event.target.value)}
+                          />
+                          <span style={{ color: 'var(--muted)', fontSize: 12 }}>até</span>
+                          <input
+                            type="date"
+                            aria-label={`${filter.label} — até`}
+                            value={filterState[lteKey] ?? ''}
+                            onChange={(event) => handleFilterKeyChange(lteKey, event.target.value)}
+                          />
+                        </div>
                       </label>
                     )
                   }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../services/api'
 
 const LOADING_CACHE_KEY = 'seg-loading-cache'
@@ -67,6 +68,7 @@ function timelineLabel(evento, motivosMap) {
 }
 
 export default function LoadingPage() {
+  const navigate = useNavigate()
   const cachedLoading = readLoadingCache()
   const [config, setConfig] = useState({
     ...(cachedLoading?.config || {}),
@@ -618,6 +620,11 @@ export default function LoadingPage() {
           <span className="eyebrow">Operação RTM</span>
           <h1>Carregamento</h1>
           <p>O líder logado vira o responsável da jornada e registra início de carga, paradas, ocorrências, tempo parado e fechamento do caminhão.</p>
+        </div>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button className="button-secondary" onClick={() => navigate('/carregamento-metricas')} type="button">
+            📊 Métricas e gráficos
+          </button>
         </div>
       </div>
 

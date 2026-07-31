@@ -7,6 +7,20 @@ const MES_ATUAL = (() => {
   const d = new Date()
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 })()
+// Período padrão: 1º dia do mês atual → hoje.
+const PERIODO_PADRAO = (() => {
+  const d = new Date()
+  const p = (n) => String(n).padStart(2, '0')
+  return {
+    inicio: `${d.getFullYear()}-${p(d.getMonth() + 1)}-01`,
+    fim: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
+  }
+})()
+function fmtDataBR(iso) {
+  if (!iso) return ''
+  const [y, m, dd] = String(iso).slice(0, 10).split('-')
+  return `${dd}/${m}/${y.slice(2)}`
+}
 
 const C = {
   primary: '#0969da',
@@ -304,7 +318,9 @@ export default function FrotaDashboardPage() {
   const { profile } = useAuth()
   const [filiais, setFiliais] = useState([])
   const [selectedFilial, setSelectedFilial] = useState('')
-  const [mes, setMes] = useState(MES_ATUAL)
+  const [pInicio, setPInicio] = useState(PERIODO_PADRAO.inicio)
+  const [pFim, setPFim] = useState(PERIODO_PADRAO.fim)
+  const periodoLabel = `${fmtDataBR(pInicio)} a ${fmtDataBR(pFim)}`
 
   useEffect(() => {
     if (filiais?.length === 1 && !selectedFilial) {
@@ -325,6 +341,7 @@ export default function FrotaDashboardPage() {
   const [vinculos, setVinculos] = useState([])
 
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState('')
   const _loaded = useRef(false)
 
@@ -334,11 +351,13 @@ export default function FrotaDashboardPage() {
 
   const load = useCallback(async () => {
     if (!_loaded.current) setLoading(true)
+    setRefreshing(true)
     setError('')
     try {
       const params = {}
       if (selectedFilial) params.filial_id = selectedFilial
-      if (mes) params.mes = mes
+      // período livre tem prioridade; senão, o mês
+      if (pInicio && pFim) { params.inicio = pInicio; params.fim = pFim }
       const filialParam = params.filial_id ? { filial_id: params.filial_id } : {}
 
       const safeList = (resource, p = {}) =>
@@ -394,8 +413,9 @@ export default function FrotaDashboardPage() {
     } finally {
       _loaded.current = true
       setLoading(false)
+      setRefreshing(false)
     }
-  }, [selectedFilial, mes])
+  }, [selectedFilial, pInicio, pFim])
 
   useEffect(() => { void load() }, [load])
 
@@ -427,6 +447,7 @@ export default function FrotaDashboardPage() {
   const veic = data?.veiculos || {}
   const mnt = data?.manutencoes || {}
   const comb = data?.combustivel || {}
+  const arla = data?.arla || {}
   const pn = data?.pneus || {}
 
   const totalHE = hePendentes.reduce((s, h) => s + Number(h.qtd_horas || 0), 0)
@@ -483,14 +504,26 @@ export default function FrotaDashboardPage() {
             {filiais.length !== 1 && <option value="">Todas as filiais</option>}
             {filiais.map(f => (<option key={f.id} value={f.id}>{f.cidade}</option>))}
           </select>
-          <input
-            type="month" value={mes} onChange={e => setMes(e.target.value)}
-            style={{ padding: '8px 12px', fontSize: 13, border: `1px solid ${C.border}`, borderRadius: 8, background: '#fff' }}
-          />
+          <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>Período:</span>
+          <input type="date" value={pInicio} max={pFim || undefined} onChange={e => setPInicio(e.target.value)}
+            title="Início do período"
+            style={{ padding: '8px 10px', fontSize: 13, border: `1px solid ${C.border}`, borderRadius: 8, background: '#fff' }} />
+          <span style={{ fontSize: 12, color: C.muted }}>a</span>
+          <input type="date" value={pFim} min={pInicio || undefined} onChange={e => setPFim(e.target.value)}
+            title="Fim do período"
+            style={{ padding: '8px 10px', fontSize: 13, border: `1px solid ${C.border}`, borderRadius: 8, background: '#fff' }} />
+          <button onClick={() => { setPInicio(PERIODO_PADRAO.inicio); setPFim(PERIODO_PADRAO.fim) }} type="button"
+            title="Voltar ao mês atual"
+            style={{ padding: '8px 10px', fontSize: 12, borderRadius: 8, border: `1px solid ${C.border}`, cursor: 'pointer', background: '#fff', color: C.muted }}
+          >↺ mês atual</button>
           <button
-            onClick={load} type="button"
-            style={{ padding: '8px 16px', fontSize: 13, fontWeight: 600, borderRadius: 8, border: `1px solid ${C.primary}`, cursor: 'pointer', background: C.primary, color: '#fff' }}
-          >🔄 Atualizar</button>
+            onClick={load} type="button" disabled={refreshing}
+            style={{ padding: '8px 16px', fontSize: 13, fontWeight: 600, borderRadius: 8, border: `1px solid ${C.primary}`, cursor: refreshing ? 'wait' : 'pointer', background: refreshing ? '#7fb0e6' : C.primary, color: '#fff', opacity: refreshing ? 0.9 : 1 }}
+          >{refreshing ? '⏳ Atualizando…' : '🔄 Atualizar'}</button>
+          {refreshing && (
+            <span style={{ display: 'inline-block', width: 16, height: 16, border: `2px solid ${C.border}`, borderTopColor: C.primary, borderRadius: '50%', animation: 'fdspin 0.7s linear infinite' }} />
+          )}
+          <style>{'@keyframes fdspin{to{transform:rotate(360deg)}}'}</style>
         </div>
       </div>
 
@@ -509,7 +542,8 @@ export default function FrotaDashboardPage() {
             <KPI icon="🚛" label="Total veículos" value={totalVeic} color={C.primary} sub={`${ativos} ativos`} />
             <KPI icon="🛣️" label="Viagens ativas" value={osMotoristaAtivas.length} color={C.success} sub="OS em curso" />
             <KPI icon="🔧" label="OS manutenção" value={mnt.os_abertas ?? 0} color={emManut > 0 ? C.warning : C.success} sub={formatBRL(mnt.custo_mes)} />
-            <KPI icon="⛽" label="Combustível" value={formatBRL(comb.gasto_mes)} color={C.orange} sub={`${comb.litros_mes?.toFixed?.(0) || 0} L · ${comb.abastecimentos_count || 0} abast.`} />
+            <KPI icon="⛽" label="Combustível (diesel)" value={formatBRL(comb.gasto_mes)} color={C.orange} sub={`${comb.litros_mes?.toFixed?.(0) || 0} L · média ${comb.media_km_l != null ? `${comb.media_km_l} km/L` : '—'}`} />
+            <KPI icon="🧪" label="ARLA" value={formatBRL(arla.gasto_mes)} color={C.info} sub={`${arla.litros_mes?.toFixed?.(0) || 0} L · ${arla.pct_do_diesel || 0}% do diesel`} />
             <KPI icon="📋" label="Aprovações" value={totalAprovacoes} color={C.danger} sub={`${hePendentes.length} HE · ${abastPendentes.length} comb · ${diariasPendentes.length} diárias`} />
             <KPI icon="📄" label="Docs a vencer" value={docsVencer.length} color={docsVencidos > 0 ? C.danger : C.muted} sub={`${docsVencidos} vencidos · ${docsProx30} em 30d`} />
           </KPIRow>
@@ -544,7 +578,7 @@ export default function FrotaDashboardPage() {
           <div style={{
             display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14, marginTop: 14,
           }}>
-            <Panel eyebrow="Manutenção" title={`OS — ${mes}`} color={C.warning}>
+            <Panel eyebrow="Manutenção" title={`OS — ${periodoLabel}`} color={C.warning}>
               <KPIRow>
                 <KPI label="OS abertas" value={mnt.os_abertas ?? 0} color={mnt.os_abertas > 0 ? C.warning : C.success} />
                 <KPI label="Aguardando" value={mnt.os_aguardando_aprovacao ?? 0} color={mnt.os_aguardando_aprovacao > 0 ? C.danger : C.muted} />
@@ -552,11 +586,13 @@ export default function FrotaDashboardPage() {
               </KPIRow>
             </Panel>
 
-            <Panel eyebrow="Combustível" title={`Abastecimentos — ${mes}`} color={C.orange}>
+            <Panel eyebrow="Combustível" title={`Abastecimentos — ${periodoLabel}`} color={C.orange}>
               <KPIRow>
-                <KPI label="Litros" value={comb.litros_mes != null ? `${Number(comb.litros_mes).toFixed(1)} L` : '—'} color={C.orange} />
+                <KPI label="Diesel (L)" value={comb.litros_mes != null ? `${Number(comb.litros_mes).toFixed(1)} L` : '—'} color={C.orange} />
+                <KPI label="Média frota" value={comb.media_km_l != null ? `${comb.media_km_l} km/L` : '—'} color={C.success} />
+                <KPI label="R$/km" value={comb.media_custo_km != null ? formatBRL(comb.media_custo_km) : '—'} color={C.muted} />
                 <KPI label="Médio/L" value={formatPrecoLitro(comb.media_preco_litro)} color={C.muted} />
-                <KPI label="Abast." value={comb.abastecimentos_count ?? 0} color={C.muted} />
+                <KPI label="ARLA (L)" value={arla.litros_mes != null ? `${Number(arla.litros_mes).toFixed(1)} L` : '—'} color={C.info} sub={formatBRL(arla.gasto_mes)} />
               </KPIRow>
             </Panel>
 
@@ -575,6 +611,49 @@ export default function FrotaDashboardPage() {
               </KPIRow>
             </Panel>
           </div>
+
+          {/* ── Consumo detalhado por veículo ── */}
+          {Array.isArray(comb.por_veiculo) && comb.por_veiculo.length > 0 && (
+            <Panel eyebrow="Combustível" title={`Consumo por veículo — ${periodoLabel}`} color={C.orange}>
+              {comb.veiculos_alerta_consumo > 0 && (
+                <div style={{ fontSize: 12, fontWeight: 600, color: C.danger, background: '#fff5f5', border: `1px solid ${C.danger}33`, borderRadius: 8, padding: '8px 12px', marginBottom: 10 }}>
+                  🔴 {comb.veiculos_alerta_consumo} veículo(s) gastando acima do próprio normal — veja os marcados na tabela.
+                </div>
+              )}
+              <MiniTable
+                headers={['Veículo', 'Abast.', 'Litros', 'Gasto', 'R$/L médio', 'Km rodados', 'Consumo', 'R$/km']}
+                rows={comb.por_veiculo.map(v => [
+                  <span key="p" style={{ fontFamily: 'monospace', fontWeight: 700 }}>{v.placa}</span>,
+                  v.abastecimentos,
+                  `${Number(v.litros).toFixed(1)} L`,
+                  formatBRL(v.gasto),
+                  formatPrecoLitro(v.media_preco_litro),
+                  v.km_rodados > 0 ? `${Number(v.km_rodados).toLocaleString('pt-BR')} km` : '—',
+                  v.consumo_km_l != null
+                    ? (
+                      <span key="c" style={{ fontWeight: 700, color: v.alerta_consumo ? C.danger : undefined }}>
+                        {Number(v.consumo_km_l).toFixed(2)} km/L{' '}
+                        {v.alerta_consumo && (
+                          <span title={`Gastando acima do normal deste veículo. Média histórica: ${v.consumo_baseline} km/L · agora ${Math.abs(v.desvio_pct)}% pior`} style={{ cursor: 'help' }}>🔴</span>
+                        )}
+                        {v.odometro_inconsistente && (
+                          <span title="Odômetro fora de ordem entre abastecimentos — confira as leituras" style={{ cursor: 'help' }}>⚠️</span>
+                        )}
+                      </span>
+                    )
+                    : <span style={{ color: C.muted }} title="Precisa de ao menos 2 abastecimentos com odômetro no mês">—</span>,
+                  v.custo_por_km != null ? formatBRL(v.custo_por_km) : '—',
+                ])}
+              />
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 10, lineHeight: 1.5 }}>
+                <strong>Consumo (km/L)</strong> = km rodados (soma das diferenças de odômetro) ÷ todos os litros de diesel do período (ARLA excluído).
+                Abastecimento é sempre parcial, então soma tudo. <strong>R$/km</strong> = gasto diesel ÷ km rodados.
+                {' '}⚠️ = odômetro fora de ordem ou salto impossível (esse trecho não entra no km — verifique a digitação).
+                {' '}🔴 = veículo gastando <strong>acima do próprio normal</strong> (consumo ≥ 15% pior que a média histórica dele).
+              </div>
+              <LinkBtn to="/abastecimentos" color={C.orange}>Ver abastecimentos →</LinkBtn>
+            </Panel>
+          )}
 
           {/* ── Bar chart: top veículos ── */}
           {topVeiculosOS.length > 0 && (

@@ -1,11 +1,12 @@
 import { Fragment, useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { api } from '../services/api'
+import ParcelasModal from './ParcelasModal'
 
 const OBRIGACOES = ['HORA EXTRA', 'KM RODADO', 'HOSPEDAGEM', 'PEDAGIO', 'DESPESAS EXTRAS', 'OUTRO']
 const STATUS_FAT = ['NÃO FATURADO', 'FATURADO', 'PARCIAL']
 const STATUS_OPTS = ['AGUARDANDO', 'AGUARDANDO PEDIDO DO CLIENTE', 'COBRANÇA REALIZADA', 'FALTA COBRAR', 'RECEBIDO', 'FINALIZADO']
 const FERRAMENTAS = ['SISTEMA SASCAR DA WHITE', 'GW SISTEMAS - C.APAGAR', 'E-MAIL RH (ENVIO APÓS O PAG.)', 'PLANILHA DE CONTRATOS', 'OUTRO']
-const TIPO_DOC = ['ND', 'CTE']
+const TIPO_DOC = ['ND', 'CTE', 'NFSE', 'NFE']
 
 const XL = { border: '1px solid #d1d5db' }
 const XL_TH = { ...XL, padding: '4px 7px', background: '#e8edf2', fontWeight: 700, whiteSpace: 'nowrap', fontSize: 11, position: 'sticky', top: 0, zIndex: 2 }
@@ -98,10 +99,11 @@ export default function ContasReceberPage() {
   const [saving, setSaving] = useState(false)
 
   const [showNew, setShowNew] = useState(false)
-  const [newForm, setNewForm] = useState({ obrigacao: 'HORA EXTRA', status_fat: 'NÃO FATURADO', status: 'FALTA COBRAR', limite_dia: 10 })
+  const [newForm, setNewForm] = useState({ obrigacao: '', status_fat: 'NÃO FATURADO', status: 'FALTA COBRAR', limite_dia: 10 })
   const [creatingNew, setCreatingNew] = useState(false)
 
   const [ctxMenu, setCtxMenu] = useState(null) // { row, x, y }
+  const [parcelaConta, setParcelaConta] = useState(null)
   const [showMetricas, setShowMetricas] = useState(true)
   const [prioridades, setPrioridades] = useState(() => {
     try { return JSON.parse(localStorage.getItem('cr-prioridade') || '{}') } catch { return {} }
@@ -139,21 +141,30 @@ export default function ContasReceberPage() {
     return [...s].sort().reverse()
   }, [rows])
 
+  // Obrigações do filtro = lista fixa + o que existe de fato nos dados
+  // (NFSe gera SERVIÇO/CONTRATO etc. que não estavam na lista fixa)
+  const obrigacoesDisponiveis = useMemo(() => [...new Set([...OBRIGACOES, ...rows.map((r) => r.obrigacao).filter(Boolean)])], [rows])
+
+  // filial_id é a chave confiável; nome é fallback p/ linhas antigas sem id.
+  // Nomes variam ("SAPUCAIA DO SUL/RS" vs cidade "SAPUCAIA DO SUL", acentos) —
+  // comparação exata escondia linhas. Normaliza e corta o /UF.
+  const normFilial = (s) => (s || '').split('/')[0].toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+  const matchFilial = useCallback((r) => {
+    if (!filterFilial) return true
+    if (r.filial_id != null) return String(r.filial_id) === String(filterFilial)
+    const sel = normFilial(filiais.find((f) => String(f.id) === String(filterFilial))?.cidade)
+    const nome = normFilial(r.filial_nome)
+    return Boolean(sel && nome && (nome === sel || nome.includes(sel) || sel.includes(nome)))
+  }, [filterFilial, filiais])
+
   const filtradas = useMemo(() => rows.filter((r) => {
-    if (filterFilial) {
-      const selectedCidade = filiais.find((f) => String(f.id) === String(filterFilial))?.cidade
-      if (r.filial_nome && selectedCidade) {
-        if (r.filial_nome.trim().toUpperCase() !== selectedCidade.trim().toUpperCase()) return false
-      } else if (r.filial_id != null) {
-        if (String(r.filial_id) !== String(filterFilial)) return false
-      }
-    }
+    if (!matchFilial(r)) return false
     if (filterObrigacao && r.obrigacao !== filterObrigacao) return false
     if (filterMes && r.competencia?.slice(0, 7) !== filterMes) return false
     if (filterStatusFat && r.status_fat !== filterStatusFat) return false
     if (filterStatus && r.status !== filterStatus) return false
     return true
-  }), [rows, filiais, filterFilial, filterObrigacao, filterMes, filterStatusFat, filterStatus])
+  }), [rows, matchFilial, filterObrigacao, filterMes, filterStatusFat, filterStatus])
 
   const metricas = useMemo(() => {
     const vlr = filtradas.reduce((s, r) => s + (r.valor_gold || 0), 0)
@@ -220,6 +231,24 @@ export default function ContasReceberPage() {
     setCtxMenu(null)
   }
 
+  // Faturamento = você emitiu (ou não) a nota fiscal para o cliente.
+  // "Faturar" opcionalmente registra o nº da nota no campo ND.
+  async function faturar(row) {
+    setCtxMenu(null)
+    const nf = prompt('Nº da nota fiscal emitida (opcional):', row.nd || '')
+    if (nf === null) return // cancelou
+    const payload = { status_fat: 'FATURADO' }
+    if (nf.trim()) payload.nd = nf.trim()
+    try { await api.editarContaReceber(row.id, payload); carregar() }
+    catch (err) { alert(err.message || 'Erro.') }
+  }
+
+  async function quickFat(id, status_fat) {
+    try { await api.editarContaReceber(id, { status_fat }); carregar() }
+    catch (err) { alert(err.message || 'Erro.') }
+    setCtxMenu(null)
+  }
+
   async function salvarEdicao() {
     setSaving(true)
     try { await api.editarContaReceber(editId, editForm); setEditId(null); carregar() }
@@ -242,7 +271,7 @@ export default function ContasReceberPage() {
     try {
       await api.criarContaReceber(newForm)
       setShowNew(false)
-      setNewForm({ obrigacao: 'HORA EXTRA', status_fat: 'NÃO FATURADO', status: 'FALTA COBRAR', limite_dia: 10 })
+      setNewForm({ obrigacao: '', status_fat: 'NÃO FATURADO', status: 'FALTA COBRAR', limite_dia: 10 })
       carregar()
     } catch (e) { alert(e.message || 'Erro ao criar.') }
     finally { setCreatingNew(false) }
@@ -256,7 +285,7 @@ export default function ContasReceberPage() {
         <div>
           <span className="eyebrow">Financeiro</span>
           <h1>Contas a Receber</h1>
-          <p>Obrigações de clientes — horas extras no contrato, KM, hospedagem, pedágio e despesas</p>
+          <p>Valores a receber de clientes — notas fiscais (NFe/NFSe), KM, hospedagem, pedágio e outras cobranças</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="button" style={metBtnSt} onClick={() => setShowMetricas(m => !m)}>
@@ -335,7 +364,7 @@ export default function ContasReceberPage() {
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8, padding: '8px 12px', background: '#f5f7fa', border: '1px solid #dce1e8', borderRadius: 6 }}>
         <div><label className="field-label">Filial</label><select className="input" value={filterFilial} onChange={(e) => setFilterFilial(e.target.value)} style={{ minWidth: 130 }}>{filiais.length !== 1 && <option value="">Todas</option>}{filiais.map((f) => <option key={f.id} value={f.id}>{f.cidade}</option>)}</select></div>
         <div><label className="field-label">Mês</label><select className="input" value={filterMes} onChange={(e) => setFilterMes(e.target.value)} style={{ minWidth: 110 }}><option value="">Todos</option>{mesesDisponiveis.map((m) => <option key={m} value={m}>{m}</option>)}</select></div>
-        <div><label className="field-label">Obrigação</label><select className="input" value={filterObrigacao} onChange={(e) => setFilterObrigacao(e.target.value)} style={{ minWidth: 130 }}><option value="">Todas</option>{OBRIGACOES.map((o) => <option key={o} value={o}>{o}</option>)}</select></div>
+        <div><label className="field-label">Obrigação</label><select className="input" value={filterObrigacao} onChange={(e) => setFilterObrigacao(e.target.value)} style={{ minWidth: 130 }}><option value="">Todas</option>{obrigacoesDisponiveis.map((o) => <option key={o} value={o}>{o}</option>)}</select></div>
         <div><label className="field-label">Status Fat.</label><select className="input" value={filterStatusFat} onChange={(e) => setFilterStatusFat(e.target.value)} style={{ minWidth: 120 }}><option value="">Todos</option>{STATUS_FAT.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
         <div><label className="field-label">Status</label><select className="input" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ minWidth: 150 }}><option value="">Todos</option>{STATUS_OPTS.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
         {(filterFilial || filterMes || filterObrigacao || filterStatusFat || filterStatus) && (
@@ -348,7 +377,7 @@ export default function ContasReceberPage() {
       {loading ? (
         <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 40 }}>Carregando…</div>
       ) : filtradas.length === 0 ? (
-        <div className="surface-card empty-state"><strong>Nenhum lançamento</strong><p>Salve um fechamento RTM ou crie uma obrigação manualmente.</p></div>
+        <div className="surface-card empty-state"><strong>Nenhum lançamento</strong><p>Clique em “+ Nova obrigação” para criar uma conta a receber.</p></div>
       ) : (
         <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 340px)', border: '1px solid #c8d2dc', borderRadius: 6 }}>
           <table style={{ borderCollapse: 'collapse', fontSize: 11, width: 'max-content', minWidth: '100%' }}>
@@ -425,7 +454,10 @@ export default function ContasReceberPage() {
                         <td style={{ ...rowStyle, textAlign: 'right', fontFamily: 'monospace', fontWeight: 700, color: dif < 0 ? '#dc2626' : dif > 0 ? '#059669' : '#999' }}>{fmtBRL(dif)}</td>
                         <td style={{ ...rowStyle, textAlign: 'right', fontFamily: 'monospace' }}>{r.frete ? fmtBRL(r.frete) : '—'}</td>
                         <td style={{ ...rowStyle, textAlign: 'right', fontFamily: 'monospace' }}>{r.vlr_cte ? fmtBRL(r.vlr_cte) : '—'}</td>
-                        <td style={{ ...rowStyle, fontFamily: 'monospace' }}>{r.nd || '—'}</td>
+                        <td style={{ ...rowStyle, fontFamily: 'monospace' }}>
+                          {r.tipo_documento && <span style={{ fontSize: 9, fontWeight: 700, padding: '1px 5px', borderRadius: 99, background: '#e0f2fe', color: '#0369a1', border: '1px solid #bae6fd', marginRight: 4 }}>{r.tipo_documento}</span>}
+                          {r.nd || '—'}
+                        </td>
                         <td style={{ ...rowStyle, fontFamily: 'monospace' }}>{r.cte || '—'}</td>
                         <td style={{ ...rowStyle, maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.ferramenta}>{r.ferramenta || '—'}</td>
                         <td style={{ ...rowStyle, maxWidth: 100, overflow: 'hidden', textOverflow: 'ellipsis' }} title={r.autorizacao}>{r.autorizacao || '—'}</td>
@@ -501,7 +533,12 @@ export default function ContasReceberPage() {
           {/* actions */}
           {[
             { label: '✎ Editar', action: () => abrirEdicao(ctxMenu.row), color: '#1e3a5f' },
+            { label: '◧ Parcelar', action: () => { setParcelaConta(ctxMenu.row); setCtxMenu(null) }, color: '#0f766e' },
             { label: prioridades[ctxMenu.row.id] ? '★ Remover prioridade' : '☆ Marcar como prioritário', action: () => togglePrioridade(ctxMenu.row.id), color: '#d97706' },
+            null, // divider
+            ctxMenu.row.status_fat !== 'FATURADO'
+              ? { label: '🧾 Faturar (NF emitida)', action: () => faturar(ctxMenu.row), color: '#059669' }
+              : { label: '↺ Marcar Não Faturado', action: () => quickFat(ctxMenu.row.id, 'NÃO FATURADO'), color: '#d97706' },
             null, // divider
             { label: '✔ Marcar Recebido', action: () => quickStatus(ctxMenu.row.id, 'RECEBIDO'), color: '#059669' },
             { label: '→ Cobrança Realizada', action: () => quickStatus(ctxMenu.row.id, 'COBRANÇA REALIZADA'), color: '#0369a1' },
@@ -646,6 +683,7 @@ export default function ContasReceberPage() {
               <div>
                 <label className="field-label">Obrigação *</label>
                 <select className="input" value={newForm.obrigacao || ''} onChange={(e) => setNewForm((p) => ({ ...p, obrigacao: e.target.value }))}>
+                  <option value="">Selecione</option>
                   {OBRIGACOES.map((o) => <option key={o} value={o}>{o}</option>)}
                 </select>
               </div>
@@ -692,6 +730,15 @@ export default function ContasReceberPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {parcelaConta && (
+        <ParcelasModal
+          conta={parcelaConta}
+          contaTipo="receber"
+          onClose={() => setParcelaConta(null)}
+          onChanged={carregar}
+        />
       )}
     </section>
   )

@@ -132,7 +132,7 @@ BEGIN
     SET status       = 'aprovado',
         aprovado_por = v_colab_id,
         aprovado_em  = NOW(),
-        atualizado_em = NOW()
+        updated_at   = NOW()
     WHERE id = p_pedido_id AND ativo = TRUE;
 
   ELSIF v_status_real = 'reprovado' THEN
@@ -141,7 +141,7 @@ BEGIN
         motivo_reprovacao  = p_motivo,
         reprovado_por      = v_colab_id,
         reprovado_em       = NOW(),
-        atualizado_em      = NOW()
+        updated_at         = NOW()
     WHERE id = p_pedido_id AND ativo = TRUE;
   END IF;
 END;

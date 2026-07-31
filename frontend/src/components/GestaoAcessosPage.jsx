@@ -271,6 +271,99 @@ function ModalResetSenha({ colab, onClose, onSaved }) {
   )
 }
 
+// ─── Modal ÚNICO de edição (e-mail + senha numa tela só) ──────────────────────
+function ModalEditarAcesso({ colab, onClose, onSaved }) {
+  const [email, setEmail] = useState(colab.email || '')
+  const [salvandoEmail, setSalvandoEmail] = useState(false)
+  const [msgEmail, setMsgEmail] = useState(null) // {tipo,texto}
+
+  const [senha, setSenha] = useState(() => gerarSenha())
+  const [mostrar, setMostrar] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const [salvandoSenha, setSalvandoSenha] = useState(false)
+  const [msgSenha, setMsgSenha] = useState(null)
+
+  async function salvarEmail() {
+    const t = email.trim()
+    if (!t || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(t)) { setMsgEmail({ tipo: 'error', texto: 'E-mail inválido.' }); return }
+    setSalvandoEmail(true); setMsgEmail(null)
+    try {
+      await api.adminAtualizarEmail(colab.id, t)
+      setMsgEmail({ tipo: 'success', texto: 'E-mail atualizado.' }); onSaved()
+    } catch (err) { setMsgEmail({ tipo: 'error', texto: err.message || 'Falha ao atualizar e-mail.' }) }
+    finally { setSalvandoEmail(false) }
+  }
+
+  async function salvarSenha() {
+    if (!senha || senha.length < 6) { setMsgSenha({ tipo: 'error', texto: 'Mínimo 6 caracteres.' }); return }
+    setSalvandoSenha(true); setMsgSenha(null)
+    try {
+      await api.adminResetarSenha(colab.id, senha)
+      setMsgSenha({ tipo: 'success', texto: 'Senha redefinida. Anote antes de fechar.' }); onSaved()
+    } catch (err) { setMsgSenha({ tipo: 'error', texto: err.message || 'Falha ao redefinir senha.' }) }
+    finally { setSalvandoSenha(false) }
+  }
+
+  const secBox = { border: '1px solid var(--border-light,#e5e7eb)', borderRadius: 10, padding: '14px 16px', marginBottom: 14 }
+  const secTitle = { fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em', color: '#64748b', marginBottom: 10 }
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" style={{ maxWidth: 480 }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <span className="eyebrow">Gestão de acessos</span>
+            <h2>Editar acesso</h2>
+          </div>
+          <button className="button-secondary" onClick={onClose} type="button">✕</button>
+        </div>
+
+        <div style={{ background: '#f8f9fa', borderRadius: 8, padding: '12px 14px', marginBottom: 16 }}>
+          <div style={{ fontWeight: 700, fontSize: 15 }}>{colab.nome_completo}</div>
+          <div style={{ fontSize: 12, color: '#555', marginTop: 3 }}>
+            {colab.cargo}{colab.filial_label ? ` · ${colab.filial_label}` : ''}
+            {' · '}<span className={`status-chip tone-${colab.ativo ? 'success' : 'neutral'}`} style={{ fontSize: 10 }}>{colab.ativo ? 'Ativo' : 'Inativo'}</span>
+          </div>
+        </div>
+
+        {/* E-mail de login */}
+        <div style={secBox}>
+          <div style={secTitle}>✉ E-mail de login</div>
+          {msgEmail && <div className={msgEmail.tipo === 'error' ? 'alert-error' : 'alert-success'} style={{ marginBottom: 10 }}>{msgEmail.texto}</div>}
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="off"
+              style={{ flex: 1, fontFamily: 'monospace', fontSize: 14 }} placeholder="email@empresa.com" />
+            <button type="button" className="button-primary" style={{ whiteSpace: 'nowrap' }} onClick={salvarEmail} disabled={salvandoEmail || email.trim() === (colab.email || '')}>
+              {salvandoEmail ? '...' : 'Salvar'}
+            </button>
+          </div>
+        </div>
+
+        {/* Redefinir senha */}
+        <div style={secBox}>
+          <div style={secTitle}>🔑 Redefinir senha</div>
+          {msgSenha && <div className={msgSenha.tipo === 'error' ? 'alert-error' : 'alert-success'} style={{ marginBottom: 10 }}>{msgSenha.texto}</div>}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+            <input type={mostrar ? 'text' : 'password'} value={senha} onChange={(e) => setSenha(e.target.value)} autoComplete="new-password" minLength={6}
+              style={{ flex: 1, fontFamily: mostrar ? 'monospace' : 'inherit', letterSpacing: mostrar ? '.08em' : 'normal', fontSize: 15 }} />
+            <button type="button" className="button-secondary" style={{ padding: '0 10px', fontSize: 16 }} onClick={() => setMostrar((v) => !v)} title={mostrar ? 'Ocultar' : 'Mostrar'}>{mostrar ? '🙈' : '👁'}</button>
+            <button type="button" className="button-secondary" style={{ padding: '0 10px', fontSize: 16 }} onClick={() => copiar(senha, setCopied)} title="Copiar">{copied ? '✓' : '📋'}</button>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', justifyContent: 'space-between' }}>
+            <button type="button" className="button-secondary" style={{ fontSize: 12 }} onClick={() => { setSenha(gerarSenha()); setMsgSenha(null) }}>↻ Gerar automática</button>
+            <button type="button" className="button-primary" onClick={salvarSenha} disabled={salvandoSenha}>{salvandoSenha ? 'Salvando...' : 'Redefinir'}</button>
+          </div>
+          <div style={{ fontSize: 11, color: '#92400e', marginTop: 8 }}>⚠️ Anote a senha antes de fechar — não é exibida de novo.</div>
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <button type="button" className="button-secondary" onClick={onClose}>Fechar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 // ─── Página principal ─────────────────────────────────────────────────────────
 
 export default function GestaoAcessosPage() {
@@ -280,8 +373,7 @@ export default function GestaoAcessosPage() {
   const [erro, setErro] = useState('')
   const [busca, setBusca] = useState('')
   const [filtroStatus, setFiltroStatus] = useState('todos') // todos | ativos | inativos
-  const [modalColab, setModalColab] = useState(null)
-  const [modalEmailColab, setModalEmailColab] = useState(null)
+  const [editando, setEditando] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const _loaded = useRef(false)
 
@@ -456,26 +548,15 @@ export default function GestaoAcessosPage() {
                       </span>
                     </td>
                     <td>
-                      <div style={{ display: 'flex', gap: 4 }}>
-                        <button
-                          type="button"
-                          className="button-secondary"
-                          style={{ fontSize: 11, padding: '4px 8px', flex: 1 }}
-                          onClick={() => setModalEmailColab(a)}
-                          title="Alterar e-mail de login"
-                        >
-                          ✉ E-mail
-                        </button>
-                        <button
-                          type="button"
-                          className="button-secondary"
-                          style={{ fontSize: 11, padding: '4px 8px', flex: 1 }}
-                          onClick={() => setModalColab(a)}
-                          title="Redefinir senha"
-                        >
-                          🔑 Senha
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        className="button-primary"
+                        style={{ fontSize: 12, padding: '5px 14px', width: '100%' }}
+                        onClick={() => setEditando(a)}
+                        title="Editar e-mail e senha"
+                      >
+                        ✏ Editar
+                      </button>
                     </td>
                   </tr>
                 ))}
@@ -485,19 +566,11 @@ export default function GestaoAcessosPage() {
         )}
       </div>
 
-      {modalColab && (
-        <ModalResetSenha
-          colab={modalColab}
-          onClose={() => setModalColab(null)}
+      {editando && (
+        <ModalEditarAcesso
+          colab={editando}
+          onClose={() => setEditando(null)}
           onSaved={() => setRefreshKey((k) => k + 1)}
-        />
-      )}
-
-      {modalEmailColab && (
-        <ModalEditarEmail
-          colab={modalEmailColab}
-          onClose={() => setModalEmailColab(null)}
-          onSaved={() => { setRefreshKey((k) => k + 1); setModalEmailColab(null) }}
         />
       )}
     </section>

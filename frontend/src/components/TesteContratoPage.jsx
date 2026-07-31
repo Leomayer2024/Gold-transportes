@@ -400,7 +400,8 @@ export default function TesteContratoPage() {
                 veiculos: vinculosPorAba.veiculos.length,
                 pacotes: vinculosPorAba.pacotes.length,
                 outros: vinculosPorAba.outros.length,
-                gastos: gastos.length,
+                // Conta só gastos ativos (gasto ativo E colaborador vinculado ativo)
+                gastos: gastos.filter((g) => g.ativo !== false && !(g.colaborador_id && colaboradores.find((c) => Number(c.id) === Number(g.colaborador_id))?.ativo === false)).length,
               }
               const isActive = activeTab === k
               return (

@@ -10,10 +10,12 @@ export const navigationGroups = [
     title: 'RH',
     items: [
       { to: '/colaboradores', label: 'Colaboradores', scope: 'menu.colaboradores' },
+      { to: '/treinamentos', label: 'Treinamentos', scope: 'menu.treinamentos' },
       { to: '/contratos-operacionais', label: 'Contratos operacionais', scope: 'menu.contratos_operacionais' },
       { to: '/teste-contrato', label: 'Teste Contrato (preview)', scope: 'menu.contratos_operacionais' },
       { to: '/rh-documentos', label: 'Documentos RH', scope: 'menu.colaborador_documentos' },
       { to: '/diarias', label: 'Diárias / Hotelaria', scope: 'menu.diarias' },
+      { to: '/hotelaria-aprovacoes', label: 'Hotelaria — Aprovações', scope: 'menu.hotelaria_aprovacoes' },
       { to: '/rh-planejamento', label: 'Planejamento RH', scope: 'menu.eventos_rh' },
       { to: '/horas-extras', label: 'Horas extras', scope: 'menu.horas_extras' },
       { to: '/quadro-funcionarios', label: 'Quadro de funcionários', scope: 'menu.quadro_funcionarios' },
@@ -32,7 +34,9 @@ export const navigationGroups = [
   {
     title: 'Financeiro',
     items: [
-      { to: '/notas-cte', label: 'Notas Fiscais / CT-e', scope: 'menu.notas_cte' },
+      { to: '/financeiro-painel', label: 'Painel financeiro', scope: 'menu.financeiro_painel' },
+      { to: '/notas-cte', label: 'CT-e', scope: 'menu.notas_cte' },
+      { to: '/notas-fiscais-servico', label: 'NFS-e emitidas', scope: 'menu.notas_fiscais_servico' },
       { to: '/contas-receber', label: 'Contas a Receber', scope: 'menu.contas_receber' },
       { to: '/contas-pagar', label: 'Contas a Pagar', scope: 'menu.contas_pagar' },
       { to: '/banco', label: 'Banco / Conciliação', scope: 'menu.banco' },
@@ -52,6 +56,7 @@ export const navigationGroups = [
       { to: '/veiculos', label: 'Veículos', scope: 'menu.veiculos' },
       { to: '/veiculos-documentos', label: 'Documentos de frota', scope: 'menu.veiculos_documentos' },
       { to: '/abastecimentos', label: 'Abastecimentos', scope: 'menu.abastecimentos' },
+      { to: '/postos-combustivel', label: 'Postos de combustível', scope: 'menu.postos_combustivel' },
       { to: '/pneus', label: 'Controle de pneus', scope: 'menu.pneus' },
       { to: '/manutencoes', label: 'Manutenções', scope: 'menu.manutencoes' },
     ],

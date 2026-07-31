@@ -1,7 +1,7 @@
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
-import { getAllNavigation } from '../lib/permissions'
+import { getAllNavigation, hasScopePermission } from '../lib/permissions'
 import { api } from '../services/api'
 import { enriquecerDocumento } from './rhDocumentos/helpers'
 import { calcularStatusContrato } from './rhContratos/catalogo'
@@ -11,22 +11,30 @@ import packageInfo from '../../package.json'
 // Cache simples para os badges de alerta (TTL 60s). Atualizado em foco da janela
 // e quando o evento global "rh-docs-changed" é disparado pela tela de Documentos RH.
 const BADGE_TTL_MS = 60_000
-const badgeCache = { ts: 0, counts: {} }
+const badgeCache = { ts: 0, loaded: false, counts: {} }
 
 async function fetchAlertBadges() {
   try {
-    const [docsRes, contratosRes] = await Promise.all([
+    const [docsRes, contratosRes, colabsRes] = await Promise.all([
       api.list('colaborador_documentos', { limit: 5000 }),
       api.list('colaborador_contratos', { limit: 2000 }).catch(() => ({ data: [] })),
+      api.list('colaboradores', { limit: 1000 }).catch(() => ({ data: [] })),
     ])
-    const rows = (docsRes?.data || docsRes || []).filter((d) => d.ativo !== false)
+    // Colaborador desligado não conta como pendência (docs/contratos viram n/a).
+    const colaboradores = colabsRes?.data || colabsRes || []
+    const ativoPorId = new Map(colaboradores.map((c) => [Number(c.id), c.ativo !== false]))
+    const rows = (docsRes?.data || docsRes || [])
+      .filter((d) => d.ativo !== false)
+      .map((d) => ({ ...d, colaborador_ativo: ativoPorId.get(Number(d.colaborador_id)) !== false }))
     const enriched = rows.map((d) => enriquecerDocumento(d))
     const urgentesDocs = enriched.filter((d) =>
       d.status_calculado === 'vencido' || d.status_calculado === 'vence_em_breve',
     ).length
 
     // Contratos: pega o último termo de cada vinculo_id e conta vencidos / vence em breve
-    const contratos = (contratosRes?.data || contratosRes || []).filter((c) => !c.data_desligamento)
+    const contratos = (contratosRes?.data || contratosRes || [])
+      .filter((c) => !c.data_desligamento)
+      .map((c) => ({ ...c, colaborador_ativo: ativoPorId.get(Number(c.colaborador_id)) !== false }))
     const ultimoPorVinculo = new Map()
     for (const c of contratos) {
       const k = c.vinculo_id || `solo-${c.id}`
@@ -135,17 +143,23 @@ export default function Sidebar() {
 
   const [badgeCounts, setBadgeCounts] = useState(badgeCache.counts)
 
+  // Badges de RH só pra quem enxerga Documentos RH — evita 403 em loop.
+  const canVerDocs = hasScopePermission(profile, 'menu.colaborador_documentos')
+
   useEffect(() => {
-    if (!profile) return
+    if (!profile || !canVerDocs) return
     let cancelled = false
     async function refresh(force = false) {
       const now = Date.now()
-      if (!force && now - badgeCache.ts < BADGE_TTL_MS && Object.keys(badgeCache.counts).length > 0) {
+      // Guard por FRESCOR (não por quantidade): carregou dentro do TTL, não refaz
+      // — mesmo com resultado vazio (0 alertas ou 403).
+      if (!force && badgeCache.loaded && now - badgeCache.ts < BADGE_TTL_MS) {
         if (!cancelled) setBadgeCounts(badgeCache.counts)
         return
       }
       const counts = await fetchAlertBadges()
       badgeCache.ts = Date.now()
+      badgeCache.loaded = true
       badgeCache.counts = counts
       if (!cancelled) setBadgeCounts(counts)
     }
@@ -159,7 +173,8 @@ export default function Sidebar() {
       window.removeEventListener('focus', onFocus)
       window.removeEventListener('rh-docs-changed', onChange)
     }
-  }, [profile])
+    // profile?.id (estável) — não o objeto, que muda a cada /api/me.
+  }, [profile?.id, canVerDocs])
 
   const [organizing, setOrganizing] = useState(false)
   const [drag, setDrag] = useState(null)      // { type:'group'|'item', title?:string, to?:string, fromGroup?:string }

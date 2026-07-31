@@ -150,6 +150,8 @@ export function calcularValidadeSugerida(tipo, dataEmissaoISO) {
 // Status visual a partir de data_validade e dias_alerta (espelha o backend).
 export function calcularStatus(doc, hoje = new Date()) {
   if (doc.status === 'nao_se_aplica') return 'nao_se_aplica'
+  // Colaborador desligado: documento não gera mais alerta (vira "não se aplica").
+  if (doc.colaborador_ativo === false) return 'nao_se_aplica'
   if (!doc.data_validade) {
     // Sem data de validade — se o tipo for "sem validade" no catálogo (RG, CPF,
     // CTPS, contrato, termos), trata como vigente em vez de pendente.

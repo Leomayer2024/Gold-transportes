@@ -357,7 +357,8 @@ textarea:focus {
 }
 
 .button-primary,
-.button-secondary {
+.button-secondary,
+.button-danger {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 5px 12px;
@@ -389,6 +390,25 @@ textarea:focus {
 .button-secondary:hover {
   background: var(--surface-hover);
   border-color: #a0aab5;
+}
+
+.button-danger {
+  background: var(--danger-bg);
+  color: var(--danger);
+  border-color: var(--danger-border);
+}
+
+.button-danger:hover {
+  background: var(--danger);
+  color: #ffffff;
+  border-color: var(--danger);
+}
+
+.button-primary:disabled,
+.button-secondary:disabled,
+.button-danger:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .button-row {
@@ -2463,6 +2483,19 @@ tr:last-child td {
 .loading-timeline-item span,
 .loading-timeline-item small {
   color: var(--muted);
+}
+
+.loading-timeline-actions {
+  margin-top: 6px;
+}
+
+.loading-timeline-edit {
+  margin-top: 6px;
+  display: grid;
+  gap: 6px;
+  padding: 6px;
+  border: 1px dashed #c7d0d8;
+  background: #f7f9fb;
 }
 
 .screen-center {

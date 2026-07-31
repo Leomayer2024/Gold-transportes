@@ -2,13 +2,14 @@ import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../services/api'
 import { useAuth } from '../context/AuthContext'
+import { hasScopePermission } from '../lib/permissions'
 import { enriquecerDocumento } from './rhDocumentos/helpers'
 import { calcularStatusContrato, TIPO_VINCULO_LABELS } from './rhContratos/catalogo'
 
 // Cache simples — reusa a mesma estratégia do badge da Sidebar (TTL 60s,
 // invalidado por foco da janela e pelo evento global "rh-docs-changed").
 const TTL_MS = 60_000
-const cache = { ts: 0, items: [], colaboradores: [] }
+const cache = { ts: 0, loaded: false, items: [], colaboradores: [] }
 
 async function fetchPendencias() {
   try {
@@ -18,9 +19,16 @@ async function fetchPendencias() {
       api.list('colaboradores', { limit: 1000 }),
       api.list('colaborador_contratos', { limit: 2000 }).catch(() => ({ data: [] })),
     ])
-    const docs = (docsRes?.data || docsRes || []).filter((d) => d.ativo !== false)
     const colaboradores = colabsRes?.data || colabsRes || []
-    const contratos = (contratosRes?.data || contratosRes || []).filter((c) => !c.data_desligamento)
+    // Colaborador desligado não gera pendência: marca ativo=false em docs/contratos
+    // pra que calcularStatus/calcularStatusContrato virem n/a/encerrado.
+    const ativoPorId = new Map(colaboradores.map((c) => [Number(c.id), c.ativo !== false]))
+    const docs = (docsRes?.data || docsRes || [])
+      .filter((d) => d.ativo !== false)
+      .map((d) => ({ ...d, colaborador_ativo: ativoPorId.get(Number(d.colaborador_id)) !== false }))
+    const contratos = (contratosRes?.data || contratosRes || [])
+      .filter((c) => !c.data_desligamento)
+      .map((c) => ({ ...c, colaborador_ativo: ativoPorId.get(Number(c.colaborador_id)) !== false }))
     const enriched = docs.map((d) => enriquecerDocumento(d))
 
     // Pendências de documentos
@@ -81,6 +89,28 @@ async function fetchPendencias() {
   }
 }
 
+// Batidas de ponto (iopoint) fora da cerca da base, últimos 7 dias.
+async function fetchForaCerca() {
+  try {
+    const hoje = new Date()
+    const d0 = new Date(hoje)
+    d0.setDate(d0.getDate() - 7)
+    const iso = (x) => x.toISOString().slice(0, 10)
+    const r = await api.iopointForaCerca({ inicio: iso(d0), fim: iso(hoje) })
+    return (r?.itens || []).map((v, i) => ({
+      kind: 'cerca',
+      id: `cerca-${v.colaborador_id}-${v.data}-${v.hora}-${i}`,
+      colaborador_id: v.colaborador_id,
+      status: 'vencido',
+      nome: v.colaborador,
+      titulo: `Fora da cerca${v.filial_label ? ' — ' + v.filial_label : ''}`,
+      descricao: `${(v.data || '').split('-').reverse().join('/')} ${v.hora || ''} · ${v.distancia_m}m (raio ${v.raio_m}m)`,
+    }))
+  } catch {
+    return []
+  }
+}
+
 export default function NotificationBell() {
   const { profile } = useAuth()
   const navigate = useNavigate()
@@ -89,20 +119,32 @@ export default function NotificationBell() {
   const [colaboradores, setColaboradores] = useState(cache.colaboradores)
   const panelRef = useRef(null)
 
+  // Só quem enxerga Documentos RH puxa as pendências — sem isso o sino batia
+  // colaboradores/contratos/documentos e levava 403 em loop.
+  const canVerDocs = hasScopePermission(profile, 'menu.colaborador_documentos')
+  const canVerPonto = hasScopePermission(profile, 'menu.ponto')
+
   useEffect(() => {
-    if (!profile) return
+    if (!profile || (!canVerDocs && !canVerPonto)) return
     let cancelled = false
     async function refresh(force = false) {
       const now = Date.now()
-      if (!force && now - cache.ts < TTL_MS && cache.items.length > 0) {
+      // Guard por FRESCOR, não por quantidade: já carregou dentro do TTL não
+      // refaz — mesmo que o resultado tenha vindo vazio (0 pendências ou 403).
+      if (!force && cache.loaded && now - cache.ts < TTL_MS) {
         if (!cancelled) {
           setItens(cache.items)
           setColaboradores(cache.colaboradores)
         }
         return
       }
-      const { itens: itensNovos, colaboradores: colabs } = await fetchPendencias()
+      const [{ itens: itensDocs, colaboradores: colabs }, cerca] = await Promise.all([
+        canVerDocs ? fetchPendencias() : Promise.resolve({ itens: [], colaboradores: [] }),
+        canVerPonto ? fetchForaCerca() : Promise.resolve([]),
+      ])
+      const itensNovos = [...cerca, ...itensDocs]
       cache.ts = Date.now()
+      cache.loaded = true
       cache.items = itensNovos
       cache.colaboradores = colabs
       if (!cancelled) {
@@ -120,7 +162,8 @@ export default function NotificationBell() {
       window.removeEventListener('focus', onFocus)
       window.removeEventListener('rh-docs-changed', onChange)
     }
-  }, [profile])
+    // profile?.id (estável) — não o objeto profile, que muda a cada /api/me.
+  }, [profile?.id, canVerDocs, canVerPonto])
 
   // Click fora fecha o painel
   useEffect(() => {
@@ -140,9 +183,9 @@ export default function NotificationBell() {
   const total = itens.length
   const colabPorId = (id) => colaboradores.find((c) => Number(c.id) === Number(id))
 
-  function irParaTela(_item) {
+  function irParaTela(item) {
     setOpen(false)
-    navigate('/rh-documentos')
+    navigate(item?.kind === 'cerca' ? '/ponto' : '/rh-documentos')
     // O drawer/edição direto exigiria comunicação com a página — por enquanto
     // só navega pra tela. Pode evoluir depois.
   }
@@ -165,7 +208,7 @@ export default function NotificationBell() {
       {open && (
         <div className="notif-panel" ref={panelRef}>
           <div className="notif-panel-header">
-            <h4>Pendências de documentos</h4>
+            <h4>Pendências</h4>
             <button className="button-link" onClick={() => setOpen(false)} type="button">✕</button>
           </div>
           <div className="notif-panel-body">
@@ -175,14 +218,17 @@ export default function NotificationBell() {
               itens.slice(0, 50).map((item) => {
                 const colab = colabPorId(item.colaborador_id)
                 const dias = item.dias
-                let descricao = ''
-                if (item.status === 'vencido') {
-                  descricao = `Vencido há ${Math.abs(dias ?? 0)} dia${Math.abs(dias ?? 0) === 1 ? '' : 's'}`
-                } else if (item.status === 'vence_em_breve') {
-                  descricao = `Vence em ${dias} dia${dias === 1 ? '' : 's'}`
-                } else {
-                  descricao = 'Pendente (sem validade definida)'
+                let descricao = item.descricao || ''
+                if (!descricao) {
+                  if (item.status === 'vencido') {
+                    descricao = `Vencido há ${Math.abs(dias ?? 0)} dia${Math.abs(dias ?? 0) === 1 ? '' : 's'}`
+                  } else if (item.status === 'vence_em_breve') {
+                    descricao = `Vence em ${dias} dia${dias === 1 ? '' : 's'}`
+                  } else {
+                    descricao = 'Pendente (sem validade definida)'
+                  }
                 }
+                const icon = item.kind === 'cerca' ? '📍 ' : item.kind === 'contrato' ? '📑 ' : ''
                 return (
                   <button
                     key={item.id}
@@ -191,8 +237,8 @@ export default function NotificationBell() {
                     onClick={() => irParaTela(item)}
                   >
                     <div className="notif-item-title">
-                      {item.kind === 'contrato' ? '📑 ' : ''}
-                      {colab?.nome_completo || `#${item.colaborador_id}`} — {item.titulo}
+                      {icon}
+                      {item.nome || colab?.nome_completo || `#${item.colaborador_id}`} — {item.titulo}
                     </div>
                     <div className="notif-item-meta">{descricao}</div>
                   </button>

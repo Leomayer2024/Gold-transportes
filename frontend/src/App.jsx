@@ -4,6 +4,7 @@ import FiliaisPage from './components/FiliaisPage'
 import ColaboradoresPage from './components/ColaboradoresPage'
 import ColaboradorDocumentosPage from './components/ColaboradorDocumentosPage'
 import DiariasPage from './components/DiariasPage'
+import HotelariaAprovacoesPage from './components/HotelariaAprovacoesPage'
 import ContratosOperacionaisPage from './components/ContratosOperacionaisPage'
 import TesteContratoPage from './components/TesteContratoPage'
 import CustosRhPage from './components/CustosRhPage'
@@ -11,6 +12,7 @@ import AuditoriaPage from './components/AuditoriaPage'
 import BonificacaoPage from './components/BonificacaoPage'
 import BonificacaoMetricasPage from './components/BonificacaoMetricasPage'
 import LoadingPage from './components/LoadingPage'
+import LoadingMetricsPage from './components/LoadingMetricsPage'
 import AccessRoute from './components/AccessRoute'
 import EventosRhPage from './components/EventosRhPage'
 import Layout from './components/Layout'
@@ -31,24 +33,28 @@ import ItensCatalogoPage from './components/ItensCatalogoPage'
 import AprovacoesPage from './components/AprovacoesPage'
 import FeriadosPage from './components/FeriadosPage'
 import NotasCTEPage from './components/NotasCTEPage'
+import NfseEmitidasPage from './components/NfseEmitidasPage'
 import GestaoAcessosPage from './components/GestaoAcessosPage'
 import EstoquePage from './components/EstoquePage'
 import EstoqueMovimentosPage from './components/EstoqueMovimentosPage'
 import AssinaturaPage from './components/AssinaturaPage'
 import FrotaDashboardPage from './components/FrotaDashboardPage'
 import AbastecimentosPage from './components/AbastecimentosPage'
+import PostosCombustivelPage from './components/PostosCombustivelPage'
 import PneusPage from './components/PneusPage'
 import ManutencoesPage from './components/ManutencoesPage'
 import OrdensServicoMotoristaPage from './components/OrdensServicoMotoristaPage'
 import VeiculosDocumentosPage from './components/VeiculosDocumentosPage'
 import HorasExtrasPage from './components/HorasExtrasPage'
 import AcompanhamentoPage from './components/AcompanhamentoPage'
+import TreinamentosPage from './components/TreinamentosPage'
 import HorasExtrasRTMPage from './components/HorasExtrasRTMPage'
 import HorasExtrasHistoricoPage from './components/HorasExtrasHistoricoPage'
 import HorasExtrasMetricasPage from './components/HorasExtrasMetricasPage'
 import ContasReceberPage from './components/ContasReceberPage'
 import ContasPagarPage from './components/ContasPagarPage'
 import BancoPage from './components/BancoPage'
+import FinanceiroPainelPage from './components/FinanceiroPainelPage'
 import FornecedoresPage from './components/FornecedoresPage'
 import ClientesPage from './components/ClientesPage'
 import MeuPerfilPage from './components/MeuPerfilPage'
@@ -90,6 +96,9 @@ export default function App() {
           <Route element={<AccessRoute requiredScope="menu.colaboradores" />}>
             <Route path="/colaboradores" element={<ColaboradoresPage />} />
           </Route>
+          <Route element={<AccessRoute requiredScope="menu.treinamentos" />}>
+            <Route path="/treinamentos" element={<TreinamentosPage />} />
+          </Route>
           <Route element={<AccessRoute requiredScope="menu.custos_rh" />}>
             <Route path="/custos-rh" element={<CustosRhPage />} />
           </Route>
@@ -104,6 +113,9 @@ export default function App() {
           </Route>
           <Route element={<AccessRoute requiredScope="menu.diarias" />}>
             <Route path="/diarias" element={<DiariasPage />} />
+          </Route>
+          <Route element={<AccessRoute requiredScope="menu.hotelaria_aprovacoes" />}>
+            <Route path="/hotelaria-aprovacoes" element={<HotelariaAprovacoesPage />} />
           </Route>
           <Route element={<AccessRoute requiredScope="menu.eventos_rh" />}>
             <Route path="/rh-planejamento" element={<EventosRhPage />} />
@@ -125,6 +137,9 @@ export default function App() {
           </Route>
           <Route element={<AccessRoute requiredScope="menu.abastecimentos" />}>
             <Route path="/abastecimentos" element={<AbastecimentosPage />} />
+          </Route>
+          <Route element={<AccessRoute requiredScope="menu.postos_combustivel" />}>
+            <Route path="/postos-combustivel" element={<PostosCombustivelPage />} />
           </Route>
           <Route element={<AccessRoute requiredScope="menu.pneus" />}>
             <Route path="/pneus" element={<PneusPage />} />
@@ -171,6 +186,9 @@ export default function App() {
           <Route element={<AccessRoute requiredScope="menu.notas_cte" />}>
             <Route path="/notas-cte" element={<NotasCTEPage />} />
           </Route>
+          <Route element={<AccessRoute requiredScope="menu.notas_fiscais_servico" />}>
+            <Route path="/notas-fiscais-servico" element={<NfseEmitidasPage />} />
+          </Route>
           <Route element={<AccessRoute requiredScope="menu.gestao_acessos" />}>
             <Route path="/gestao-acessos" element={<GestaoAcessosPage />} />
           </Route>
@@ -196,6 +214,7 @@ export default function App() {
           </Route>
           <Route element={<AccessRoute requiredScope="menu.carregamento" />}>
             <Route path="/carregamento" element={<LoadingPage />} />
+            <Route path="/carregamento-metricas" element={<LoadingMetricsPage />} />
           </Route>
           <Route element={<AccessRoute requiredScope="menu.horas_extras_rtm" />}>
             <Route path="/horas-extras-rtm" element={<HorasExtrasRTMPage />} />
@@ -205,6 +224,9 @@ export default function App() {
           </Route>
           <Route element={<AccessRoute requiredScope="menu.horas_extras_rtm" />}>
             <Route path="/horas-extras-metricas" element={<HorasExtrasMetricasPage />} />
+          </Route>
+          <Route element={<AccessRoute requiredScope="menu.financeiro_painel" />}>
+            <Route path="/financeiro-painel" element={<FinanceiroPainelPage />} />
           </Route>
           <Route element={<AccessRoute requiredScope="menu.contas_receber" />}>
             <Route path="/contas-receber" element={<ContasReceberPage />} />

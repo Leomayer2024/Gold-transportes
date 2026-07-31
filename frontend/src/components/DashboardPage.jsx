@@ -3,11 +3,8 @@ import { useAuth } from '../context/AuthContext'
 import { hasScopePermission } from '../lib/permissions'
 import { api } from '../services/api'
 import { formatMinutes, formatSeverityLabel } from '../lib/formatters'
-import StatCard from './StatCard'
-import PieChart from './Charts/PieChart'
-import BarChart from './Charts/BarChart'
-import LineChart from './Charts/LineChart'
-import GaugeChart from './Charts/GaugeChart'
+import AndamentoBI from './AndamentoBI'
+import '../styles/dashboard.css'
 
 const TIPO_FERIADO_LABELS = {
   nacional: 'Nacional',
@@ -25,31 +22,74 @@ function formatBRL(value) {
   })
 }
 
-function readDashboardCache(cacheKey) {
-  if (!cacheKey) {
-    return null
-  }
-
-  try {
-    const raw = window.sessionStorage.getItem(cacheKey)
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
+function saudacao() {
+  const h = new Date().getHours()
+  if (h < 12) return 'Bom dia'
+  if (h < 18) return 'Boa tarde'
+  return 'Boa noite'
 }
 
-function writeDashboardCache(cacheKey, payload) {
-  if (!cacheKey) {
-    return
-  }
-
-  try {
-    window.sessionStorage.setItem(cacheKey, JSON.stringify(payload))
-  } catch {
-    // Ignore dashboard cache persistence failures.
-  }
+function dataLonga() {
+  return new Date().toLocaleDateString('pt-BR', {
+    weekday: 'long', day: '2-digit', month: 'long', year: 'numeric',
+  })
 }
 
+function primeiroNome(nome) {
+  return (nome || 'Operador').trim().split(/\s+/)[0]
+}
+
+function iniciais(nome) {
+  const parts = (nome || 'OP').trim().split(/\s+/)
+  return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || 'OP'
+}
+
+// ─── Ícones (stroke = currentColor) ────────────────────────────────────────
+const P = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' }
+function Ico({ name }) {
+  const paths = {
+    building: <><rect x="4" y="3" width="16" height="18" rx="1.5" {...P} /><path d="M9 7h.01M12 7h.01M15 7h.01M9 11h.01M12 11h.01M15 11h.01M10 21v-4h4v4" {...P} /></>,
+    users: <><circle cx="9" cy="8" r="3.2" {...P} /><path d="M3.5 20a5.5 5.5 0 0 1 11 0M16 6.5a3 3 0 0 1 0 5.8M18 20a4.8 4.8 0 0 0-3-4.4" {...P} /></>,
+    doc: <><path d="M6 3h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z" {...P} /><path d="M14 3v4h4M8 12h8M8 16h8" {...P} /></>,
+    calendar: <><rect x="3.5" y="5" width="17" height="16" rx="1.5" {...P} /><path d="M3.5 9.5h17M8 3v4M16 3v4" {...P} /></>,
+    truck: <><path d="M3 6h11v9H3zM14 9h4l3 3v3h-7z" {...P} /><circle cx="7" cy="18" r="1.8" {...P} /><circle cx="17.5" cy="18" r="1.8" {...P} /></>,
+    box: <><path d="M12 3 3.5 7.5v9L12 21l8.5-4.5v-9L12 3Z" {...P} /><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9" {...P} /></>,
+    alert: <><path d="M12 3 2.5 20h19L12 3Z" {...P} /><path d="M12 10v4M12 17h.01" {...P} /></>,
+    cart: <><path d="M3 4h2l1.6 10.5a1.5 1.5 0 0 0 1.5 1.3h8.4a1.5 1.5 0 0 0 1.5-1.2L20 8H6" {...P} /><circle cx="9" cy="20" r="1.4" {...P} /><circle cx="17" cy="20" r="1.4" {...P} /></>,
+    shield: <><path d="M12 3 5 6v5c0 4.2 2.9 7.6 7 9 4.1-1.4 7-4.8 7-9V6l-7-3Z" {...P} /><path d="m9 12 2 2 4-4" {...P} /></>,
+    check: <><circle cx="12" cy="12" r="9" {...P} /><path d="m8.5 12 2.3 2.3L15.5 9.5" {...P} /></>,
+    people: <><circle cx="12" cy="8" r="3.4" {...P} /><path d="M5 20a7 7 0 0 1 14 0" {...P} /></>,
+    heart: <><path d="M12 20s-7-4.4-7-9.3A3.7 3.7 0 0 1 12 8a3.7 3.7 0 0 1 7 2.7C19 15.6 12 20 12 20Z" {...P} /></>,
+    refresh: <><path d="M20 11a8 8 0 1 0-.6 4M20 5v6h-6" {...P} /></>,
+    chart: <><path d="M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6" {...P} /></>,
+    fuel: <><path d="M4 21V5a2 2 0 0 1 2-2h5a2 2 0 0 1 2 2v16M3 21h12" {...P} /><path d="M13 8h3l2 2v7a2 2 0 0 0 2-2v-6l-3-3" {...P} /></>,
+    pin: <><path d="M12 21s6-5.3 6-10a6 6 0 0 0-12 0c0 4.7 6 10 6 10Z" {...P} /><circle cx="12" cy="11" r="2.2" {...P} /></>,
+  }
+  return <svg viewBox="0 0 24 24" aria-hidden="true">{paths[name] || paths.box}</svg>
+}
+
+const KPI_META = {
+  'Filiais':         { icon: 'building', tone: 'info' },
+  'Colaboradores':   { icon: 'users',    tone: 'success' },
+  'Documentos RH':   { icon: 'doc',      tone: 'warning' },
+  'Planejamento RH': { icon: 'calendar', tone: 'info' },
+  'Veículos':        { icon: 'truck',    tone: 'default' },
+  'Estoque (itens)': { icon: 'box',      tone: 'default' },
+}
+
+function DistBar({ ativos, faltas, ferias, afastados }) {
+  const total = (ativos || 0) + (faltas || 0) + (ferias || 0) + (afastados || 0)
+  if (total === 0) return <div className="dsh-dist" />
+  const pct = (n) => `${((n || 0) / total) * 100}%`
+  return (
+    <div className="dsh-dist" title={`${total} colaboradores`}>
+      <span className="seg-ativos" style={{ width: pct(ativos) }} />
+      <span className="seg-faltas" style={{ width: pct(faltas) }} />
+      <span className="seg-ferias" style={{ width: pct(ferias) }} />
+      <span className="seg-afastados" style={{ width: pct(afastados) }} />
+    </div>
+  )
+}
 
 export default function DashboardPage() {
   const DASHBOARD_REFRESH_INTERVAL_MS = 30 * 60 * 1000
@@ -78,15 +118,36 @@ export default function DashboardPage() {
   const [dashboardLoading, setDashboardLoading] = useState(!cachedDashboard)
   const [refreshing, setRefreshing] = useState(false)
 
-  // Estado da aba "Andamento por filial"
-  const [andamento, setAndamento] = useState(null)
-  const [andamentoMes, setAndamentoMes] = useState(MES_ATUAL)
-  const [andamentoLoading, setAndamentoLoading] = useState(false)
-  const [andamentoError, setAndamentoError] = useState('')
+  // Aba Carregamento — filtro por data (período)
+  const [carregData, setCarregData] = useState(() => new Date().toISOString().slice(0, 10))
+  const [carregSummary, setCarregSummary] = useState(null)
+  const [carregLoading, setCarregLoading] = useState(false)
 
   const allowedBasesText = profile?.has_filial_scope
     ? (profile.allowed_filial_labels || []).join(', ')
     : 'Todas as bases liberadas'
+
+  async function reloadDashboard() {
+    try {
+      setRefreshing(true)
+      const response = await api.getDashboard(selectedFilialId ? { filial_id: selectedFilialId } : {})
+      setStats(response.resumo || [])
+      setBaseStats(response.bases || [])
+      setRhDocumentsSummary(response.rh_documentos || { available: false, database_ready: false, cards: [] })
+      setLoadingSummary(response.carregamento || { available: false, database_ready: false, cards: [], highlights: [] })
+      setFeriadosProximos(response.feriados_proximos || [])
+      setEstoqueAlertas(response.estoque_alertas || [])
+      setPedidosPendentes(response.pedidos_pendentes || 0)
+      setAlertsSnapshot(response.alertas || { summary: { total: 0, critical: 0, warning: 0, info: 0 }, items: [], last_run_at: null, last_error: null })
+      writeDashboardCache(cacheKey, response)
+      setErrorMessage('')
+    } catch (error) {
+      setErrorMessage(error.message)
+    } finally {
+      setDashboardLoading(false)
+      setRefreshing(false)
+    }
+  }
 
   useEffect(() => {
     let active = true
@@ -149,36 +210,15 @@ export default function DashboardPage() {
   }, [cacheKey])
 
   useEffect(() => {
-    if (activeTab !== 'andamento') {
-      return
-    }
-
+    if (activeTab !== 'carregamento') return
     let active = true
-    setAndamentoLoading(true)
-    setAndamentoError('')
-
-    api
-      .getDashboardAndamento({ mes: andamentoMes, filial_id: selectedFilialId || undefined })
-      .then((response) => {
-        if (active) {
-          setAndamento(response)
-        }
-      })
-      .catch((error) => {
-        if (active) {
-          setAndamentoError(error.message)
-        }
-      })
-      .finally(() => {
-        if (active) {
-          setAndamentoLoading(false)
-        }
-      })
-
-    return () => {
-      active = false
-    }
-  }, [activeTab, andamentoMes, selectedFilialId])
+    setCarregLoading(true)
+    api.getDashboardCarregamento(carregData)
+      .then((r) => { if (active) setCarregSummary(r) })
+      .catch(() => { if (active) setCarregSummary(null) })
+      .finally(() => { if (active) setCarregLoading(false) })
+    return () => { active = false }
+  }, [activeTab, carregData])
 
   const showGeneralSkeleton = dashboardLoading && stats.length === 0 && baseStats.length === 0
   const showLoadingHighlights = refreshing || profileLoading
@@ -186,39 +226,47 @@ export default function DashboardPage() {
   // Dados para gráficos
   const baseStatsFiltered = baseStats.filter((base) => !selectedFilialId || String(base.filial_id) === String(selectedFilialId))
 
-  const workforceChartData = baseStatsFiltered.map((base) => ({
-    label: base.filial_nome?.split('/')[0] || 'Base',
-    value: base.ativos || 0,
-  }))
-
-  const statusChartData = baseStatsFiltered.length > 0 ? [
-    { label: 'Ativos', value: baseStatsFiltered.reduce((s, b) => s + (b.ativos || 0), 0) },
-    { label: 'Faltas', value: baseStatsFiltered.reduce((s, b) => s + (b.faltas || 0), 0) },
-    { label: 'Férias', value: baseStatsFiltered.reduce((s, b) => s + (b.ferias || 0), 0) },
-    { label: 'Afastados', value: baseStatsFiltered.reduce((s, b) => s + (b.afastados || 0), 0) },
-  ] : []
-
-  const alertsChartData = [
-    { label: 'Críticos', value: alertsSnapshot.summary?.critical || 0 },
-    { label: 'Atenção', value: alertsSnapshot.summary?.warning || 0 },
-    { label: 'Info', value: alertsSnapshot.summary?.info || 0 },
-  ]
+  const totalColaboradores = baseStatsFiltered.reduce(
+    (s, b) => s + (b.ativos || 0) + (b.faltas || 0) + (b.ferias || 0) + (b.afastados || 0), 0,
+  )
 
   const systemHealthScore = Math.round(
     100 - (((alertsSnapshot.summary?.critical || 0) * 10 + (alertsSnapshot.summary?.warning || 0) * 3) % 100)
   )
 
+  const criticos = alertsSnapshot.summary?.critical || 0
+
+  const execTiles = [
+    { icon: 'people', label: 'Colaboradores', value: totalColaboradores, tone: 'info' },
+    { icon: 'alert', label: 'Alertas críticos', value: criticos, tone: criticos > 0 ? 'danger' : 'success' },
+    { icon: 'box', label: 'Estoque baixo', value: estoqueAlertas.length, tone: estoqueAlertas.length > 0 ? 'warning' : 'neutral' },
+    { icon: 'cart', label: 'Pedidos pendentes', value: pedidosPendentes, tone: pedidosPendentes > 0 ? 'warning' : 'neutral' },
+    { icon: 'heart', label: 'Saúde do sistema', value: `${systemHealthScore}%`, tone: systemHealthScore >= 75 ? 'success' : systemHealthScore >= 50 ? 'warning' : 'danger' },
+  ]
+
+  const TABS = [
+    { id: 'geral', label: 'Visão geral', icon: 'chart' },
+    { id: 'andamento', label: 'Andamento por filial', icon: 'building' },
+    ...(loadingSummary.available ? [{ id: 'carregamento', label: 'Carregamento', icon: 'truck' }] : []),
+  ]
+
   return (
-    <section className="page-shell">
-      <div className="page-header">
-        <div>
-          <span className="eyebrow">Painel</span>
-          <h1>Dashboard operacional</h1>
-          <p>Visão resumida de módulos, permissões ativas e base cadastral.</p>
+    <section className="dsh">
+      {/* ── HERO ─────────────────────────────────────────────────────── */}
+      <div className="dsh-hero">
+        <div className="dsh-hero-main">
+          <span className="dsh-hero-eyebrow"><Ico name="pin" /> Painel operacional</span>
+          <h1>{saudacao()}, {primeiroNome(profile?.nome_completo)} 👋</h1>
+          <p className="dsh-hero-sub">
+            {dataLonga().charAt(0).toUpperCase() + dataLonga().slice(1)} · Visão geral de pessoas, frota, estoque e aprovações.
+          </p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
+        <div className="dsh-hero-actions">
+          {showLoadingHighlights && (
+            <span className="dsh-live"><span className="dsh-live-dot" /> Atualizando…</span>
+          )}
           {filiais.length > 1 && (
-            <label className="field filter-field" style={{ minWidth: 180, marginBottom: 0 }}>
+            <label className="dsh-hero-field">
               <span>Base</span>
               <select value={selectedFilialId} onChange={(e) => setSelectedFilialId(e.target.value)}>
                 <option value="">Todas as bases</option>
@@ -228,531 +276,399 @@ export default function DashboardPage() {
               </select>
             </label>
           )}
-          {showLoadingHighlights && <div className="profile-chip">Atualizando dados...</div>}
+          <button className="dsh-btn-refresh" onClick={reloadDashboard} type="button" disabled={refreshing}>
+            <Ico name="refresh" /> {refreshing ? 'Atualizando' : 'Atualizar'}
+          </button>
         </div>
       </div>
 
       {errorMessage && <div className="alert-error">{errorMessage}</div>}
 
-      <div className="dashboard-tab-row">
-        <button className={`button-secondary dashboard-tab-button${activeTab === 'geral' ? ' active' : ''}`} onClick={() => setActiveTab('geral')} type="button">
-          Visão geral
-        </button>
-        <button className={`button-secondary dashboard-tab-button${activeTab === 'graficos' ? ' active' : ''}`} onClick={() => setActiveTab('graficos')} type="button">
-          Análise com gráficos
-        </button>
-        <button className={`button-secondary dashboard-tab-button${activeTab === 'andamento' ? ' active' : ''}`} onClick={() => setActiveTab('andamento')} type="button">
-          Andamento por filial
-        </button>
-        {loadingSummary.available && (
+      {/* ── TABS ─────────────────────────────────────────────────────── */}
+      <div className="dsh-tabs">
+        {TABS.map((t) => (
           <button
-            className={`button-secondary dashboard-tab-button${activeTab === 'carregamento' ? ' active' : ''}`}
-            onClick={() => setActiveTab('carregamento')}
+            key={t.id}
             type="button"
+            className={`dsh-tab${activeTab === t.id ? ' is-active' : ''}`}
+            onClick={() => setActiveTab(t.id)}
           >
-            Carregamento hoje
+            {t.label}
           </button>
-        )}
+        ))}
       </div>
 
-      {activeTab === 'geral' ? (
+      {/* ══════════════ TAB: VISÃO GERAL ══════════════ */}
+      {activeTab === 'geral' && (
         <>
+          {/* KPIs cadastrais */}
           {showGeneralSkeleton ? (
-            <div className="stats-grid">
-              {Array.from({ length: 4 }).map((_, index) => (
-                <article className="stat-card stat-card-skeleton" key={`stat-skeleton-${index}`}>
-                  <span className="skeleton-line skeleton-line-short" />
-                  <strong className="skeleton-line skeleton-line-value" />
-                  <small className="skeleton-line skeleton-line-medium" />
-                </article>
-              ))}
+            <div className="dsh-kpis">
+              {Array.from({ length: 6 }).map((_, i) => <div className="dsh-skel" key={`k-${i}`} />)}
             </div>
           ) : (
-            <div className="stats-grid">
-              {stats.map((item) => (
-                <StatCard item={item} key={item.label} />
-              ))}
+            <div className="dsh-kpis">
+              {stats.map((item) => {
+                const meta = KPI_META[item.label] || { icon: 'box', tone: 'default' }
+                return (
+                  <article className={`dsh-kpi${meta.tone !== 'default' ? ` tone-${meta.tone}` : ''}`} key={item.label}>
+                    <div className="dsh-kpi-icon"><Ico name={meta.icon} /></div>
+                    <div className="dsh-kpi-body">
+                      <span className="dsh-kpi-value">{item.value}</span>
+                      <span className="dsh-kpi-label">{item.label}</span>
+                      {item.hint && <span className="dsh-kpi-hint">{item.hint}</span>}
+                    </div>
+                  </article>
+                )
+              })}
             </div>
           )}
 
-          {showGeneralSkeleton ? (
-            <div className="workforce-summary-grid dashboard-base-grid">
-              {Array.from({ length: 2 }).map((_, index) => (
-                <article className="surface-card workforce-summary-card skeleton-panel" key={`base-skeleton-${index}`}>
-                  <div className="section-title">
-                    <span className="skeleton-line skeleton-line-short" />
-                    <h2 className="skeleton-line skeleton-line-title" />
-                  </div>
-                  <div className="workforce-kpi-grid">
-                    {Array.from({ length: 4 }).map((_, itemIndex) => (
-                      <div className="workforce-kpi" key={`base-skeleton-kpi-${itemIndex}`}>
-                        <span className="skeleton-line skeleton-line-short" />
-                        <strong className="skeleton-line skeleton-line-value" />
-                      </div>
-                    ))}
-                  </div>
-                </article>
-              ))}
-            </div>
-          ) : baseStats.length > 0 && (
-            <div className="workforce-summary-grid dashboard-base-grid">
-              {baseStats.filter((base) => !selectedFilialId || String(base.filial_id) === String(selectedFilialId)).map((base) => (
-                <article className="surface-card workforce-summary-card" key={`dashboard-${base.filial_id}`}>
-                  <div className="section-title">
-                    <span className="eyebrow">Base do gestor</span>
-                    <h2>{base.filial_nome}</h2>
-                  </div>
-                  <div className="workforce-kpi-grid">
-                    <div className="workforce-kpi">
-                      <span>Ativos</span>
-                      <strong>{base.ativos}</strong>
-                    </div>
-                    <div className="workforce-kpi">
-                      <span>Faltas</span>
-                      <strong>{base.faltas}</strong>
-                    </div>
-                    <div className="workforce-kpi">
-                      <span>Férias</span>
-                      <strong>{base.ferias}</strong>
-                    </div>
-                    <div className="workforce-kpi">
-                      <span>Afastados</span>
-                      <strong>{base.afastados}</strong>
-                    </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-
-          {feriadosProximos.length > 0 && hasScopePermission(profile, 'menu.feriados') && (
-            <article className="surface-card panel-card">
-              <div className="section-title">
-                <span className="eyebrow">Calendário</span>
-                <h2>Próximos feriados</h2>
-              </div>
-              <div className="table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Data</th>
-                      <th>Feriado</th>
-                      <th>Tipo</th>
-                      <th>Expediente</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {feriadosProximos.map((f) => (
-                      <tr key={f.id}>
-                        <td>{f.data ? f.data.split('-').reverse().join('/') : '—'}</td>
-                        <td><strong>{f.nome}</strong></td>
-                        <td>{TIPO_FERIADO_LABELS[f.tipo] || f.tipo}</td>
-                        <td>{f.tem_expediente ? (f.horario_expediente || 'Sim') : '—'}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </article>
-          )}
-
-          <div className="dashboard-grid">
-            {estoqueAlertas.length > 0 && hasScopePermission(profile, 'menu.estoque') && (
-              <article className="surface-card panel-card">
-                <div className="section-title">
-                  <span className="eyebrow">Estoque</span>
-                  <h2>Alerta: estoque baixo</h2>
-                </div>
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Item</th>
-                        <th>Em estoque</th>
-                        <th>Mínimo</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {estoqueAlertas.map((item) => (
-                        <tr key={item.id}>
-                          <td><strong>{item.nome}</strong></td>
-                          <td style={{ color: '#dc2626', fontWeight: 600 }}>{Number(item.estoque_atual || 0).toFixed(2)}</td>
-                          <td>{Number(item.estoque_minimo || 0).toFixed(2)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </article>
-            )}
-
-            {pedidosPendentes > 0 && hasScopePermission(profile, 'menu.pedidos_compra') && (
-              <article className="surface-card panel-card">
-                <div className="section-title">
-                  <span className="eyebrow">Compras</span>
-                  <h2>Pedidos pendentes</h2>
-                </div>
-                <div className="workforce-kpi-grid">
-                  <div className="workforce-kpi">
-                    <span>Aguardando aprovação</span>
-                    <strong style={{ fontSize: 28, color: '#d97706' }}>{pedidosPendentes}</strong>
-                  </div>
-                </div>
-              </article>
-            )}
-
-            <article className="surface-card panel-card">
-              <div className="section-title">
-                <span className="eyebrow">Motor de alertas</span>
-                <h2>Notificações automáticas</h2>
-              </div>
-
-              {alertsSnapshot.last_error && <div className="alert-error">Falha no motor de alertas: {alertsSnapshot.last_error}</div>}
-
-              <div className="badge-row">
-                <span className="permission-badge enabled">Total: {alertsSnapshot.summary?.total || 0}</span>
-                <span className={`permission-badge${(alertsSnapshot.summary?.critical || 0) > 0 ? ' enabled' : ''}`}>
-                  Críticos: {alertsSnapshot.summary?.critical || 0}
-                </span>
-                <span className={`permission-badge${(alertsSnapshot.summary?.warning || 0) > 0 ? ' enabled' : ''}`}>
-                  Atenção: {alertsSnapshot.summary?.warning || 0}
-                </span>
-                <span className="permission-badge">Info: {alertsSnapshot.summary?.info || 0}</span>
-              </div>
-
-              {alertsSnapshot.last_run_at && (
-                <small className="field-help-text">Última atualização automática: {new Date(alertsSnapshot.last_run_at).toLocaleString('pt-BR')}</small>
-              )}
-
-              {alertsSnapshot.items?.length ? (
-                <div className="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Nível</th>
-                        <th>Alerta</th>
-                        <th>Status</th>
-                        <th>Prazo/Data</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {alertsSnapshot.items.slice(0, 8).map((item) => (
-                        <tr key={`${item.type}-${item.reference_id}`}>
-                          <td><strong>{formatSeverityLabel(item.severity)}</strong></td>
-                          <td>
-                            <strong>{item.title}</strong>
-                            <br />
-                            <small>{item.message}</small>
-                          </td>
-                          <td>{item.status || '-'}</td>
-                          <td>{item.date_limit || '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <div className="empty-state">Sem alertas ativos no momento.</div>
-              )}
-            </article>
-
-            {rhDocumentsSummary.available && (
-              <article className="surface-card panel-card">
-                <div className="section-title">
-                  <span className="eyebrow">RH</span>
-                  <h2>Alertas documentais</h2>
-                </div>
-                {!rhDocumentsSummary.database_ready ? (
-                  <div className="alert-error">A migration de documentos RH ainda não foi executada no banco.</div>
-                ) : (
-                  <div className="stats-grid compact-stats-grid">
-                    {(rhDocumentsSummary.cards || []).map((item) => (
-                      <StatCard item={item} key={item.label} />
-                    ))}
-                  </div>
-                )}
-              </article>
-            )}
-
-            <article className="surface-card panel-card">
-              <div className="section-title">
-                <span className="eyebrow">Usuário autenticado</span>
-                <h2>{profile?.nome_completo || 'Operador'}</h2>
-              </div>
-              <div className="meta-grid">
-                <div>
-                  <span>Cargo</span>
-                  <strong>{profile?.cargo || '-'}</strong>
-                </div>
-                <div>
-                  <span>CPF</span>
-                  <strong>{profile?.cpf || '-'}</strong>
-                </div>
-                <div>
-                  <span>Acesso</span>
-                  <strong>{profile?.tipo_acesso || '-'}</strong>
-                </div>
-                <div>
-                  <span>Status</span>
-                  <strong>{profile?.ativo ? 'Ativo' : 'Inativo'}</strong>
-                </div>
-                <div>
-                  <span>Bases visíveis</span>
-                  <strong>{allowedBasesText}</strong>
-                </div>
-              </div>
-            </article>
-
-            <article className="surface-card panel-card">
-              <div className="section-title">
-                <span className="eyebrow">Permissões</span>
-                <h2>Regras principais</h2>
-              </div>
-              <div className="badge-row">
-                <span className={`permission-badge${profile?.permissions?.app ? ' enabled' : ''}`}>Web</span>
-                <span className={`permission-badge${profile?.permissions?.desktop ? ' enabled' : ''}`}>Desktop</span>
-                <span className={`permission-badge${profile?.permissions?.edit ? ' enabled' : ''}`}>Editar</span>
-                <span className={`permission-badge${profile?.permissions?.delete ? ' enabled' : ''}`}>Excluir</span>
-                <span className={`permission-badge${profile?.permissions?.approve_he ? ' enabled' : ''}`}>Aprovar HE</span>
-              </div>
-            </article>
-          </div>
-        </>
-      ) : null}
-
-      {/* ===== TAB: ANÁLISE COM GRÁFICOS ===== */}
-      {activeTab === 'graficos' ? (
-        <>
-          <div className="charts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px', marginBottom: '40px' }}>
-            {/* Health Score Gauge */}
-            <article className="surface-card panel-card">
-              <GaugeChart value={systemHealthScore} max={100} title="Saúde do Sistema" unit="%" color="#10b981" width={300} height={300} />
-            </article>
-
-            {/* Status Distribution Pie */}
-            {statusChartData.length > 0 && (
-              <article className="surface-card panel-card">
-                <PieChart data={statusChartData} title="Distribuição de Pessoal" width={350} height={350} />
-              </article>
-            )}
-          </div>
-
-          <div className="charts-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '20px', marginBottom: '40px' }}>
-            {/* Workforce by Base Bar */}
-            {workforceChartData.length > 0 && (
-              <article className="surface-card panel-card">
-                <BarChart data={workforceChartData} title="Colaboradores por Base" width={400} height={300} />
-              </article>
-            )}
-
-            {/* Alerts Distribution */}
-            {alertsChartData.some((d) => d.value > 0) && (
-              <article className="surface-card panel-card">
-                <BarChart
-                  data={alertsChartData}
-                  title="Distribuição de Alertas"
-                  width={400}
-                  height={300}
-                />
-              </article>
-            )}
-          </div>
-
-          {/* Summary Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginBottom: '40px' }}>
-            <article className="surface-card panel-card" style={{ textAlign: 'center' }}>
-              <small style={{ color: '#556371' }}>Total de Colaboradores</small>
-              <strong style={{ fontSize: '28px', color: '#10b981', display: 'block' }}>
-                {baseStatsFiltered.reduce((s, b) => s + (b.ativos || 0) + (b.faltas || 0) + (b.ferias || 0) + (b.afastados || 0), 0)}
-              </strong>
-            </article>
-
-            <article className="surface-card panel-card" style={{ textAlign: 'center' }}>
-              <small style={{ color: '#556371' }}>Alertas Críticos</small>
-              <strong style={{ fontSize: '28px', color: (alertsSnapshot.summary?.critical || 0) > 0 ? '#ef4444' : '#10b981', display: 'block' }}>
-                {alertsSnapshot.summary?.critical || 0}
-              </strong>
-            </article>
-
-            <article className="surface-card panel-card" style={{ textAlign: 'center' }}>
-              <small style={{ color: '#556371' }}>Estoque Baixo</small>
-              <strong style={{ fontSize: '28px', color: '#f59e0b', display: 'block' }}>
-                {estoqueAlertas.length}
-              </strong>
-            </article>
-
-            <article className="surface-card panel-card" style={{ textAlign: 'center' }}>
-              <small style={{ color: '#556371' }}>Pedidos Pendentes</small>
-              <strong style={{ fontSize: '28px', color: '#8b5cf6', display: 'block' }}>
-                {pedidosPendentes}
-              </strong>
-            </article>
-          </div>
-        </>
-      ) : null}
-
-      {/* ===== TAB: ANDAMENTO POR FILIAL ===== */}
-      {activeTab === 'andamento' ? (
-        <>
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 12, marginBottom: 20, flexWrap: 'wrap' }}>
-            <label className="field filter-field" style={{ minWidth: 180, marginBottom: 0 }}>
-              <span>Mês de referência</span>
-              <input type="month" value={andamentoMes} onChange={(e) => setAndamentoMes(e.target.value || MES_ATUAL)} />
-            </label>
-            {andamentoLoading && <div className="profile-chip">Carregando andamento...</div>}
-          </div>
-
-          {andamentoError && <div className="alert-error">{andamentoError}</div>}
-
-          {!andamentoLoading && andamento && (andamento.filiais?.length ?? 0) === 0 && (
-            <div className="empty-state">Nenhuma filial liberada com dados neste mês.</div>
-          )}
-
-          {andamento && (andamento.filiais?.length ?? 0) > 0 && (
+          {/* Resumo executivo */}
+          {!showGeneralSkeleton && (
             <>
-              <div className="stats-grid" style={{ marginBottom: 24 }}>
-                <article className="surface-card panel-card" style={{ textAlign: 'center' }}>
-                  <small style={{ color: '#556371' }}>Receita total (faturamento + a receber)</small>
-                  <strong style={{ fontSize: 24, color: '#10b981', display: 'block' }}>{formatBRL(andamento.totais?.receita_total)}</strong>
-                </article>
-                <article className="surface-card panel-card" style={{ textAlign: 'center' }}>
-                  <small style={{ color: '#556371' }}>Saída (pedidos finalizados)</small>
-                  <strong style={{ fontSize: 24, color: '#ef4444', display: 'block' }}>{formatBRL(andamento.totais?.saida_total)}</strong>
-                </article>
-                <article className="surface-card panel-card" style={{ textAlign: 'center' }}>
-                  <small style={{ color: '#556371' }}>Saldo</small>
-                  <strong style={{ fontSize: 24, color: (andamento.totais?.saldo || 0) >= 0 ? '#10b981' : '#ef4444', display: 'block' }}>{formatBRL(andamento.totais?.saldo)}</strong>
-                </article>
-                <article className="surface-card panel-card" style={{ textAlign: 'center' }}>
-                  <small style={{ color: '#556371' }}>Margem hora extra (cobrado − real)</small>
-                  <strong style={{ fontSize: 24, color: (andamento.totais?.he_margem || 0) >= 0 ? '#10b981' : '#ef4444', display: 'block' }}>{formatBRL(andamento.totais?.he_margem)}</strong>
-                </article>
+              <div className="dsh-section-head"><Ico name="chart" /><h2>Resumo executivo</h2></div>
+              <div className="dsh-exec">
+                {execTiles.map((t) => (
+                  <div className={`dsh-tile tone-${t.tone}`} key={t.label}>
+                    <div className="dsh-tile-icon"><Ico name={t.icon} /></div>
+                    <div>
+                      <span className="dsh-tile-value">{t.value}</span>
+                      <span className="dsh-tile-label">{t.label}</span>
+                    </div>
+                  </div>
+                ))}
               </div>
+            </>
+          )}
 
-              <div className="workforce-summary-grid dashboard-base-grid">
-                {andamento.filiais.map((f) => (
-                  <article className="surface-card workforce-summary-card" key={`andamento-${f.filial_id}`}>
-                    <div className="section-title">
-                      <span className="eyebrow">Andamento · {andamento.mes}</span>
-                      <h2>{f.filial_nome}</h2>
-                    </div>
-
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 12 }}>
-                      <div className="workforce-kpi">
-                        <span>Faturamento pago</span>
-                        <strong style={{ color: '#10b981' }}>{formatBRL(f.faturamento_pago)}</strong>
-                      </div>
-                      <div className="workforce-kpi">
-                        <span>Faturamento pendente</span>
-                        <strong style={{ color: '#d97706' }}>{formatBRL(f.faturamento_pendente)}</strong>
-                      </div>
-                      <div className="workforce-kpi">
-                        <span>A receber faturado</span>
-                        <strong>{formatBRL(f.contas_receber_faturado)}</strong>
-                      </div>
-                      <div className="workforce-kpi">
-                        <span>A receber em aberto</span>
-                        <strong style={{ color: '#d97706' }}>{formatBRL(f.contas_receber_aberto)}</strong>
-                      </div>
-                      <div className="workforce-kpi">
-                        <span>Pedidos finalizados</span>
-                        <strong style={{ color: '#ef4444' }}>{formatBRL(f.pedidos_finalizados_valor)}</strong>
-                      </div>
-                      <div className="workforce-kpi">
-                        <span>Qtd. pedidos</span>
-                        <strong>{f.pedidos_finalizados_qtd}</strong>
-                      </div>
-                    </div>
-
-                    <div className="section-title" style={{ marginTop: 4 }}>
-                      <span className="eyebrow">Hora extra</span>
-                    </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
-                      <div className="workforce-kpi">
-                        <span>Calculado (cobrado)</span>
-                        <strong>{formatBRL(f.he_calculado)}</strong>
-                      </div>
-                      <div className="workforce-kpi">
-                        <span>Real (custo)</span>
-                        <strong>{formatBRL(f.he_real)}</strong>
-                      </div>
-                      <div className="workforce-kpi">
-                        <span>Margem</span>
-                        <strong style={{ color: (f.he_margem || 0) >= 0 ? '#10b981' : '#ef4444' }}>{formatBRL(f.he_margem)}</strong>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #e5e7eb', paddingTop: 10 }}>
+          {/* Bases / força de trabalho */}
+          {showGeneralSkeleton ? (
+            <div className="dsh-bases">
+              {Array.from({ length: 2 }).map((_, i) => <div className="dsh-skel" style={{ height: 150 }} key={`b-${i}`} />)}
+            </div>
+          ) : baseStatsFiltered.length > 0 && (
+            <>
+              <div className="dsh-section-head">
+                <Ico name="people" /><h2>Força de trabalho por base</h2>
+                <span className="dsh-section-count">{baseStatsFiltered.length} base(s) · {totalColaboradores} pessoas</span>
+              </div>
+              <div className="dsh-bases">
+                {baseStatsFiltered.map((base) => (
+                  <article className="dsh-base-card" key={`base-${base.filial_id}`}>
+                    <div className="dsh-base-title">
+                      <div className="dsh-base-ic"><Ico name="building" /></div>
                       <div>
-                        <small style={{ color: '#556371', display: 'block' }}>Saldo do mês</small>
-                        <strong style={{ fontSize: 18, color: (f.saldo || 0) >= 0 ? '#10b981' : '#ef4444' }}>{formatBRL(f.saldo)}</strong>
-                      </div>
-                      <div style={{ textAlign: 'right' }}>
-                        <small style={{ color: '#556371', display: 'block' }}>Receita · Saída</small>
-                        <strong style={{ fontSize: 14 }}>{formatBRL(f.receita_total)} · {formatBRL(f.saida_total)}</strong>
+                        <small>Base do gestor</small>
+                        <h3>{base.filial_nome}</h3>
                       </div>
                     </div>
+                    <div className="dsh-base-kpis">
+                      <div className="dsh-mini ativos"><strong>{base.ativos || 0}</strong><span>Ativos</span></div>
+                      <div className="dsh-mini faltas"><strong>{base.faltas || 0}</strong><span>Faltas</span></div>
+                      <div className="dsh-mini ferias"><strong>{base.ferias || 0}</strong><span>Férias</span></div>
+                      <div className="dsh-mini afastados"><strong>{base.afastados || 0}</strong><span>Afastados</span></div>
+                    </div>
+                    <DistBar {...base} />
                   </article>
                 ))}
               </div>
             </>
           )}
-        </>
-      ) : null}
 
-      {/* ===== TAB: CARREGAMENTO ===== */}
-      {activeTab === 'carregamento' ? (
-        <>
-          {!loadingSummary.database_ready ? (
-            <div className="alert-error">A migration de carregamento ainda não foi executada no banco.</div>
-          ) : (
-            <>
-              <div className="stats-grid">
-                {(loadingSummary.cards || []).map((item) => (
-                  <StatCard item={item} key={item.label} />
-                ))}
+          {/* Painéis */}
+          <div className="dsh-panels">
+            {/* Alertas automáticos — largura maior */}
+            <article className="dsh-panel dsh-col-7">
+              <div className="dsh-panel-head">
+                <div className="dsh-panel-ic"><Ico name="alert" /></div>
+                <div>
+                  <span className="dsh-eyebrow">Motor de alertas</span>
+                  <h3>Notificações automáticas</h3>
+                </div>
+                {alertsSnapshot.last_run_at && (
+                  <span className="dsh-panel-head-right" style={{ fontSize: 10, color: 'var(--muted)' }}>
+                    {new Date(alertsSnapshot.last_run_at).toLocaleString('pt-BR')}
+                  </span>
+                )}
               </div>
 
-              <article className="surface-card panel-card">
-                <div className="section-title">
-                  <span className="eyebrow">Carregamento do dia</span>
-                  <h2>Maiores impactos operacionais</h2>
+              {alertsSnapshot.last_error && <div className="alert-error">Falha no motor de alertas: {alertsSnapshot.last_error}</div>}
+
+              <div className="dsh-alert-summary">
+                <span className="dsh-alert-pill"><span className="dsh-dot" /> Total {alertsSnapshot.summary?.total || 0}</span>
+                <span className="dsh-alert-pill crit"><span className="dsh-dot" /> Críticos {alertsSnapshot.summary?.critical || 0}</span>
+                <span className="dsh-alert-pill warn"><span className="dsh-dot" /> Atenção {alertsSnapshot.summary?.warning || 0}</span>
+                <span className="dsh-alert-pill info"><span className="dsh-dot" /> Info {alertsSnapshot.summary?.info || 0}</span>
+              </div>
+
+              {alertsSnapshot.items?.length ? (
+                <div className="dsh-feed">
+                  {alertsSnapshot.items.slice(0, 8).map((item) => {
+                    const sev = item.severity === 'critical' ? 'crit' : item.severity === 'warning' ? 'warn' : 'info'
+                    return (
+                      <div className={`dsh-feed-item ${sev}`} key={`${item.type}-${item.reference_id}`}>
+                        <div className="dsh-feed-body">
+                          <span className="dsh-feed-title">{item.title}</span>
+                          {item.message && <span className="dsh-feed-msg">{item.message}</span>}
+                          <div className="dsh-feed-meta">
+                            {item.status && <span>{item.status}</span>}
+                            {item.date_limit && <span>Prazo: {item.date_limit}</span>}
+                          </div>
+                        </div>
+                        <span className="dsh-feed-sev">{formatSeverityLabel(item.severity)}</span>
+                      </div>
+                    )
+                  })}
                 </div>
-                {loadingSummary.highlights?.length ? (
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Placa</th>
-                          <th>Base</th>
-                          <th>Rota</th>
-                          <th>Status</th>
-                          <th>Tempo parado</th>
-                          <th>Ocorrências</th>
-                        </tr>
-                      </thead>
+              ) : (
+                <div className="dsh-empty"><strong>Tudo sob controle</strong>Sem alertas ativos no momento.</div>
+              )}
+            </article>
+
+            {/* Coluna direita: pedidos + estoque */}
+            <div className="dsh-col-5" style={{ display: 'grid', gap: 12, gridTemplateColumns: '1fr', alignContent: 'start' }}>
+              {hasScopePermission(profile, 'menu.pedidos_compra') && (
+                <article className="dsh-panel">
+                  <div className="dsh-panel-head">
+                    <div className="dsh-panel-ic"><Ico name="cart" /></div>
+                    <div>
+                      <span className="dsh-eyebrow">Compras</span>
+                      <h3>Pedidos pendentes</h3>
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                    <strong style={{ fontSize: 40, fontWeight: 700, color: pedidosPendentes > 0 ? 'var(--warning)' : 'var(--success)', lineHeight: 1 }}>
+                      {pedidosPendentes}
+                    </strong>
+                    <span style={{ fontSize: 12, color: 'var(--muted)' }}>aguardando aprovação</span>
+                  </div>
+                </article>
+              )}
+
+              {estoqueAlertas.length > 0 && hasScopePermission(profile, 'menu.estoque') && (
+                <article className="dsh-panel">
+                  <div className="dsh-panel-head">
+                    <div className="dsh-panel-ic"><Ico name="box" /></div>
+                    <div>
+                      <span className="dsh-eyebrow">Estoque</span>
+                      <h3>Estoque baixo</h3>
+                    </div>
+                    <span className="dsh-panel-head-right" style={{ fontSize: 11, color: 'var(--muted)' }}>{estoqueAlertas.length} item(ns)</span>
+                  </div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table className="dsh-table">
+                      <thead><tr><th>Item</th><th style={{ textAlign: 'right' }}>Atual</th><th style={{ textAlign: 'right' }}>Mínimo</th></tr></thead>
                       <tbody>
-                        {loadingSummary.highlights.map((item) => (
-                          <tr key={`loading-highlight-${item.id}`}>
-                            <td><strong>{item.placa}</strong></td>
-                            <td>{item.filial_nome}</td>
-                            <td>{item.rota_nome}</td>
-                            <td>{item.status}</td>
-                            <td>{formatMinutes(item.tempo_parado_minutos)}</td>
-                            <td>{item.ocorrencias_count}</td>
+                        {estoqueAlertas.slice(0, 6).map((item) => (
+                          <tr key={item.id}>
+                            <td><strong>{item.nome}</strong></td>
+                            <td style={{ textAlign: 'right' }} className="dsh-num-danger">{Number(item.estoque_atual || 0).toFixed(2)}</td>
+                            <td style={{ textAlign: 'right' }}>{Number(item.estoque_minimo || 0).toFixed(2)}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
                   </div>
+                </article>
+              )}
+            </div>
+
+            {/* Próximos feriados */}
+            {feriadosProximos.length > 0 && hasScopePermission(profile, 'menu.feriados') && (
+              <article className="dsh-panel dsh-col-6">
+                <div className="dsh-panel-head">
+                  <div className="dsh-panel-ic"><Ico name="calendar" /></div>
+                  <div>
+                    <span className="dsh-eyebrow">Calendário</span>
+                    <h3>Próximos feriados</h3>
+                  </div>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table className="dsh-table">
+                    <thead><tr><th>Data</th><th>Feriado</th><th>Tipo</th><th>Expediente</th></tr></thead>
+                    <tbody>
+                      {feriadosProximos.map((f) => (
+                        <tr key={f.id}>
+                          <td style={{ whiteSpace: 'nowrap' }}>{f.data ? f.data.split('-').reverse().join('/') : '—'}</td>
+                          <td><strong>{f.nome}</strong></td>
+                          <td>{TIPO_FERIADO_LABELS[f.tipo] || f.tipo}</td>
+                          <td>{f.tem_expediente ? (f.horario_expediente || 'Sim') : '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </article>
+            )}
+
+            {/* Alertas documentais RH */}
+            {rhDocumentsSummary.available && (
+              <article className="dsh-panel dsh-col-6">
+                <div className="dsh-panel-head">
+                  <div className="dsh-panel-ic"><Ico name="doc" /></div>
+                  <div>
+                    <span className="dsh-eyebrow">RH</span>
+                    <h3>Alertas documentais</h3>
+                  </div>
+                </div>
+                {!rhDocumentsSummary.database_ready ? (
+                  <div className="alert-error">A migration de documentos RH ainda não foi executada no banco.</div>
                 ) : (
-                  <div className="empty-state">Nenhuma jornada registrada para hoje.</div>
+                  <div className="dsh-exec" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))' }}>
+                    {(rhDocumentsSummary.cards || []).map((item) => (
+                      <div className={`dsh-tile tone-${item.tone || 'neutral'}`} key={item.label}>
+                        <div>
+                          <span className="dsh-tile-value">{item.value}</span>
+                          <span className="dsh-tile-label">{item.label}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </article>
-            </>
-          )}
+            )}
+
+            {/* Usuário autenticado */}
+            <article className="dsh-panel dsh-col-6">
+              <div className="dsh-user-head">
+                <div className="dsh-avatar">{iniciais(profile?.nome_completo)}</div>
+                <div>
+                  <h3>{profile?.nome_completo || 'Operador'}</h3>
+                  <small>{profile?.cargo || 'Sem cargo definido'}</small>
+                </div>
+              </div>
+              <div className="dsh-meta">
+                <div><span>CPF</span><strong>{profile?.cpf || '—'}</strong></div>
+                <div><span>Acesso</span><strong>{profile?.tipo_acesso || '—'}</strong></div>
+                <div><span>Status</span><strong style={{ color: profile?.ativo ? 'var(--success)' : 'var(--danger)' }}>{profile?.ativo ? 'Ativo' : 'Inativo'}</strong></div>
+                <div><span>Bases visíveis</span><strong>{allowedBasesText}</strong></div>
+              </div>
+            </article>
+
+            {/* Permissões */}
+            <article className="dsh-panel dsh-col-6">
+              <div className="dsh-panel-head">
+                <div className="dsh-panel-ic"><Ico name="shield" /></div>
+                <div>
+                  <span className="dsh-eyebrow">Permissões</span>
+                  <h3>Regras principais</h3>
+                </div>
+              </div>
+              <div className="dsh-perm-row">
+                {[
+                  { l: 'Web', on: profile?.permissions?.app },
+                  { l: 'Desktop', on: profile?.permissions?.desktop },
+                  { l: 'Editar', on: profile?.permissions?.edit },
+                  { l: 'Excluir', on: profile?.permissions?.delete },
+                  { l: 'Aprovar HE', on: profile?.permissions?.approve_he },
+                ].map((p) => (
+                  <span className={`dsh-perm${p.on ? ' on' : ''}`} key={p.l}>
+                    <span className="dsh-perm-dot" />{p.l}
+                  </span>
+                ))}
+              </div>
+            </article>
+          </div>
         </>
-      ) : null}
+      )}
+
+      {/* ══════════════ TAB: ANDAMENTO POR FILIAL (BI) ══════════════ */}
+      {activeTab === 'andamento' && <AndamentoBI />}
+
+      {/* ══════════════ TAB: CARREGAMENTO ══════════════ */}
+      {activeTab === 'carregamento' && (() => {
+        const carregView = carregSummary || loadingSummary
+        return (
+          <>
+            {/* Filtro por período (data) */}
+            <div className="bi-filters">
+              <label className="field filter-field" style={{ marginBottom: 0, minWidth: 160 }}>
+                <span>Data</span>
+                <input type="date" value={carregData} onChange={(e) => setCarregData(e.target.value || new Date().toISOString().slice(0, 10))} />
+              </label>
+              {carregLoading && <span className="dsh-live"><span className="dsh-live-dot" /> carregando…</span>}
+            </div>
+
+            {!carregView.database_ready ? (
+              <div className="alert-error">A migration de carregamento ainda não foi executada no banco.</div>
+            ) : (
+              <>
+                <div className="dsh-kpis">
+                  {(carregView.cards || []).map((item) => (
+                    <article className={`dsh-kpi${item.tone ? ` tone-${item.tone}` : ''}`} key={item.label}>
+                      <div className="dsh-kpi-icon"><Ico name="truck" /></div>
+                      <div className="dsh-kpi-body">
+                        <span className="dsh-kpi-value">{item.value}</span>
+                        <span className="dsh-kpi-label">{item.label}</span>
+                        {item.hint && <span className="dsh-kpi-hint">{item.hint}</span>}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+
+                <article className="dsh-panel">
+                  <div className="dsh-panel-head">
+                    <div className="dsh-panel-ic"><Ico name="truck" /></div>
+                    <div>
+                      <span className="dsh-eyebrow">Carregamento · {carregData.split('-').reverse().join('/')}</span>
+                      <h3>Maiores impactos operacionais</h3>
+                    </div>
+                  </div>
+                  {carregView.highlights?.length ? (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="dsh-table">
+                        <thead>
+                          <tr><th>Placa</th><th>Base</th><th>Rota</th><th>Status</th><th>Tempo parado</th><th>Ocorrências</th></tr>
+                        </thead>
+                        <tbody>
+                          {carregView.highlights.map((item) => (
+                            <tr key={`loading-highlight-${item.id}`}>
+                              <td><strong>{item.placa}</strong></td>
+                              <td>{item.filial_nome}</td>
+                              <td>{item.rota_nome}</td>
+                              <td>{item.status}</td>
+                              <td>{formatMinutes(item.tempo_parado_minutos)}</td>
+                              <td>{item.ocorrencias_count}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="dsh-empty"><strong>Sem jornadas</strong>Nenhuma jornada registrada nesta data.</div>
+                  )}
+                </article>
+              </>
+            )}
+          </>
+        )
+      })()}
     </section>
   )
+}
+
+function readDashboardCache(cacheKey) {
+  if (!cacheKey) {
+    return null
+  }
+
+  try {
+    const raw = window.sessionStorage.getItem(cacheKey)
+    return raw ? JSON.parse(raw) : null
+  } catch {
+    return null
+  }
+}
+
+function writeDashboardCache(cacheKey, payload) {
+  if (!cacheKey) {
+    return
+  }
+
+  try {
+    window.sessionStorage.setItem(cacheKey, JSON.stringify(payload))
+  } catch {
+    // Ignore dashboard cache persistence failures.
+  }
 }

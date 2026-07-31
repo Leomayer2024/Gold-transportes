@@ -57,8 +57,9 @@ const CAMPOS_MODAL = {
   ],
   abastecimentos: [
     { k: 'numero_solicitacao', l: 'N° Solicitação' },
+    { k: 'colaborador_nome',   l: 'Colaborador' },
+    { k: 'placa',              l: 'Placa' },
     { k: 'os_motorista_id',    l: 'Vinc. à OS (ID)' },
-    { k: 'veiculo_id',         l: 'ID Veículo' },
     { k: 'tipo_combustivel',   l: 'Combustível' },
     { k: 'litros',             l: 'Litros' },
     { k: 'valor_litro',        l: 'Valor/litro', moeda: true },
@@ -161,6 +162,7 @@ function buildDetalhesResumido(s) {
   if (fi.valor_estimado != null) out.push(`Valor: ${fmtMoeda(fi.valor_estimado)}`)
   if (fi.fornecedor)             out.push(`Fornecedor: ${fi.fornecedor}`)
   if (fi.colaborador_nome)       out.push(fi.colaborador_nome)
+  if (s.resource_type === 'abastecimentos' && fi.placa) out.push(`Placa ${fi.placa}`)
   if (fi.litros != null)         out.push(`${fi.litros} L ${fi.tipo_combustivel || ''}`)
   if (s.resource_type === 'abastecimentos' && fi.valor_litro != null && fi.litros != null)
     out.push(`Total: ${fmtMoeda(fi.valor_litro * fi.litros)}`)

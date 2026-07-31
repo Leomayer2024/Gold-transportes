@@ -26,6 +26,12 @@ const CATEGORIA_OPTS = [
   { value: 'outro', label: 'Outro' },
 ]
 
+const NATUREZA_OPTS = [
+  { value: 'nenhum', label: 'Sem vínculo financeiro (padrão)' },
+  { value: 'pagar', label: 'Gera Conta a Pagar (frete/despesa)' },
+  { value: 'receber', label: 'Gera Conta a Receber (Gold cobra o frete)' },
+]
+
 const TIPO_LABELS    = Object.fromEntries(TIPO_OPTS.map((o) => [o.value, o.label]))
 const STATUS_LABELS  = Object.fromEntries(STATUS_OPTS.map((o) => [o.value, o.label]))
 const CATEG_LABELS   = Object.fromEntries(CATEGORIA_OPTS.map((o) => [o.value, o.label]))
@@ -65,7 +71,7 @@ function resolvedStatus(nota) {
 function emptyForm() {
   return {
     filial_id: '',
-    tipo: 'nota_fiscal',
+    tipo: 'cte',
     numero_documento: '',
     chave_acesso: '',
     emitente: '',
@@ -77,6 +83,7 @@ function emptyForm() {
     descricao: '',
     status: 'pendente',
     categoria: 'outro',
+    natureza: 'nenhum',
     observacoes: '',
     ativo: true,
   }
@@ -101,7 +108,7 @@ function ResumoCard({ label, valor, contagem, tone, icon }) {
 
 // ─── Modal de cadastro / edição ───────────────────────────────────────────────
 
-function NotaModal({ nota, filiais, onSave, onClose }) {
+function NotaModal({ nota, filiais, clientes, fornecedores, onSave, onClose }) {
   const [form, setForm] = useState(() =>
     nota
       ? { ...nota, filial_id: nota.filial_id != null ? String(nota.filial_id) : '' }
@@ -133,6 +140,7 @@ function NotaModal({ nota, filiais, onSave, onClose }) {
         descricao: form.descricao.trim() || null,
         status: form.status || 'pendente',
         categoria: form.categoria || 'outro',
+        natureza: form.natureza || 'nenhum',
         observacoes: form.observacoes.trim() || null,
         ativo: true,
       }
@@ -190,14 +198,51 @@ function NotaModal({ nota, filiais, onSave, onClose }) {
               </select>
             </label>
 
+            <label className="field" style={{ gridColumn: '1 / -1' }}>
+              <span>Financeiro — vínculo automático</span>
+              <select value={form.natureza || 'pagar'} onChange={(e) => setField('natureza', e.target.value)}>
+                {NATUREZA_OPTS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+              <small style={{ color: '#64748b', fontSize: 11 }}>
+                Padrão: sem vínculo. Se escolher <b>Pagar</b> ou <b>Receber</b>, ao salvar o sistema cria/atualiza a conta correspondente e mantém o link.
+                {(form.conta_pagar_id || form.conta_receber_id) && ' ✓ Conta já gerada para este documento.'}
+              </small>
+            </label>
+
             {/* Linha 3 */}
             <label className="field">
               <span>Emitente (fornecedor)</span>
+              {fornecedores.length > 0 && (
+                <select
+                  value={fornecedores.find((f) => f.nome === form.emitente)?.id || ''}
+                  onChange={(e) => {
+                    const f = fornecedores.find((x) => String(x.id) === e.target.value)
+                    if (f) setField('emitente', f.nome)
+                  }}
+                  style={{ marginBottom: 4 }}
+                >
+                  <option value="">— Selecionar fornecedor —</option>
+                  {fornecedores.map((f) => <option key={f.id} value={f.id}>{f.nome}{f.cnpj ? ` · ${f.cnpj}` : ''}</option>)}
+                </select>
+              )}
               <input type="text" placeholder="Quem emitiu a nota" value={form.emitente} onChange={(e) => setField('emitente', e.target.value)} />
             </label>
 
             <label className="field">
-              <span>Destinatário / tomador</span>
+              <span>Destinatário / cliente</span>
+              {clientes.length > 0 && (
+                <select
+                  value={clientes.find((c) => c.nome === form.destinatario)?.id || ''}
+                  onChange={(e) => {
+                    const c = clientes.find((x) => String(x.id) === e.target.value)
+                    if (c) setField('destinatario', c.nome)
+                  }}
+                  style={{ marginBottom: 4 }}
+                >
+                  <option value="">— Selecionar cliente —</option>
+                  {clientes.map((c) => <option key={c.id} value={c.id}>{c.nome}{c.cnpj ? ` · ${c.cnpj}` : ''}</option>)}
+                </select>
+              )}
               <input type="text" placeholder="Quem recebe / paga" value={form.destinatario} onChange={(e) => setField('destinatario', e.target.value)} />
             </label>
 
@@ -319,6 +364,8 @@ function AcoesRapidas({ nota, onRefresh }) {
 
 export default function NotasCTEPage() {
   const [filiais, setFiliais] = useState([])
+  const [clientes, setClientes] = useState([])
+  const [fornecedores, setFornecedores] = useState([])
   const [notas, setNotas] = useState([])
   const [resumo, setResumo] = useState(null)
   const [loading, setLoading] = useState(false)
@@ -330,9 +377,13 @@ export default function NotasCTEPage() {
   const [fTipo, setFTipo] = useState('')
   const [fBusca, setFBusca] = useState('')
   const [fVencMes, setFVencMes] = useState('')   // 'YYYY-MM'
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState('')
 
   useEffect(() => {
     api.list('filiais', { ativo: true }).then(setFiliais).catch(() => {})
+    api.list('clientes', { ativo: true }).then((r) => setClientes(Array.isArray(r) ? r : (r?.data || []))).catch(() => setClientes([]))
+    api.list('fornecedores', { ativo: true }).then((r) => setFornecedores(Array.isArray(r) ? r : (r?.data || []))).catch(() => setFornecedores([]))
   }, [])
 
   useEffect(() => {
@@ -355,7 +406,7 @@ export default function NotasCTEPage() {
     ])
       .then(([rows, res]) => {
         if (!active) return
-        setNotas(rows || [])
+        setNotas(Array.isArray(rows) ? rows : (rows?.data || []))
         setResumo(res)
       })
       .catch(() => { if (active) setNotas([]) })
@@ -383,6 +434,22 @@ export default function NotasCTEPage() {
     setRefreshKey((k) => k + 1)
   }
 
+  async function handleSincronizar() {
+    setSyncing(true)
+    setSyncMsg('')
+    try {
+      const r = await api.sincronizarNotasCteFinanceiro()
+      setSyncMsg(r?.geradas > 0
+        ? `✓ ${r.geradas} conta(s) a pagar/receber sincronizada(s) a partir das notas.`
+        : '✓ Tudo em dia — nenhuma conta nova a gerar.')
+      setRefreshKey((k) => k + 1)
+    } catch {
+      setSyncMsg('Falha ao sincronizar o financeiro.')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   const mesAtual = todayIso().slice(0, 7)
 
   return (
@@ -390,11 +457,18 @@ export default function NotasCTEPage() {
       <div className="page-header">
         <div>
           <span className="eyebrow">Financeiro</span>
-          <h1>Notas Fiscais &amp; CT-e</h1>
-          <p>Lance documentos fiscais, faturas e boletos pendentes de pagamento. Acompanhe vencimentos e quite direto pela lista.</p>
+          <h1>CT-e</h1>
+          <p>Lance e controle os CT-e (e demais documentos fiscais). Acompanhe vencimentos e quite direto pela lista. O vínculo com Contas a Pagar/Receber é opcional — escolha por lançamento.</p>
         </div>
-        <button className="button-primary" type="button" onClick={() => setModalNota({})}>+ Nova nota / CT-e</button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="button-secondary" type="button" onClick={handleSincronizar} disabled={syncing} title="Gera/atualiza as contas a pagar e receber a partir destas notas">
+            {syncing ? 'Sincronizando...' : '⟳ Sincronizar financeiro'}
+          </button>
+          <button className="button-primary" type="button" onClick={() => setModalNota({})}>+ Nova nota / CT-e</button>
+        </div>
       </div>
+
+      {syncMsg && <div className="alert-success" style={{ marginBottom: 12 }}>{syncMsg}</div>}
 
       {/* Cards de resumo */}
       {resumo && (
@@ -487,13 +561,13 @@ export default function NotasCTEPage() {
                   <th>Tipo</th>
                   <th>Número</th>
                   <th>Emitente</th>
+                  <th>Destinatário</th>
                   <th>Descrição</th>
                   <th>Emissão</th>
                   <th>Vencimento</th>
                   <th>Valor</th>
                   <th>Status</th>
-                  <th>Ações</th>
-                  <th style={{ width: 60 }}>Editar</th>
+                  <th style={{ width: 180 }}>Ações</th>
                 </tr>
               </thead>
               <tbody>
@@ -507,6 +581,7 @@ export default function NotasCTEPage() {
                       </td>
                       <td style={{ fontFamily: 'monospace', fontSize: 12 }}>{nota.numero_documento || <span style={{ color: '#bbb' }}>—</span>}</td>
                       <td>{nota.emitente || <span style={{ color: '#bbb' }}>—</span>}</td>
+                      <td>{nota.destinatario || <span style={{ color: '#bbb' }}>—</span>}</td>
                       <td>
                         <span title={nota.descricao}>{nota.descricao ? (nota.descricao.length > 40 ? nota.descricao.slice(0, 40) + '…' : nota.descricao) : <span style={{ color: '#bbb' }}>—</span>}</span>
                         {nota.categoria && nota.categoria !== 'outro' && (
@@ -529,17 +604,17 @@ export default function NotasCTEPage() {
                         </span>
                       </td>
                       <td>
-                        <AcoesRapidas nota={nota} onRefresh={() => setRefreshKey((k) => k + 1)} />
-                      </td>
-                      <td>
-                        <button
-                          className="button-secondary"
-                          style={{ fontSize: 12, padding: '3px 10px' }}
-                          type="button"
-                          onClick={() => setModalNota(nota)}
-                        >
-                          Editar
-                        </button>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', alignItems: 'center' }}>
+                          <AcoesRapidas nota={nota} onRefresh={() => setRefreshKey((k) => k + 1)} />
+                          <button
+                            className="button-secondary"
+                            style={{ fontSize: 11, padding: '2px 8px' }}
+                            type="button"
+                            onClick={() => setModalNota(nota)}
+                          >
+                            Editar
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )
@@ -547,13 +622,13 @@ export default function NotasCTEPage() {
               </tbody>
               <tfoot>
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'right', fontWeight: 600, padding: '8px 10px', borderTop: '2px solid #e5e7eb' }}>
+                  <td colSpan={7} style={{ textAlign: 'right', fontWeight: 600, padding: '8px 10px', borderTop: '2px solid #e5e7eb' }}>
                     Total exibido:
                   </td>
                   <td style={{ fontWeight: 700, padding: '8px 10px', borderTop: '2px solid #e5e7eb' }}>
                     {formatCurrency(filtradas.reduce((acc, n) => acc + Number(n.valor_total || 0), 0))}
                   </td>
-                  <td colSpan={3} style={{ borderTop: '2px solid #e5e7eb' }} />
+                  <td colSpan={2} style={{ borderTop: '2px solid #e5e7eb' }} />
                 </tr>
               </tfoot>
             </table>
@@ -565,6 +640,8 @@ export default function NotasCTEPage() {
         <NotaModal
           nota={modalNota?.id ? modalNota : null}
           filiais={filiais}
+          clientes={clientes}
+          fornecedores={fornecedores}
           onSave={handleSaved}
           onClose={() => setModalNota(null)}
         />

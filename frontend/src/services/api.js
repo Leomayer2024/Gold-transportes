@@ -19,20 +19,55 @@ function buildHeaders(extraHeaders = {}) {
   }
 }
 
+const TRANSIENT_STATUS = new Set([502, 503, 504])
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+
+function makeApiError(message, { status = 0, transient = false } = {}) {
+  return Object.assign(new Error(message || 'Falha na comunicação com a API.'), { status, transient })
+}
+
+// Só reenvia automaticamente métodos idempotentes. Reenviar POST/PUT/DELETE
+// poderia duplicar gravações — nesses casos falha na 1ª e o chamador decide.
+function isIdempotent(method) {
+  const m = (method || 'GET').toUpperCase()
+  return m === 'GET' || m === 'HEAD'
+}
+
 async function request(path, options = {}) {
-  const response = await fetch(`${API_URL}${path}`, {
-    ...options,
-    headers: buildHeaders(options.headers),
-  })
+  const maxAttempts = isIdempotent(options.method) ? 3 : 1
+  let lastErr
 
-  const isJson = response.headers.get('content-type')?.includes('application/json')
-  const payload = isJson ? await response.json() : null
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    let response
+    try {
+      response = await fetch(`${API_URL}${path}`, {
+        ...options,
+        headers: buildHeaders(options.headers),
+      })
+    } catch {
+      // Falha de rede (offline, conexão abortada) — transitório.
+      lastErr = makeApiError('Conexão instável. Tente novamente.', { status: 0, transient: true })
+      if (attempt < maxAttempts) { await sleep(300 * attempt); continue }
+      throw lastErr
+    }
 
-  if (!response.ok) {
-    throw new Error(payload?.error || 'Falha na comunicação com a API.')
+    const isJson = response.headers.get('content-type')?.includes('application/json')
+    const payload = isJson ? await response.json() : null
+
+    if (!response.ok) {
+      const transient = payload?.transient === true || TRANSIENT_STATUS.has(response.status)
+      const err = makeApiError(payload?.error || 'Falha na comunicação com a API.', {
+        status: response.status,
+        transient,
+      })
+      if (transient && attempt < maxAttempts) { lastErr = err; await sleep(300 * attempt); continue }
+      throw err
+    }
+
+    return payload
   }
 
-  return payload
+  throw lastErr
 }
 
 export const api = {
@@ -43,6 +78,11 @@ export const api = {
     return request(`/dashboard${suffix}`)
   },
   getLoadingConfig: () => request('/carregamento/config'),
+  getLoadingMetrics: (params = {}) => {
+    const search = new URLSearchParams(params)
+    const suffix = search.toString() ? `?${search.toString()}` : ''
+    return request(`/carregamento/metricas${suffix}`)
+  },
   getLoadingJourneys: (params = {}) => {
     const search = new URLSearchParams(params)
     const suffix = search.toString() ? `?${search.toString()}` : ''
@@ -266,6 +306,8 @@ export const api = {
     ).toString()
     return request(`/dashboard/andamento-filiais${qs ? `?${qs}` : ''}`)
   },
+  getDashboardCarregamento: (data) =>
+    request(`/dashboard/carregamento${data ? `?data=${encodeURIComponent(data)}` : ''}`),
 
   // ─── Pedidos de Compra ────────────────────────────────────────────────────
   preAlocarNumeroPedido: () => request('/pedidos_compra/pre-alocar-numero'),
@@ -358,7 +400,12 @@ export const api = {
   },
   rtmEditarRegistro: (id, payload) => request(`/horas-extras-rtm/registro/${id}`, { method: 'PUT', body: JSON.stringify(payload) }),
   rtmRecalcularTipoHora: (mes, filial_nome) => request('/horas-extras-rtm/recalcular-tipo-hora', { method: 'POST', body: JSON.stringify({ mes, filial_nome }) }),
-  rtmMetricas: () => request('/horas-extras-rtm/metricas'),
+  rtmReprocessarFinanceiro: (mes) => request('/horas-extras-rtm/reprocessar-financeiro', { method: 'POST', body: JSON.stringify({ mes }) }),
+  rtmMetricas: (params = {}) => {
+    const clean = Object.fromEntries(Object.entries(params).filter(([, v]) => v !== undefined && v !== null && v !== ''))
+    const qs = new URLSearchParams(clean).toString()
+    return request(`/horas-extras-rtm/metricas${qs ? `?${qs}` : ''}`)
+  },
   rtmTipoHoraMapa: (mes) => request(`/horas-extras-rtm/tipo-hora-mapa?mes=${mes}`),
   // Contas a Receber
   contasReceber: (params) => {
@@ -393,6 +440,21 @@ export const api = {
   conciliarLancamento: (id, payload) => request(`/banco/lancamentos/${id}/conciliar`, { method: 'POST', body: JSON.stringify(payload) }),
   bancoSaldos: () => request('/banco/saldos'),
 
+  // ─── Motor financeiro (painel + interligação + parcelas) ───────────────────
+  financeiroPainel: (mes) => request(`/financeiro/painel${mes ? `?mes=${mes}` : ''}`),
+  sincronizarNotasCteFinanceiro: () => request('/notas-cte/sincronizar-financeiro', { method: 'POST' }),
+  sincronizarNfseFinanceiro: () => request('/notas-fiscais-servico/sincronizar-financeiro', { method: 'POST' }),
+  listarParcelas: (params = {}) => {
+    const search = new URLSearchParams(
+      Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))
+    )
+    const suffix = search.toString() ? `?${search.toString()}` : ''
+    return request(`/financeiro/parcelas${suffix}`)
+  },
+  gerarParcelas: (payload) => request('/financeiro/parcelas/gerar', { method: 'POST', body: JSON.stringify(payload) }),
+  editarParcela: (id, payload) => request(`/financeiro/parcelas/${id}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deletarParcela: (id) => request(`/financeiro/parcelas/${id}`, { method: 'DELETE' }),
+
   // ─── Ponto (batidas faciais) ───────────────────────────────────────────────
   pontoBatidas: (params = {}) => {
     const search = new URLSearchParams(
@@ -421,4 +483,22 @@ export const api = {
     const suffix = search.toString() ? `?${search.toString()}` : ''
     return `${API_URL}/ponto/export-xlsx${suffix}`
   },
+
+  // ─── iopoint (ponto eletrônico externo — proxy do backend) ─────────────────
+  iopointStatus: () => request('/iopoint/status'),
+  iopointEspelho: (params = {}) => request(`/iopoint/espelho${qs(params)}`),
+  iopointEspelhoExportUrl: (params = {}) => `${API_URL}/iopoint/espelho/export-xlsx${qs(params)}`,
+  iopointAlertas: (params = {}) => request(`/iopoint/alertas${qs(params)}`),
+  iopointConciliacaoPresenca: (params = {}) => request(`/iopoint/conciliacao-presenca${qs(params)}`),
+  iopointConciliacaoHE: (params = {}) => request(`/iopoint/conciliacao-he${qs(params)}`),
+  iopointHorasExtrasApuradas: (params = {}) => request(`/iopoint/horas-extras-apuradas${qs(params)}`),
+  iopointForaCerca: (params = {}) => request(`/iopoint/fora-cerca${qs(params)}`),
+  iopointDashboard: (params = {}) => request(`/iopoint/dashboard${qs(params)}`),
+}
+
+function qs(params = {}) {
+  const search = new URLSearchParams(
+    Object.fromEntries(Object.entries(params).filter(([, v]) => v != null && v !== ''))
+  )
+  return search.toString() ? `?${search.toString()}` : ''
 }

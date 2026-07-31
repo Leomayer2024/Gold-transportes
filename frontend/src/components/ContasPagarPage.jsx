@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { api } from '../services/api'
+import ParcelasModal from './ParcelasModal'
 
-const TIPOS = ['HORAS EXTRAS', 'FORNECEDOR', 'COLABORADOR', 'HOSPEDAGEM', 'KM', 'PEDAGIO', 'DESPESAS EXTRAS', 'COMPRAS', 'OUTRO']
+const TIPOS = ['HORAS EXTRAS', 'FORNECEDOR', 'COLABORADOR', 'HOSPEDAGEM', 'KM', 'PEDAGIO', 'COMBUSTÍVEL', 'DESPESAS EXTRAS', 'COMPRAS', 'OUTRO']
 const STATUS_OPTS = ['PENDENTE', 'PAGO', 'VENCIDO', 'FINALIZADO', 'CANCELADO']
 const TIPO_DOCS = ['NF', 'BOLETO', 'RECIBO', 'PIX', 'TED', 'OUTRO']
 
@@ -92,10 +93,11 @@ export default function ContasPagarPage() {
   const [saving, setSaving] = useState(false)
 
   const [showNew, setShowNew] = useState(false)
-  const [newForm, setNewForm] = useState({ tipo_despesa: 'HORAS EXTRAS', status: 'PENDENTE', valor: '' })
+  const [newForm, setNewForm] = useState({ tipo_despesa: 'FORNECEDOR', status: 'PENDENTE', valor: '' })
   const [creatingNew, setCreatingNew] = useState(false)
 
   const [ctxMenu, setCtxMenu] = useState(null)
+  const [parcelaConta, setParcelaConta] = useState(null)
   const [showMetricas, setShowMetricas] = useState(true)
   const [prioridades, setPrioridades] = useState(() => {
     try { return JSON.parse(localStorage.getItem('cp-prioridade') || '{}') } catch { return {} }
@@ -143,20 +145,28 @@ export default function ContasPagarPage() {
     return [...s].sort().reverse()
   }, [rows])
 
+  // filial_id é a chave confiável; nome é fallback p/ linhas antigas sem id.
+  // Nomes no banco variam ("SAPUCAIA DO SUL/RS" vs cidade "SAPUCAIA DO SUL",
+  // acentos) — comparação exata escondia linhas. Normaliza e corta o /UF.
+  const normFilial = (s) => (s || '').split('/')[0].toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+  const matchFilial = useCallback((r) => {
+    if (!filterFilial) return true
+    if (r.filial_id != null) return String(r.filial_id) === String(filterFilial)
+    const sel = normFilial(filiais.find((f) => String(f.id) === String(filterFilial))?.cidade)
+    const nome = normFilial(r.filial_nome)
+    return Boolean(sel && nome && (nome === sel || nome.includes(sel) || sel.includes(nome)))
+  }, [filterFilial, filiais])
+
   const filtradas = useMemo(() => rows.filter((r) => {
-    if (filterFilial) {
-      const selectedCidade = filiais.find((f) => String(f.id) === String(filterFilial))?.cidade
-      if (r.filial_nome && selectedCidade) {
-        if (r.filial_nome.trim().toUpperCase() !== selectedCidade.trim().toUpperCase()) return false
-      } else if (r.filial_id != null) {
-        if (String(r.filial_id) !== String(filterFilial)) return false
-      }
-    }
+    if (!matchFilial(r)) return false
     if (filterMes && r.competencia?.slice(0, 7) !== filterMes) return false
     if (filterTipo && r.tipo_despesa !== filterTipo) return false
     if (filterStatus && r.status !== filterStatus) return false
     return true
-  }), [rows, filiais, filterFilial, filterMes, filterTipo, filterStatus])
+  }), [rows, matchFilial, filterMes, filterTipo, filterStatus])
+
+  // Tipos do dropdown = lista fixa + o que existe de fato nos dados
+  const tiposDisponiveis = useMemo(() => [...new Set([...TIPOS, ...rows.map((r) => r.tipo_despesa).filter(Boolean)])], [rows])
 
   const metricas = useMemo(() => {
     const valor = filtradas.reduce((s, r) => s + (r.valor || 0), 0)
@@ -242,7 +252,7 @@ export default function ContasPagarPage() {
     try {
       await api.criarContaPagar(newForm)
       setShowNew(false)
-      setNewForm({ tipo_despesa: 'HORAS EXTRAS', status: 'PENDENTE', valor: '' })
+      setNewForm({ tipo_despesa: 'FORNECEDOR', status: 'PENDENTE', valor: '' })
       carregar()
     } catch (e) { alert(e.message || 'Erro ao criar.') }
     finally { setCreatingNew(false) }
@@ -256,7 +266,7 @@ export default function ContasPagarPage() {
         <div>
           <span className="eyebrow">Financeiro</span>
           <h1>Contas a Pagar</h1>
-          <p>Obrigações Gold — horas extras fora do contrato, fornecedores, hospedagens e outras despesas operacionais</p>
+          <p>Despesas da Gold — fornecedores, notas fiscais, hospedagens, pedágios e outras despesas operacionais</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button type="button" style={metBtnSt} onClick={() => setShowMetricas((m) => !m)}>
@@ -330,7 +340,7 @@ export default function ContasPagarPage() {
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8, padding: '8px 12px', background: '#f5f7fa', border: '1px solid #dce1e8', borderRadius: 6 }}>
         <div><label className="field-label">Filial</label><select className="input" value={filterFilial} onChange={(e) => setFilterFilial(e.target.value)} style={{ minWidth: 130 }}>{filiais.length !== 1 && <option value="">Todas</option>}{filiais.map((f) => <option key={f.id} value={f.id}>{f.cidade}</option>)}</select></div>
         <div><label className="field-label">Mês</label><select className="input" value={filterMes} onChange={(e) => setFilterMes(e.target.value)} style={{ minWidth: 110 }}><option value="">Todos</option>{mesesDisponiveis.map((m) => <option key={m} value={m}>{m}</option>)}</select></div>
-        <div><label className="field-label">Tipo</label><select className="input" value={filterTipo} onChange={(e) => setFilterTipo(e.target.value)} style={{ minWidth: 140 }}><option value="">Todos</option>{TIPOS.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
+        <div><label className="field-label">Tipo</label><select className="input" value={filterTipo} onChange={(e) => setFilterTipo(e.target.value)} style={{ minWidth: 140 }}><option value="">Todos</option>{tiposDisponiveis.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
         <div><label className="field-label">Status</label><select className="input" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ minWidth: 120 }}><option value="">Todos</option>{STATUS_OPTS.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
         {(filterFilial || filterMes || filterTipo || filterStatus) && (
           <div style={{ display: 'flex', alignItems: 'flex-end' }}><button className="button-secondary" type="button" style={{ fontSize: 11 }} onClick={() => { setFilterFilial(''); setFilterMes(''); setFilterTipo(''); setFilterStatus('') }}>Limpar</button></div>
@@ -342,7 +352,7 @@ export default function ContasPagarPage() {
       {loading ? (
         <div style={{ textAlign: 'center', color: 'var(--muted)', padding: 40 }}>Carregando…</div>
       ) : filtradas.length === 0 ? (
-        <div className="surface-card empty-state"><strong>Nenhuma despesa</strong><p>As horas extras fora do contrato aparecem aqui automaticamente ao fechar o RTM.</p></div>
+        <div className="surface-card empty-state"><strong>Nenhuma despesa</strong><p>Clique em “+ Nova despesa” para lançar uma conta a pagar. As horas extras fora do contrato também entram aqui ao fechar o RTM.</p></div>
       ) : (
         <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 340px)', border: '1px solid #c8d2dc', borderRadius: 6 }}>
           <table style={{ borderCollapse: 'collapse', fontSize: 11, width: 'max-content', minWidth: '100%' }}>
@@ -465,6 +475,7 @@ export default function ContasPagarPage() {
           </div>
           {[
             { label: '✎ Editar', action: () => abrirEdicao(ctxMenu.row), color: '#1e3a5f' },
+            { label: '◧ Parcelar', action: () => { setParcelaConta(ctxMenu.row); setCtxMenu(null) }, color: '#0f766e' },
             { label: prioridades[ctxMenu.row.id] ? '★ Remover prioridade' : '☆ Marcar como prioritário', action: () => togglePrioridade(ctxMenu.row.id), color: '#d97706' },
             null,
             ctxMenu.row.status !== 'PAGO' ? { label: '✔ Marcar como Pago', action: () => quickStatus(ctxMenu.row.id, 'PAGO'), color: '#059669' } : null,
@@ -633,6 +644,15 @@ export default function ContasPagarPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {parcelaConta && (
+        <ParcelasModal
+          conta={parcelaConta}
+          contaTipo="pagar"
+          onClose={() => setParcelaConta(null)}
+          onChanged={carregar}
+        />
       )}
     </section>
   )

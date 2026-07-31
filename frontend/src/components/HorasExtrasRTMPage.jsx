@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { api } from '../services/api'
+import { useAuth } from '../context/AuthContext'
 
 // ─── Utilitários ──────────────────────────────────────────────────────────────
 function parseHoras(str) {
@@ -24,8 +25,14 @@ function numericStr(val) {
 function calcValorHora(col) {
   const salary = parseFloat(col?.salario_base_mensal) || 0
   const weeklyH = parseFloat(col?.carga_horaria_semanal) || 44
-  const monthlyH = weeklyH * (52 / 12)
-  return salary === 0 || monthlyH === 0 ? 0 : salary / monthlyH
+  // Divisor CLT do mensalista: 220h para 44h semanais (weekly × 5). NÃO usar o
+  // nº de dias do mês nem 52/12 — o divisor contratual é fixo por jornada.
+  const divisor = weeklyH * 5
+  // Súmula 132 do TST: o adicional de periculosidade (30%) INTEGRA a base de
+  // cálculo da hora extra. Base = salário + periculosidade.
+  const pctPeric = parseFloat(col?.percentual_periculosidade) || 0
+  const base = salary + salary * (pctPeric / 100)
+  return salary === 0 || divisor === 0 ? 0 : base / divisor
 }
 function normName(s) {
   return (s || '').toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
@@ -230,6 +237,9 @@ function AbaHistorico() {
   const [deleting, setDeleting] = useState(false)
   const [recalcMsg, setRecalcMsg] = useState(null)
   const [recalculating, setRecalculating] = useState(false)
+  const [reprocessando, setReprocessando] = useState(false)
+  const { profile } = useAuth()
+  const isSuperAdmin = Boolean(profile?.is_super_admin)
   const [editando, setEditando] = useState(null)
   const [editForm, setEditForm] = useState({})
   const [saving, setSaving] = useState(false)
@@ -259,20 +269,11 @@ function AbaHistorico() {
   }, [colaboradores])
 
   function valorRealRegistro(r) {
-    const col = r.colaborador_id != null ? colabPorId.get(String(r.colaborador_id)) : null
-    if (!col) return null
-    const salary = parseFloat(col.salario_base_mensal) || 0
-    const weeklyH = parseFloat(col.carga_horaria_semanal) || 44
-    const monthlyH = weeklyH * (52 / 12)
-    if (!salary || !monthlyH) return null
-    const pctPeric = parseFloat(col.percentual_periculosidade) || 0
-    const pctNoturno = parseFloat(col.percentual_adicional_clt) || 0
-    const valorPeric = salary * (pctPeric / 100)
-    const baseHora = (salary + valorPeric) / monthlyH
-    const fatorNoturno = 1 + pctNoturno / 100
-    const hora50 = baseHora * 1.5 * fatorNoturno
-    const hora100 = baseHora * 2.0 * fatorNoturno
-    return (r.horas_normais || 0) * hora50 + (r.horas_extra_100 || 0) * hora100
+    // Fonte da verdade: o backend já devolve `valor_real` com a MESMA fórmula
+    // do Contas a Pagar (adicional noturno só na fração noturna 22h–5h do turno).
+    // Assim a coluna sempre bate com o que é lançado no financeiro.
+    if (r.valor_real != null) return Number(r.valor_real)
+    return null
   }
 
   function toggleHidden(id) {
@@ -309,6 +310,19 @@ function AbaHistorico() {
     } catch (e) {
       setRecalcMsg({ type: 'error', text: e.message || 'Erro ao recalcular.' })
     } finally { setRecalculating(false) }
+  }
+
+  // Admin: re-executa o cálculo financeiro do mês (custo real -> Contas a Pagar).
+  // Idempotente no backend (apaga auto-gerado do mês e recria).
+  async function reprocessarFinanceiro() {
+    if (!selMes) return
+    setReprocessando(true); setRecalcMsg(null)
+    try {
+      const res = await api.rtmReprocessarFinanceiro(selMes)
+      setRecalcMsg({ type: 'success', text: `Financeiro reprocessado: ${res.contas_pagar ?? 0} lançamento(s) em Contas a Pagar (${res.mes}).` })
+    } catch (e) {
+      setRecalcMsg({ type: 'error', text: e.message || 'Erro ao reprocessar financeiro.' })
+    } finally { setReprocessando(false) }
   }
 
   async function deletarFilialMes({ mes, filial }) {
@@ -502,6 +516,13 @@ function AbaHistorico() {
                       style={{ fontSize: 11 }} title="Recalcula NO CONTRATO / FORA CONTRATO com base nos contratos atuais">
                       {recalculating ? 'Recalculando…' : 'Recalcular tipo'}
                     </button>
+                    {isSuperAdmin && (
+                      <button className="button-secondary" onClick={reprocessarFinanceiro} disabled={reprocessando} type="button"
+                        style={{ fontSize: 11, color: '#7c3aed', borderColor: '#7c3aed' }}
+                        title="Admin: reprocessa o custo real do mês e regenera os lançamentos em Contas a Pagar (idempotente)">
+                        {reprocessando ? 'Reprocessando…' : '↻ Reenviar financeiro'}
+                      </button>
+                    )}
                     <button className="button-secondary" onClick={() => setMostrarValorReal((v) => !v)} type="button"
                       style={{ fontSize: 11, color: mostrarValorReal ? '#7c3aed' : undefined, borderColor: mostrarValorReal ? '#7c3aed' : undefined }}
                       title="Valor real calculado conforme salário base + periculosidade + adicional noturno do cadastro do colaborador">
@@ -718,10 +739,23 @@ function AbaGraficos() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [rankTab, setRankTab] = useState('h100')
+  const [filiais, setFiliais] = useState([])
+  const [fFilial, setFFilial] = useState('')
+  const [fMes, setFMes] = useState('')
 
-  useEffect(() => { api.rtmMetricas().then(setData).catch(() => {}).finally(() => setLoading(false)) }, [])
+  useEffect(() => {
+    api.list('filiais', { ativo: true }).then((r) => setFiliais(r.items || r || [])).catch(() => {})
+  }, [])
 
-  if (loading) return <div className="surface-card" style={{ textAlign: 'center', color: 'var(--muted)', padding: 48 }}>Carregando gráficos…</div>
+  useEffect(() => {
+    setLoading(true)
+    api.rtmMetricas({ filial_id: fFilial || undefined, mes: fMes || undefined })
+      .then(setData)
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [fFilial, fMes])
+
+  if (loading && !data) return <div className="surface-card" style={{ textAlign: 'center', color: 'var(--muted)', padding: 48 }}>Carregando gráficos…</div>
 
   const evolucao = data?.evolucao_mensal || []
   const mesesN = evolucao.length
@@ -742,6 +776,8 @@ function AbaGraficos() {
   const pct50 = totGeral > 0 ? (totT50 / totGeral) * 100 : 0
   const anoAtual = String(new Date().getFullYear())
   const resumoAnoAtual = (data.resumo_por_ano || []).find((r) => r.ano === anoAtual)
+  const resumoFinanceiro = data?.resumo_financeiro || null
+  const margemColor = resumoFinanceiro?.margem_total >= 0 ? 'var(--success)' : '#dc2626'
   const evoluacaoChartData = evolucao.map((m) => ({ ...m, label: formatMesLabel(m.mes) }))
 
   const rankTabs = [
@@ -752,6 +788,37 @@ function AbaGraficos() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', padding: '10px 14px', background: '#f5f7fa', border: '1px solid #dce1e8', borderRadius: 8 }}>
+        <div>
+          <label className="field-label">Filial</label>
+          <select className="input" value={fFilial} onChange={(e) => setFFilial(e.target.value)} style={{ minWidth: 160 }}>
+            <option value="">Todas</option>
+            {filiais.map((f) => <option key={f.id} value={f.id}>{f.cidade}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="field-label">Mês</label>
+          <input type="month" className="input" value={fMes} onChange={(e) => setFMes(e.target.value)} />
+        </div>
+        {(fFilial || fMes) && (
+          <button className="button-secondary" type="button" style={{ fontSize: 11 }} onClick={() => { setFFilial(''); setFMes('') }}>Limpar</button>
+        )}
+        {loading && <span style={{ fontSize: 11, color: 'var(--muted)' }}>atualizando…</span>}
+      </div>
+
+      {/* ── Resumo financeiro ── */}
+      {resumoFinanceiro && (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <KpiCard label="Cobrado do cliente (receita)" value={formatBRL(resumoFinanceiro.cobrado_total)} sub="valor faturado da White" color="var(--success)" accent="var(--success-bg)" icon="💸" />
+          <KpiCard label="Custo real (folha)" value={formatBRL(resumoFinanceiro.custo_total)} sub="o que pagamos aos colaboradores" color="#dc2626" accent="#fef2f2" icon="📉" />
+          <KpiCard label="Margem (lucro)" value={formatBRL(resumoFinanceiro.margem_total)} sub={`${resumoFinanceiro.margem_pct}% do cobrado`} color={margemColor} accent={margemColor === 'var(--success)' ? 'var(--success-bg)' : '#fef2f2'} icon="📈" />
+        </div>
+      )}
+      {resumoFinanceiro?.sem_cadastro > 0 && (
+        <div style={{ fontSize: 11, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '6px 12px' }}>
+          ⚠ {resumoFinanceiro.sem_cadastro} de {resumoFinanceiro.registros} registros sem colaborador/salário cadastrado — o custo real deles não entra na conta.
+        </div>
+      )}
 
       {/* ── KPIs Linha 1 ── */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
@@ -865,11 +932,260 @@ function AbaGraficos() {
 }
 
 // ─── Página principal com abas ─────────────────────────────────────────────────
+// ─── Aba Ponto automático (HE apurada direto do iopoint) ──────────────────────
+function isoTodayRTM(offset = 0) { const d = new Date(); d.setDate(d.getDate() + offset); return d.toISOString().slice(0, 10) }
+function firstOfMonthRTM() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01` }
+
+// Valor da hora extra a partir do cadastro: (salário + periculosidade) ÷ horas
+// mensais, ×1,5 (50%) ou ×2 (100%), com adicional noturno se cadastrado.
+function valorHoraColab(col) {
+  if (!col) return null
+  const salary = parseFloat(col.salario_base_mensal) || 0
+  const weeklyH = parseFloat(col.carga_horaria_semanal) || 44
+  const monthlyH = weeklyH * 5 // divisor CLT 220h (44h/sem), não 52/12
+  if (!salary || !monthlyH) return null
+  const baseHora = (salary + salary * ((parseFloat(col.percentual_periculosidade) || 0) / 100)) / monthlyH
+  const fator = 1 + (parseFloat(col.percentual_adicional_clt) || 0) / 100
+  return { vh50: baseHora * 1.5 * fator, vh100: baseHora * 2 * fator }
+}
+
+function AbaPontoAutomatico() {
+  const [inicio, setInicio] = useState(firstOfMonthRTM())
+  const [fim, setFim] = useState(isoTodayRTM())
+  const [comp, setComp] = useState(isoTodayRTM().slice(0, 7))
+  const [corteDia, setCorteDia] = useState(25)
+  const [filiais, setFiliais] = useState([])
+  const [filialId, setFilialId] = useState('')
+  const [colaboradores, setColaboradores] = useState([])
+  const [itens, setItens] = useState([])
+  const [overrides, setOverrides] = useState({})
+  const [fb50, setFb50] = useState('')
+  const [fb100, setFb100] = useState('')
+  const [sel, setSel] = useState(() => new Set())
+  const [loading, setLoading] = useState(false)
+  const [erro, setErro] = useState('')
+  const [iopEnabled, setIopEnabled] = useState(null)
+  const [mesRef, setMesRef] = useState(isoTodayRTM().slice(0, 7))
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState(null)
+  const [filterNome, setFilterNome] = useState('')
+
+  useEffect(() => {
+    api.iopointStatus().then((s) => setIopEnabled(s?.enabled ?? false)).catch(() => setIopEnabled(false))
+    api.filiaisDisponiveis().then((r) => setFiliais(Array.isArray(r) ? r : [])).catch(() => {})
+    api.list('colaboradores', { limit: 2000 }).then((res) => setColaboradores(res.items || res || [])).catch(() => {})
+  }, [])
+
+  async function carregar() {
+    setLoading(true); setErro('')
+    try {
+      const r = await api.iopointHorasExtrasApuradas({ inicio, fim, filial_id: filialId || undefined })
+      setItens(r.itens || [])
+      setOverrides({})
+      setMesRef(fim.slice(0, 7))
+    } catch (e) { setErro(e.message || 'Falha ao carregar do iopoint.') }
+    finally { setLoading(false) }
+  }
+
+  // Fechamento por competência: (corte+1) do mês anterior até (corte) da competência.
+  // Ex.: corte 25, competência jul/26 → 26/06 a 25/07. Mantém ≤31 dias (limite da API).
+  function aplicarCompetencia() {
+    const [y, m] = comp.split('-').map(Number)
+    if (!y || !m) return
+    const dia = Math.min(28, Math.max(1, parseInt(corteDia, 10) || 25))
+    const isoD = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const ini = new Date(y, m - 2, dia + 1) // dia seguinte ao corte, mês anterior
+    const end = new Date(y, m - 1, dia)     // corte da competência
+    setInicio(isoD(ini))
+    setFim(isoD(end))
+    setMesRef(comp)
+  }
+
+  // Auto-carrega assim que o status do iopoint resolve.
+  useEffect(() => { if (iopEnabled) carregar() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [iopEnabled])
+
+  const colabPorId = useMemo(() => {
+    const m = new Map()
+    for (const c of colaboradores) if (c?.id != null) m.set(String(c.id), c)
+    return m
+  }, [colaboradores])
+
+  const rows = useMemo(() => itens.map((it) => {
+    const col = it.colaborador_id != null ? colabPorId.get(String(it.colaborador_id)) : null
+    const vh = valorHoraColab(col)
+    const ov = overrides[it.colaborador_id] || {}
+    const vh50Raw = ov.vh50 != null ? ov.vh50 : numericStr(vh?.vh50 || 0)
+    const vh100Raw = ov.vh100 != null ? ov.vh100 : numericStr(vh?.vh100 || 0)
+    const vh50 = parseBRL(vh50Raw)
+    const vh100 = parseBRL(vh100Raw)
+    const total50 = (it.horas_normais || 0) * vh50
+    const total100 = (it.horas_extra_100 || 0) * vh100
+    return { ...it, vh50, vh100, vh50Raw, vh100Raw, total50, total100, total: total50 + total100, temSalario: !!vh }
+  }), [itens, colabPorId, overrides])
+
+  const visiveis = useMemo(() => rows.filter((r) => !filterNome || (r.colaborador || '').toLowerCase().includes(filterNome.toLowerCase())), [rows, filterNome])
+
+  const totH50 = visiveis.reduce((s, r) => s + (r.horas_normais || 0), 0)
+  const totH100 = visiveis.reduce((s, r) => s + (r.horas_extra_100 || 0), 0)
+  const totMon50 = visiveis.reduce((s, r) => s + r.total50, 0)
+  const totMon100 = visiveis.reduce((s, r) => s + r.total100, 0)
+  const totGeral = totMon50 + totMon100
+  const selIds = useMemo(() => visiveis.map((r) => r.colaborador_id).filter((x) => x != null), [visiveis])
+  const allSel = selIds.length > 0 && selIds.every((id) => sel.has(id))
+  const selCount = selIds.filter((id) => sel.has(id)).length
+
+  function setOverride(cid, field, value) {
+    setOverrides((o) => ({ ...o, [cid]: { ...o[cid], [field]: value } }))
+  }
+  function toggleSel(id) { setSel((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n }) }
+  function toggleAllSel(v) { setSel(v ? new Set(selIds) : new Set()) }
+  function aplicarTaxaSel() {
+    setOverrides((o) => {
+      const n = { ...o }
+      for (const id of selIds) if (sel.has(id)) n[id] = { ...n[id], vh50: fb50, vh100: fb100 }
+      return n
+    })
+  }
+
+  async function salvar() {
+    const regs = visiveis.filter((r) => r.vinculado && r.colaborador_id != null && (r.horas_normais > 0 || r.horas_extra_100 > 0)).map((r) => ({
+      funcionario_nome: r.colaborador,
+      colaborador_id: r.colaborador_id,
+      filial_nome: r.filial_label || '',
+      estado: '',
+      horas_normais: r.horas_normais,
+      horas_extra_100: r.horas_extra_100,
+      valor_hora_50: r.vh50,
+      valor_hora_100: r.vh100,
+      total_50: r.total50,
+      total_100: r.total100,
+      total_geral: r.total,
+    }))
+    if (!regs.length) { setSaveMsg({ type: 'error', text: 'Nenhum colaborador vinculado com horas para salvar.' }); return }
+    if (!mesRef) { setSaveMsg({ type: 'error', text: 'Informe o mês de referência.' }); return }
+    setSaving(true); setSaveMsg(null)
+    try {
+      await api.rtmSalvar(mesRef + '-01', regs)
+      setSaveMsg({ type: 'success', text: `${regs.length} colaborador(es) salvos em ${formatMes(mesRef)}.` })
+    } catch (e) { setSaveMsg({ type: 'error', text: e.message || 'Erro ao salvar.' }) }
+    finally { setSaving(false) }
+  }
+
+  if (iopEnabled === false) {
+    return <div className="surface-card empty-state"><strong>Integração iopoint não configurada</strong><p>Defina o token do iopoint no servidor para usar a conciliação automática.</p></div>
+  }
+
+  return (
+    <div>
+      {/* Filtros */}
+      <div className="surface-card" style={{ marginBottom: 12, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', padding: '6px 10px', background: '#f0f7ff', border: '1px solid #bfdbfe', borderRadius: 'var(--radius)' }}>
+          <div><label className="field-label">Competência</label><input type="month" className="input" value={comp} onChange={(e) => setComp(e.target.value)} style={{ width: 140 }} /></div>
+          <div><label className="field-label">Dia corte</label><input type="number" className="input" value={corteDia} min={1} max={28} onChange={(e) => setCorteDia(e.target.value)} style={{ width: 66 }} /></div>
+          <button className="button-secondary" type="button" onClick={aplicarCompetencia} title="Ex.: corte 25, comp. jul → 26/06 a 25/07">Aplicar corte</button>
+        </div>
+        <div><label className="field-label">Início</label><input type="date" className="input" value={inicio} onChange={(e) => setInicio(e.target.value)} /></div>
+        <div><label className="field-label">Fim</label><input type="date" className="input" value={fim} onChange={(e) => setFim(e.target.value)} /></div>
+        <div>
+          <label className="field-label">Filial</label>
+          <select className="input" value={filialId} onChange={(e) => setFilialId(e.target.value)} style={{ minWidth: 150 }}>
+            <option value="">Todas</option>
+            {filiais.map((f) => <option key={f.id} value={f.id}>{f.cidade}{f.uf ? `/${f.uf}` : ''}</option>)}
+          </select>
+        </div>
+        <button className="button-primary" type="button" onClick={carregar} disabled={loading}>{loading ? 'Carregando…' : 'Apurar do iopoint'}</button>
+        <div style={{ flex: 1 }} />
+        <div><label className="field-label">Buscar</label><input className="input" value={filterNome} onChange={(e) => setFilterNome(e.target.value)} placeholder="Funcionário…" style={{ width: 180 }} /></div>
+      </div>
+
+      {erro && <div className="surface-card" style={{ padding: 12, marginBottom: 12, background: '#fef2f2', color: 'var(--danger)', fontWeight: 600 }}>{erro}</div>}
+
+      <p style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 10px' }}>
+        HE apurada automaticamente pelo ponto do iopoint. <strong>50%</strong> = horas extras de dia útil; <strong>100%</strong> = DSR/feriado. Valor da hora vem do cadastro (salário + periculosidade + noturno) e é editável.
+      </p>
+
+      {/* Taxa manual (sem contrato) — muda só os selecionados */}
+      <div className="surface-card" style={{ marginBottom: 12, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', background: '#f5f7fa' }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--muted)', textTransform: 'uppercase', width: '100%', margin: 0 }}>Taxa manual (sem contrato) — aplica só aos selecionados</div>
+        <div><label className="field-label">Valor Hora 50%</label><div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ fontSize: 11, color: 'var(--muted)' }}>R$</span><input className="input" value={fb50} onChange={(e) => setFb50(e.target.value)} placeholder="59,92" style={{ width: 100 }} /></div></div>
+        <div><label className="field-label">Valor Hora 100%</label><div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ fontSize: 11, color: 'var(--muted)' }}>R$</span><input className="input" value={fb100} onChange={(e) => setFb100(e.target.value)} placeholder="79,89" style={{ width: 100 }} /></div></div>
+        <button className="button-secondary" type="button" onClick={aplicarTaxaSel} disabled={selCount === 0} title={selCount === 0 ? 'Marque funcionários na tabela' : `Aplica aos ${selCount} selecionados`}>Aplicar aos selecionados ({selCount})</button>
+      </div>
+
+      {/* Tabela */}
+      <div className="surface-card" style={{ padding: 0, marginBottom: 12 }}>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="data-table" style={{ minWidth: 920 }}>
+            <thead>
+              <tr>
+                <th style={{ width: 34, textAlign: 'center' }}><input type="checkbox" checked={allSel} onChange={(e) => toggleAllSel(e.target.checked)} /></th>
+                <th>Funcionário</th><th>Filial</th>
+                <th style={{ textAlign: 'right' }}>H. 50%</th>
+                <th style={{ textAlign: 'right' }}>H. 100%</th>
+                <th style={{ textAlign: 'right', width: 120 }}>V.H 50%</th>
+                <th style={{ textAlign: 'right', width: 120 }}>V.H 100%</th>
+                <th style={{ textAlign: 'right' }}>Total 50%</th>
+                <th style={{ textAlign: 'right' }}>Total 100%</th>
+                <th style={{ textAlign: 'right' }}>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              {visiveis.length === 0 && <tr><td colSpan={10} style={{ textAlign: 'center', color: 'var(--muted)', padding: '20px 0', fontSize: 12 }}>{loading ? 'Carregando…' : 'Nenhuma hora extra apurada no período.'}</td></tr>}
+              {visiveis.map((r, i) => (
+                <tr key={r.colaborador_id ?? `x${i}`}>
+                  <td style={{ textAlign: 'center' }}><input type="checkbox" checked={r.colaborador_id != null && sel.has(r.colaborador_id)} disabled={r.colaborador_id == null} onChange={() => toggleSel(r.colaborador_id)} /></td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      <strong style={{ fontSize: 12 }}>{r.colaborador}</strong>
+                      {!r.vinculado && <span style={{ fontSize: 9, fontWeight: 700, color: '#b45309', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 99, padding: '1px 5px' }}>não vinc.</span>}
+                      {r.vinculado && !r.temSalario && <span style={{ fontSize: 9, fontWeight: 700, color: '#92400e', background: '#fff7ed', border: '1px solid #fed7aa', borderRadius: 99, padding: '1px 5px' }} title="Sem salário no cadastro">sem salário</span>}
+                    </div>
+                  </td>
+                  <td style={{ fontSize: 11 }}>{r.filial_label || '—'}</td>
+                  <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 12 }}>{formatHHMM(r.horas_normais)}</td>
+                  <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 12, color: r.horas_extra_100 > 0 ? 'var(--warning)' : '#ccc', fontWeight: r.horas_extra_100 > 0 ? 700 : undefined }}>{r.horas_extra_100 > 0 ? formatHHMM(r.horas_extra_100) : '—'}</td>
+                  <td style={{ textAlign: 'right' }}><input className="input" value={r.vh50Raw} onChange={(e) => setOverride(r.colaborador_id, 'vh50', e.target.value)} inputMode="decimal" style={{ width: 90, textAlign: 'right', fontSize: 12 }} /></td>
+                  <td style={{ textAlign: 'right' }}><input className="input" value={r.vh100Raw} onChange={(e) => setOverride(r.colaborador_id, 'vh100', e.target.value)} inputMode="decimal" style={{ width: 90, textAlign: 'right', fontSize: 12 }} /></td>
+                  <td style={{ textAlign: 'right', fontSize: 12 }}>{r.total50 > 0 ? formatBRL(r.total50) : '—'}</td>
+                  <td style={{ textAlign: 'right', fontSize: 12 }}>{r.total100 > 0 ? formatBRL(r.total100) : '—'}</td>
+                  <td style={{ textAlign: 'right' }}><strong style={{ color: 'var(--success)' }}>{r.total > 0 ? formatBRL(r.total) : '—'}</strong></td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr style={{ background: '#f0f4f8', fontWeight: 700 }}>
+                <td colSpan={3} style={{ fontSize: 12 }}>TOTAL — {visiveis.length} func.</td>
+                <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 12 }}>{formatHHMM(totH50)}</td>
+                <td style={{ textAlign: 'right', fontFamily: 'monospace', fontSize: 12, color: totH100 > 0 ? 'var(--warning)' : undefined }}>{formatHHMM(totH100)}</td>
+                <td /><td />
+                <td style={{ textAlign: 'right', color: 'var(--success)', fontSize: 13 }}>{formatBRL(totMon50)}</td>
+                <td style={{ textAlign: 'right', color: 'var(--success)', fontSize: 13 }}>{formatBRL(totMon100)}</td>
+                <td style={{ textAlign: 'right', color: 'var(--success)', fontSize: 14 }}>{formatBRL(totGeral)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+
+      {/* Salvar fechamento */}
+      <div className="surface-card" style={{ display: 'flex', gap: 14, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div>
+          <label className="field-label">Mês de referência</label>
+          <input type="month" className="input" value={mesRef} onChange={(e) => setMesRef(e.target.value)} style={{ width: 160 }} />
+        </div>
+        <button className="button-primary" type="button" onClick={salvar} disabled={saving}>{saving ? 'Salvando…' : 'Salvar fechamento'}</button>
+        {saveMsg && <span style={{ fontSize: 12, fontWeight: 600, color: saveMsg.type === 'success' ? 'var(--success)' : 'var(--danger)' }}>{saveMsg.text}</span>}
+      </div>
+    </div>
+  )
+}
+
 export default function HorasExtrasRTMPage() {
   const [abaAtiva, setAbaAtiva] = useState('calc')
 
   const abas = [
     { key: 'calc', label: 'Calculadora' },
+    { key: 'ponto_auto', label: 'Ponto automático' },
     { key: 'historico', label: 'Histórico' },
     { key: 'graficos', label: 'Gráficos' },
   ]
@@ -895,6 +1211,7 @@ export default function HorasExtrasRTMPage() {
       </div>
 
       {abaAtiva === 'calc' && <AbaCalculadora />}
+      {abaAtiva === 'ponto_auto' && <AbaPontoAutomatico />}
       {abaAtiva === 'historico' && <AbaHistorico />}
       {abaAtiva === 'graficos' && <AbaGraficos />}
     </section>
@@ -923,10 +1240,19 @@ function AbaCalculadora() {
   const [isMultiMes, setIsMultiMes] = useState(false)
   const [anoRef, setAnoRef] = useState(String(new Date().getFullYear()))
   const [mesTabAtiva, setMesTabAtiva] = useState(null)
+  const [mesesExistentes, setMesesExistentes] = useState(new Set())
+  const [confirmSave, setConfirmSave] = useState(null) // { tipo: 'single'|'multi', meses: ['YYYY-MM'] }
+
+  function carregarMesesExistentes() {
+    api.rtmMeses().then((r) => {
+      setMesesExistentes(new Set((r.data || []).map((m) => (m.mes_referencia || '').slice(0, 7)).filter(Boolean)))
+    }).catch(() => {})
+  }
 
   useEffect(() => {
     setLoadingColab(true)
     api.list('colaboradores', { limit: 2000 }).then((res) => setTodosColaboradores(res.items || res || [])).catch(() => {}).finally(() => setLoadingColab(false))
+    carregarMesesExistentes()
   }, [])
 
   async function doCalculate() {
@@ -978,7 +1304,12 @@ function AbaCalculadora() {
   function toggleAll(val) {
     setRows((prev) => prev.map((r) => (isMultiMes && mesTabAtiva ? r.mes_referencia === mesTabAtiva : true) ? { ...r, selected: val } : r))
   }
-  function applyFallbackToAll() { setRows((prev) => prev.map((r) => ({ ...r, vh50: fallback50, vh100: fallback100 }))) }
+  function applyFallbackToSelected() {
+    setRows((prev) => prev.map((r) => {
+      const noMes = isMultiMes && mesTabAtiva ? r.mes_referencia === mesTabAtiva : true
+      return (r.selected && noMes) ? { ...r, vh50: fallback50, vh100: fallback100 } : r
+    }))
+  }
 
   const enrichedRows = useMemo(() => rows.map((r) => {
     const vh50 = parseBRL(r.vh50), vh100 = parseBRL(r.vh100)
@@ -1063,20 +1394,39 @@ function AbaCalculadora() {
     }
   }
 
-  async function salvarFechamento() {
+  function salvarFechamento() {
     if (!filteredSelectedRows.length) { setSaveMsg({ type: 'error', text: 'Nenhum funcionário visível + selecionado para salvar.' }); return }
     if (!mesReferencia) { setSaveMsg({ type: 'error', text: 'Informe o mês de referência.' }); return }
+    // Mês já importado → pede confirmação antes de substituir.
+    if (mesesExistentes.has(mesReferencia)) { setConfirmSave({ tipo: 'single', meses: [mesReferencia] }); return }
+    executarSalvarFechamento()
+  }
+
+  async function executarSalvarFechamento() {
+    setConfirmSave(null)
     setSaving(true); setSaveMsg(null)
     try {
       const registros = filteredSelectedRows.map(buildRegistro)
       await api.rtmSalvar(mesReferencia + '-01', registros)
       setSaveMsg({ type: 'success', text: `${registros.length} funcionários salvos para ${mesReferencia}.` })
+      carregarMesesExistentes()
     } catch (e) {
       setSaveMsg({ type: 'error', text: e.message || 'Erro ao salvar.' })
     } finally { setSaving(false) }
   }
 
-  async function salvarTodosMeses() {
+  function salvarTodosMeses() {
+    const selecionados = enrichedRows.filter((r) => r.selected)
+    if (!selecionados.length) { setSaveMsg({ type: 'error', text: 'Nenhum funcionário selecionado.' }); return }
+    // Meses do lote que já existem → pede confirmação antes de substituir.
+    const mesesLote = [...new Set(selecionados.map((r) => r.mes_referencia).filter(Boolean))]
+    const jaExistem = mesesLote.filter((m) => mesesExistentes.has(m)).sort()
+    if (jaExistem.length) { setConfirmSave({ tipo: 'multi', meses: jaExistem }); return }
+    executarSalvarTodosMeses()
+  }
+
+  async function executarSalvarTodosMeses() {
+    setConfirmSave(null)
     const selecionados = enrichedRows.filter((r) => r.selected)
     if (!selecionados.length) { setSaveMsg({ type: 'error', text: 'Nenhum funcionário selecionado.' }); return }
     setSaving(true); setSaveMsg(null)
@@ -1095,6 +1445,7 @@ function AbaCalculadora() {
         totalSalvos += grupos[mes].length
       }
       setSaveMsg({ type: 'success', text: `${totalSalvos} funcionários salvos em ${mesesOrdenados.length} mes${mesesOrdenados.length !== 1 ? 'es' : ''}: ${mesesOrdenados.map(formatMes).join(', ')}.` })
+      carregarMesesExistentes()
     } catch (e) {
       setSaveMsg({ type: 'error', text: e.message || 'Erro ao salvar.' })
     } finally { setSaving(false) }
@@ -1117,7 +1468,7 @@ function AbaCalculadora() {
               <label className="field-label">Valor Hora 100%</label>
               <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ fontSize: 11, color: 'var(--muted)' }}>R$</span><input className="input" value={fallback100} onChange={(e) => setFallback100(e.target.value)} placeholder="79,89" style={{ width: 100 }} /></div>
             </div>
-            {rows.length > 0 && <div style={{ display: 'flex', alignItems: 'flex-end' }}><button className="button-secondary" type="button" onClick={applyFallbackToAll} style={{ fontSize: 11 }}>Aplicar a todos</button></div>}
+            {rows.length > 0 && <div style={{ display: 'flex', alignItems: 'flex-end' }}><button className="button-secondary" type="button" onClick={applyFallbackToSelected} disabled={selectedCount === 0} title={selectedCount === 0 ? 'Selecione linhas na tabela abaixo' : `Aplica aos ${selectedCount} selecionados`} style={{ fontSize: 11 }}>Aplicar aos selecionados ({selectedCount})</button></div>}
           </div>
         </div>
         <div>
@@ -1271,6 +1622,9 @@ function AbaCalculadora() {
               <div>
                 <label className="field-label">Mês de referência</label>
                 <input type="month" className="input" value={mesReferencia} onChange={(e) => setMesReferencia(e.target.value)} style={{ width: 160 }} />
+                {mesesExistentes.has(mesReferencia) && (
+                  <div style={{ fontSize: 10, fontWeight: 700, color: '#a04000', marginTop: 3 }}>Já importado — salvar substitui.</div>
+                )}
               </div>
             )}
             <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8 }}>
@@ -1355,6 +1709,29 @@ function AbaCalculadora() {
             </div>
           )}
         </>
+      )}
+
+      {/* Confirmação de substituição — mês já importado */}
+      {confirmSave && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
+          <div className="surface-card" style={{ maxWidth: 440, width: '100%', margin: 16 }}>
+            <h3 style={{ marginTop: 0 }}>Substituir fechamento existente?</h3>
+            <p style={{ margin: '0 0 8px' }}>
+              {confirmSave.meses.length === 1
+                ? <>O mês <strong>{formatMes(confirmSave.meses[0])}</strong> já foi importado.</>
+                : <>Estes meses já foram importados: <strong>{confirmSave.meses.map(formatMes).join(', ')}</strong>.</>}
+            </p>
+            <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--muted)' }}>
+              Os registros atuais desses meses serão <strong>substituídos</strong> pelos que estão na tela. Não cria duplicatas.
+            </p>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="button-secondary" onClick={() => setConfirmSave(null)} disabled={saving} type="button">Cancelar</button>
+              <button className="button-primary" onClick={() => confirmSave.tipo === 'multi' ? executarSalvarTodosMeses() : executarSalvarFechamento()} disabled={saving} type="button">
+                {saving ? 'Substituindo…' : 'Substituir'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

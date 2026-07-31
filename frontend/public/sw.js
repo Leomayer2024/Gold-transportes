@@ -4,7 +4,7 @@
 // /assets/*). Quando uma nova versão do app é publicada, o SW detecta na
 // próxima visita e pede pra recarregar.
 
-const CACHE_NAME = 'seg-cache-v1'
+const CACHE_NAME = 'seg-cache-v2'
 const APP_SHELL = ['/', '/icon.png', '/manifest.webmanifest']
 
 self.addEventListener('install', (event) => {

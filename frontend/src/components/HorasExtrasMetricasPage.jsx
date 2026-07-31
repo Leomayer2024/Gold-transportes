@@ -118,15 +118,24 @@ export default function HorasExtrasMetricasPage() {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('filiais')
+  const [filiais, setFiliais] = useState([])
+  const [fFilial, setFFilial] = useState('')
+  const [fMes, setFMes] = useState('') // 'YYYY-MM' — vazio = todos
 
   useEffect(() => {
-    api.rtmMetricas()
+    api.list('filiais', { ativo: true }).then((r) => setFiliais(r.items || r || [])).catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    setLoading(true)
+    api.rtmMetricas({ filial_id: fFilial || undefined, mes: fMes || undefined })
       .then(setData)
       .catch(() => {})
       .finally(() => setLoading(false))
-  }, [])
+  }, [fFilial, fMes])
 
-  const totalFuncionarios = data?.top_funcionarios?.reduce((s, f) => s + (f.meses || 0), 0) || 0
+  const topFuncionarios100 = data?.top_funcionarios_100 || data?.top_funcionarios || []
+  const totalFuncionarios = topFuncionarios100.reduce((s, f) => s + (f.meses || 0), 0) || 0
   const totalHorasExtra = data?.evolucao_mensal?.reduce((s, m) => s + (m.horas_extra_100 || 0), 0) || 0
   const totalGeral = data?.evolucao_mensal?.reduce((s, m) => s + (m.total || 0), 0) || 0
   const mesesComDados = data?.evolucao_mensal?.length || 0
@@ -145,7 +154,26 @@ export default function HorasExtrasMetricasPage() {
         </div>
       </div>
 
-      {loading ? (
+      {/* Filtros */}
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14, padding: '10px 14px', background: '#f5f7fa', border: '1px solid #dce1e8', borderRadius: 8 }}>
+        <div>
+          <label className="field-label">Filial</label>
+          <select className="input" value={fFilial} onChange={(e) => setFFilial(e.target.value)} style={{ minWidth: 160 }}>
+            <option value="">Todas</option>
+            {filiais.map((f) => <option key={f.id} value={f.id}>{f.cidade}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="field-label">Mês</label>
+          <input type="month" className="input" value={fMes} onChange={(e) => setFMes(e.target.value)} />
+        </div>
+        {(fFilial || fMes) && (
+          <button className="button-secondary" type="button" style={{ fontSize: 11 }} onClick={() => { setFFilial(''); setFMes('') }}>Limpar</button>
+        )}
+        {loading && <span style={{ fontSize: 11, color: 'var(--muted)' }}>atualizando…</span>}
+      </div>
+
+      {loading && !data ? (
         <div className="surface-card" style={{ textAlign: 'center', color: 'var(--muted)', padding: 40 }}>Carregando métricas…</div>
       ) : !data || mesesComDados === 0 ? (
         <div className="surface-card empty-state">
@@ -155,12 +183,34 @@ export default function HorasExtrasMetricasPage() {
         </div>
       ) : (
         <>
+          {/* Cards financeiros — quanto ganhamos nas horas extras */}
+          {data.resumo_financeiro && (
+            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 12 }}>
+              {[
+                { label: 'Cobrado do cliente (receita)', value: formatBRL(data.resumo_financeiro.cobrado_total), color: '#059669', bg: '#f0fdf4', sub: 'valor faturado da White' },
+                { label: 'Custo real (folha)', value: formatBRL(data.resumo_financeiro.custo_total), color: '#dc2626', bg: '#fef2f2', sub: 'o que pagamos aos colaboradores' },
+                { label: 'Margem (lucro)', value: formatBRL(data.resumo_financeiro.margem_total), color: data.resumo_financeiro.margem_total >= 0 ? '#059669' : '#dc2626', bg: '#eff6ff', sub: `${data.resumo_financeiro.margem_pct}% do cobrado` },
+              ].map((k, i) => (
+                <div key={i} style={{ flex: '1 1 200px', padding: '14px 20px', background: k.bg, border: `1.5px solid ${k.color}33`, borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)' }}>
+                  <div style={{ fontSize: 10, color: k.color, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>{k.label}</div>
+                  <div style={{ fontSize: 24, fontWeight: 900, color: k.color }}>{k.value}</div>
+                  <div style={{ fontSize: 10, color: 'var(--muted)' }}>{k.sub}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          {data.resumo_financeiro?.sem_cadastro > 0 && (
+            <div style={{ fontSize: 11, color: '#92400e', background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 6, padding: '6px 12px', marginBottom: 12 }}>
+              ⚠ {data.resumo_financeiro.sem_cadastro} de {data.resumo_financeiro.registros} registros sem colaborador/salário cadastrado — o custo real deles não entra na conta (margem aparece maior que o real). Preencha o salário no cadastro de colaboradores.
+            </div>
+          )}
+
           {/* KPI cards */}
           <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
             {[
               { label: 'Meses fechados', value: mesesComDados, mono: true },
               { label: 'Total H. Extra 100%', value: formatHHMM(totalHorasExtra), mono: true },
-              { label: 'Custo total acumulado', value: formatBRL(totalGeral), color: 'var(--success)' },
+              { label: 'Cobrado acumulado', value: formatBRL(totalGeral), color: 'var(--success)' },
               { label: 'Filiais com horas', value: data.top_filiais?.length || 0, mono: true },
             ].map((k, i) => (
               <div key={i} style={{ padding: '12px 20px', background: '#fff', border: '1px solid var(--border-light)', borderRadius: 'var(--radius)', boxShadow: 'var(--shadow)', minWidth: 160 }}>
@@ -173,12 +223,23 @@ export default function HorasExtrasMetricasPage() {
           {/* Evolução mensal */}
           <div className="surface-card" style={{ marginBottom: 16 }}>
             <LineChart
-              title="Evolução mensal — Custo total (R$)"
+              title="Evolução mensal — Cobrado do cliente (R$)"
               data={(data.evolucao_mensal || []).map((m) => ({ ...m, label: formatMesLabel(m.mes) }))}
               valueKey="total"
               labelKey="label"
-              color="var(--primary)"
+              color="#059669"
               formatValue={(v) => `R$${(v / 1000).toFixed(0)}k`}
+            />
+          </div>
+
+          <div className="surface-card" style={{ marginBottom: 16 }}>
+            <LineChart
+              title="Evolução mensal — Custo real folha (R$)"
+              data={(data.evolucao_mensal || []).map((m) => ({ ...m, label: formatMesLabel(m.mes) }))}
+              valueKey="custo"
+              labelKey="label"
+              color="#dc2626"
+              formatValue={(v) => `R$${(v / 1000).toFixed(1)}k`}
             />
           </div>
 
@@ -241,7 +302,7 @@ export default function HorasExtrasMetricasPage() {
             {tab === 'funcionarios' && (
               <BarChart
                 title="Funcionários com mais horas extras 100%"
-                data={data.top_funcionarios || []}
+                data={topFuncionarios100}
                 valueKey="horas_extra_100"
                 labelKey="funcionario"
                 color="#f0b429"
@@ -251,7 +312,7 @@ export default function HorasExtrasMetricasPage() {
             {tab === 'funcionarios_custo' && (
               <BarChart
                 title="Funcionários com maior custo total"
-                data={[...(data.top_funcionarios || [])].sort((a, b) => b.total - a.total)}
+                data={[...topFuncionarios100].sort((a, b) => b.total - a.total)}
                 valueKey="total"
                 labelKey="funcionario"
                 color="var(--primary)"

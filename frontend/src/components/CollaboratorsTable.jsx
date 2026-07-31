@@ -43,6 +43,7 @@ export default function CollaboratorsTable({ collaborators = [], search = '', on
                 <th>Cargo</th>
                 <th>Salário CLT</th>
                 <th>Benefícios</th>
+                <th>Desc. VT</th>
                 <th>Custo Total</th>
                 <th>Dias Presentes</th>
                 <th>Custo/Dia</th>
@@ -58,6 +59,7 @@ export default function CollaboratorsTable({ collaborators = [], search = '', on
                   <td>{item.cargo || '-'}</td>
                   <td>{formatCurrency(item.salario_clt_mensal)}</td>
                   <td>{formatCurrency(item.beneficios_mensais)}</td>
+                  <td>{Number(item.desconto_vt_mensal) > 0 ? `- ${formatCurrency(item.desconto_vt_mensal)}` : '-'}</td>
                   <td>
                     <strong>{formatCurrency(item.custo_mensal_total)}</strong>
                   </td>

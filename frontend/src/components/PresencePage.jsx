@@ -199,7 +199,16 @@ export default function PresencePage() {
   const selectedWeekdayLabel = useMemo(() => formatWeekdayLabel(selectedDate), [selectedDate])
 
   function handleItemChange(index, fieldName, value) {
-    setItems((current) => current.map((item, itemIndex) => (itemIndex === index ? { ...item, [fieldName]: value } : item)))
+    setItems((current) => current.map((item, itemIndex) => {
+      if (itemIndex !== index) return item
+      const updated = { ...item, [fieldName]: value }
+      // Edição manual assume a autoria: vira origem 'web' para não ser
+      // sobrescrita pelo preenchimento automático do iopoint.
+      if (fieldName === 'status' || fieldName === 'observacoes') {
+        updated.origem = 'web'
+      }
+      return updated
+    }))
   }
 
   async function handleSave() {

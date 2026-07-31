@@ -35,6 +35,10 @@ export function findFaseClt(fase) {
 export function calcularStatusContrato(contrato, hoje = new Date(), diasAlerta = 15) {
   if (!contrato) return 'sem_inicio'
   if (contrato.data_desligamento) return 'encerrado'
+  // Colaborador desligado nunca gera pendência, mesmo que a fase não tenha
+  // data_desligamento própria (efetivação deixou a fase antiga em aberto, ou
+  // cascata de desligamento não pegou a linha legada).
+  if (contrato.colaborador_ativo === false) return 'encerrado'
   if (!contrato.data_inicio) return 'sem_inicio'
 
   // Sem data fim (ex.: indeterminado em curso) → vigente

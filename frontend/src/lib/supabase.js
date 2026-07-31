@@ -29,12 +29,16 @@ export async function uploadRhDocumentFile(file, options = {}) {
     throw new Error('Selecione um arquivo para enviar.')
   }
 
+  // Bucket alvo: por padrão o de documentos RH, mas pode ser sobrescrito
+  // (ex.: fotos de abastecimento vão para o bucket 'abastecimentos', o mesmo
+  // usado pelo app).
+  const targetBucket = options.bucket || documentsBucket
   const folder = options.folder || 'documentos-rh'
   const entityId = options.entityId || 'geral'
   const fileName = sanitizeFileName(file.name)
   const objectPath = `${folder}/${entityId}/${Date.now()}-${crypto.randomUUID()}-${fileName}`
 
-  const { error: uploadError } = await supabase.storage.from(documentsBucket).upload(objectPath, file, {
+  const { error: uploadError } = await supabase.storage.from(targetBucket).upload(objectPath, file, {
     cacheControl: '3600',
     upsert: false,
   })
@@ -43,24 +47,24 @@ export async function uploadRhDocumentFile(file, options = {}) {
     const msg = uploadError.message || ''
     if (/bucket not found/i.test(msg)) {
       throw new Error(
-        `Storage não configurado: o bucket "${documentsBucket}" não existe no Supabase. ` +
-        `Crie em Supabase → Storage → New bucket (nome: ${documentsBucket}, Public). ` +
-        `Ou defina VITE_SUPABASE_DOCUMENTS_BUCKET com o nome do bucket já existente.`
+        `Storage não configurado: o bucket "${targetBucket}" não existe no Supabase. ` +
+        `Crie em Supabase → Storage → New bucket (nome: ${targetBucket}, Public). ` +
+        `Ou rode a migration que cria o bucket.`
       )
     }
     if (/row-level security|RLS|policy/i.test(msg)) {
       throw new Error(
-        `Bucket "${documentsBucket}" sem permissão de upload. ` +
+        `Bucket "${targetBucket}" sem permissão de upload. ` +
         `No Supabase → Storage → Policies, adicione policy de INSERT/SELECT no bucket para a role anon (ou authenticated).`
       )
     }
     throw new Error(msg || 'Falha ao enviar arquivo para o armazenamento.')
   }
 
-  const { data } = supabase.storage.from(documentsBucket).getPublicUrl(objectPath)
+  const { data } = supabase.storage.from(targetBucket).getPublicUrl(objectPath)
 
   return {
-    bucket: documentsBucket,
+    bucket: targetBucket,
     path: objectPath,
     url: data.publicUrl,
   }

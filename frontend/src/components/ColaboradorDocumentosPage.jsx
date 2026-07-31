@@ -120,8 +120,13 @@ export default function ColaboradorDocumentosPage() {
       ])
       const colabRows = colab?.data || colab || []
       const filialRows = fil?.data || fil || []
-      const docRows = (docs?.data || docs || []).map((d) => enriquecerDocumento(d))
-      const contRows = conts?.data || conts || []
+      // Colaborador desligado → doc vira "não se aplica" e contrato vira "encerrado"
+      // (guard em calcularStatus/calcularStatusContrato lê colaborador_ativo).
+      const ativoPorId = new Map(colabRows.map((c) => [Number(c.id), c.ativo !== false]))
+      const docRows = (docs?.data || docs || []).map((d) =>
+        enriquecerDocumento({ ...d, colaborador_ativo: ativoPorId.get(Number(d.colaborador_id)) !== false }))
+      const contRows = (conts?.data || conts || []).map((c) =>
+        ({ ...c, colaborador_ativo: ativoPorId.get(Number(c.colaborador_id)) !== false }))
       setColaboradores(colabRows)
       setFiliais(filialRows)
       setDocumentos(docRows)
@@ -198,7 +203,7 @@ export default function ColaboradorDocumentosPage() {
 
   const contratosFiltrados = useMemo(() => {
     let lista = contratosUltimaFase
-    if (!mostrarInativos) lista = lista.filter((c) => !c.data_desligamento)
+    if (!mostrarInativos) lista = lista.filter((c) => !c.data_desligamento && c.colaborador_ativo !== false)
     if (filtroFilial) lista = lista.filter((c) => String(c.filial_id) === String(filtroFilial))
     if (filtroColab) lista = lista.filter((c) => String(c.colaborador_id) === String(filtroColab))
     if (filtroStatus) {

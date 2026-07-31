@@ -155,7 +155,7 @@ export default function CustosRhPage({ embedded = false }) {
                     value={summary.despesa_total_operacao || summary.monthly_total_cost}
                     unit="currency"
                     tone="warning"
-                    description="Salário, benefícios, bonificação"
+                    description="Salário + benefícios − desconto VT"
                   />
 
                   <CostSummaryCard
@@ -204,6 +204,14 @@ export default function CustosRhPage({ embedded = false }) {
                     unit="currency"
                     tone={custoForaContratoTone(custoForaContratos)}
                     description="Sem contrato vinculado"
+                  />
+
+                  <CostSummaryCard
+                    label="Desconto VT (colaborador)"
+                    value={summary.desconto_vt_total}
+                    unit="currency"
+                    tone="info"
+                    description="6% do base, limitado ao VT — já abatido do custo"
                   />
                 </div>
               </div>
