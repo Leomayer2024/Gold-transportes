@@ -959,17 +959,34 @@ PERMISSION_SCOPE_GROUPS = [
             {'name': 'aprovar.pedidos_compra',  'label': 'Aprovar pedidos de compra',    'platforms': ['web', 'app'], 'auto_enable': ['menu.acompanhamento', 'menu.pedidos_compra'], 'description': 'Permite aprovar ou reprovar pedidos de compra.'},
             {'name': 'analisar.pedidos_compra', 'label': 'Analisar pedidos de compra',   'platforms': ['web', 'app'], 'auto_enable': ['menu.acompanhamento', 'menu.pedidos_compra'], 'description': 'Permite colocar um pedido em análise (pendente → analise) e rejeitá-lo nesta etapa.'},
             {'name': 'aprovar.horas_extras',         'label': 'Aprovar horas extras (legado)','platforms': ['web', 'app'], 'auto_enable': ['menu.acompanhamento', 'menu.horas_extras'],   'description': 'Mantido por compatibilidade. Fluxo novo usa aprovar.horas_extras.lider (etapa 1) e portal cliente (etapa 2).'},
-            {'name': 'aprovar.horas_extras.lider',   'label': 'Aprovar HE — Líder base',      'platforms': ['web', 'app'], 'auto_enable': ['menu.acompanhamento', 'menu.horas_extras'],   'description': 'Etapa 1 do fluxo de HE — líder da base Gold aprova HE dos colaboradores da sua filial. Etapa 2 fica com o cliente via portal externo.'},
+            {'name': 'aprovar.horas_extras.lider',   'label': 'Aprovar HE — Líder base',      'platforms': ['web']       , 'auto_enable': ['menu.acompanhamento', 'menu.horas_extras'],   'description': 'Etapa 1 do fluxo de HE — líder da base Gold aprova HE dos colaboradores da sua filial. Etapa 2 fica com o cliente via portal externo.'},
             {'name': 'aprovar.manutencoes',          'label': 'Aprovar manutenção (final)',   'platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.manutencoes'],    'description': 'Etapa final do fluxo de manutenção — responsável de frota dá aprovação final após líder.'},
             {'name': 'aprovar.manutencoes.lider',    'label': 'Aprovar manut. — Líder base',  'platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.manutencoes'],    'description': 'Etapa 1 do fluxo de manutenção — líder da base envia para responsável.'},
             {'name': 'aprovar.manutencoes.responsavel','label':'Aprovar manut. — Responsável','platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.manutencoes'],    'description': 'Etapa final — responsável de frota.'},
             {'name': 'aprovar.abastecimentos',       'label': 'Aprovar combustível (final)',  'platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.abastecimentos'], 'description': 'Etapa final do fluxo de combustível.'},
             {'name': 'aprovar.abastecimentos.lider', 'label': 'Aprovar comb. — Líder base',   'platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.abastecimentos'], 'description': 'Etapa 1 — líder da base.'},
             {'name': 'aprovar.abastecimentos.responsavel','label':'Aprovar comb. — Responsável','platforms':['web'],       'auto_enable': ['menu.acompanhamento', 'menu.abastecimentos'], 'description': 'Etapa final — responsável de frota.'},
-            {'name': 'aprovar.diarias.lider',        'label': 'Aprovar diárias — Líder base', 'platforms': ['web', 'app'], 'auto_enable': ['menu.acompanhamento', 'menu.diarias', 'menu.hotelaria_aprovacoes'],        'description': 'Etapa 1 (pendente → em análise) da hotelaria/diárias — líder da base. Vale web e app.'},
-            {'name': 'aprovar.diarias.responsavel',  'label': 'Aprovar diárias — Responsável','platforms': ['web', 'app'], 'auto_enable': ['menu.acompanhamento', 'menu.diarias', 'menu.hotelaria_aprovacoes'],        'description': 'Etapa final (em análise → aprovado) da hotelaria/diárias — responsável.'},
-            {'name': 'menu.hotelaria_aprovacoes',    'label': 'Ver Hotelaria — Aprovações',   'platforms': ['web', 'app'], 'auto_enable': [],                                             'description': 'Mostra a tela dedicada de Solicitação de Depósito Bancário / aprovação de hotelaria. Auto-habilitado ao conceder qualquer etapa de aprovação de diárias.'},
+            {'name': 'aprovar.diarias.lider',        'label': 'Aprovar diárias — Líder base', 'platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.diarias'],        'description': 'Etapa 1 (pendente → em análise) das diárias — líder da base.'},
+            {'name': 'aprovar.diarias.responsavel',  'label': 'Aprovar diárias — Responsável','platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.diarias'],        'description': 'Etapa final (em análise → aprovado) das diárias — responsável.'},
             {'name': 'aprovar.pneus',                'label': 'Aprovar controle de pneus',    'platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.pneus'],          'description': 'Permite aprovar ou reprovar lançamentos de controle de pneus.'},
+        ],
+    },
+    # ── Diária & Hotelaria ────────────────────────────────────────────────────
+    # Módulo próprio: DIÁRIA e HOTELARIA são fluxos separados (tabelas próprias).
+    # Hotelaria = Solicitação de Depósito Bancário, com aprovação em 2 etapas.
+    {
+        'key': 'diaria_hotelaria',
+        'title': 'Diária & Hotelaria',
+        'items': [
+            # Diária
+            {'name': 'menu.diarias',                  'label': 'Ver diárias',                     'platforms': ['web', 'app'], 'auto_enable': [],                             'description': 'Mostra a tela de Diária (solicitação de diárias para motoristas em rota).'},
+            {'name': 'create.diarias',                'label': 'Solicitar diária',                'platforms': ['web', 'app'], 'auto_enable': ['menu.diarias'],               'description': 'Permite abrir solicitações de diária.'},
+            # Hotelaria
+            {'name': 'menu.hotelaria',                'label': 'Ver hotelaria',                   'platforms': ['web', 'app'], 'auto_enable': [],                             'description': 'Mostra a tela de Hotelaria (Solicitação de Depósito Bancário de pernoite) e a aba "Minhas solicitações".'},
+            {'name': 'create.hotelaria',              'label': 'Solicitar hotelaria',             'platforms': ['web', 'app'], 'auto_enable': ['menu.hotelaria'],             'description': 'Permite abrir uma Solicitação de Depósito Bancário de hotelaria. Sem este escopo a tela fica só de consulta.'},
+            {'name': 'menu.hotelaria_aprovacoes',     'label': 'Ver aprovações de hotelaria',     'platforms': ['web', 'app'], 'auto_enable': ['menu.hotelaria'],             'description': 'Mostra a tela Hotelaria — Aprovações (fila + histórico). Só aparecem as filiais liberadas para o usuário.'},
+            {'name': 'aprovar.hotelaria.lider',       'label': 'Aprovar hotelaria — Etapa 1',     'platforms': ['web', 'app'], 'auto_enable': ['menu.hotelaria_aprovacoes'],  'description': 'Etapa 1 do fluxo: move de "pendente" para "em análise". Normalmente o líder da base.'},
+            {'name': 'aprovar.hotelaria.responsavel', 'label': 'Aprovar hotelaria — Etapa 2',     'platforms': ['web', 'app'], 'auto_enable': ['menu.hotelaria_aprovacoes'],  'description': 'Etapa final: move de "em análise" para "aprovado", liberando o depósito. Normalmente o financeiro/responsável.'},
         ],
     },
     # ── RH ────────────────────────────────────────────────────────────────────
@@ -985,15 +1002,13 @@ PERMISSION_SCOPE_GROUPS = [
             {'name': 'create.contratos_operacionais','label': 'Cadastrar contratos operacionais',    'platforms': ['web'],        'auto_enable': ['menu.contratos_operacionais'], 'description': 'Permite criar e manter contratos por base para análise de acuracidade e custos.'},
             {'name': 'menu.colaborador_documentos',  'label': 'Ver documentos RH',                   'platforms': ['web'],        'auto_enable': [],                          'description': 'Mostra o controle documental de colaboradores, como CNH, ASO e certificados.'},
             {'name': 'create.colaborador_documentos','label': 'Cadastrar documentos RH',             'platforms': ['web'],        'auto_enable': ['menu.colaborador_documentos'], 'description': 'Permite manter vencimentos, arquivos e dados documentais dos colaboradores.'},
-            {'name': 'menu.diarias',                 'label': 'Ver diárias / hotelaria',             'platforms': ['web', 'app'], 'auto_enable': [],                          'description': 'Mostra a tela de solicitações de diárias e hotelaria para motoristas em rota.'},
-            {'name': 'create.diarias',               'label': 'Solicitar diárias / hotelaria',       'platforms': ['web', 'app'], 'auto_enable': ['menu.diarias'],            'description': 'Permite criar solicitações de diárias/hotelaria. Gestores de base usam pra abrir o pedido.'},
-            {'name': 'aprovar.diarias',              'label': 'Aprovar diárias / hotelaria',         'platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.diarias'], 'description': 'Permite aprovar ou reprovar pedidos de diárias e ajustar valores na tela de Acompanhamento — geralmente quem atende o financeiro.'},
+            {'name': 'aprovar.diarias',              'label': 'Aprovar diárias (legado)',            'platforms': ['web'],        'auto_enable': ['menu.acompanhamento', 'menu.diarias'], 'description': 'Aprova/reprova diárias pela tela de Acompanhamento. Mantido por compatibilidade — o fluxo por etapas usa aprovar.diarias.lider/responsavel.'},
             {'name': 'menu.colaborador_contratos',   'label': 'Ver contratos de colaboradores',      'platforms': ['web'],        'auto_enable': [],                          'description': 'Mostra os vínculos contratuais (CLT, estágio, PJ, temporário, aprendiz) e o histórico 45+45→indeterminado.'},
             {'name': 'create.colaborador_contratos', 'label': 'Cadastrar contratos de colaboradores','platforms': ['web'],        'auto_enable': ['menu.colaborador_contratos'], 'description': 'Permite registrar e prorrogar vínculos contratuais e desligamentos.'},
             {'name': 'menu.eventos_rh',              'label': 'Ver planejamento RH',                 'platforms': ['web'],        'auto_enable': [],                          'description': 'Mostra férias, afastamentos, licenças e demais eventos planejados do RH.'},
             {'name': 'create.eventos_rh',            'label': 'Cadastrar eventos RH',                'platforms': ['web'],        'auto_enable': ['menu.eventos_rh'],          'description': 'Permite planejar férias, afastamentos, licenças e folgas programadas.'},
             {'name': 'menu.horas_extras',            'label': 'Ver horas extras',                    'platforms': ['web', 'app'], 'auto_enable': [],                          'description': 'Mostra o registro e aprovação de horas extras por colaborador e filial.'},
-            {'name': 'create.horas_extras',          'label': 'Lançar horas extras',                 'platforms': ['web', 'app'], 'auto_enable': ['menu.horas_extras'],        'description': 'Permite registrar solicitações de horas extras para colaboradores.'},
+            {'name': 'create.horas_extras',          'label': 'Lançar horas extras',                 'platforms': ['web']       , 'auto_enable': ['menu.horas_extras'],        'description': 'Permite registrar solicitações de horas extras para colaboradores.'},
             {'name': 'menu.horas_extras_rtm',        'label': 'Calc. Horas Extras (RTM)',            'platforms': ['web'],        'auto_enable': [],                          'description': 'Calculadora RTM: cola dados da planilha e calcula totais de horas extras. Disponível apenas no web (usa colagem de planilha).'},
             {'name': 'menu.ordens_servico',          'label': 'Ver ordens de serviço (motorista)',   'platforms': ['web', 'app'], 'auto_enable': [],                          'description': 'Mostra as OS de motorista (viagens) — usado pelos motoristas no app e gestores no web.'},
             {'name': 'create.ordens_servico',        'label': 'Abrir OS de motorista',               'platforms': ['web', 'app'], 'auto_enable': ['menu.ordens_servico'],     'description': 'Permite ao motorista criar OS de viagem (origem/destino) e usá-la pra agrupar HE, combustível e diárias.'},
@@ -1067,7 +1082,7 @@ PERMISSION_SCOPE_GROUPS = [
             {'name': 'menu.estoque',             'label': 'Ver estoque',                  'platforms': ['web', 'app'], 'auto_enable': [],                                     'description': 'Mostra o módulo de estoque no menu. No app: aba "Estoque & Trocas".'},
             {'name': 'create.estoque',           'label': 'Cadastrar estoque',            'platforms': ['web'],        'auto_enable': ['menu.estoque'],                       'description': 'Permite criar novos itens de estoque. Disponível apenas no web.'},
             {'name': 'menu.estoque_movimentos',  'label': 'Ver movimentos de estoque',    'platforms': ['web', 'app'], 'auto_enable': ['menu.estoque'],                       'description': 'Mostra a tela de lançamento de movimentos de estoque (entradas, saídas, trocas). No app: usado para registrar trocas de equipamento.'},
-            {'name': 'create.estoque_movimentos','label': 'Lançar movimentos de estoque', 'platforms': ['web', 'app'], 'auto_enable': ['menu.estoque', 'menu.estoque_movimentos'], 'description': 'Permite registrar entradas, saídas, trocas, devoluções e ajustes de estoque.'},
+            {'name': 'create.estoque_movimentos','label': 'Lançar movimentos de estoque', 'platforms': ['web']       , 'auto_enable': ['menu.estoque', 'menu.estoque_movimentos'], 'description': 'Permite registrar entradas, saídas, trocas, devoluções e ajustes de estoque.'},
         ],
     },
     # ── Operação RTM ──────────────────────────────────────────────────────────
@@ -1076,12 +1091,12 @@ PERMISSION_SCOPE_GROUPS = [
         'title': 'Operação RTM',
         'items': [
             {'name': 'menu.presenca',                    'label': 'Ver presença',                    'platforms': ['web', 'app'], 'auto_enable': [],                      'description': 'Mostra o controle diário de presença.'},
-            {'name': 'manage.presenca',                  'label': 'Modificar presença',              'platforms': ['web', 'app'], 'auto_enable': ['menu.presenca'],        'description': 'Permite alterar e salvar o quadro diário de presença.'},
+            {'name': 'manage.presenca',                  'label': 'Modificar presença',              'platforms': ['web']       , 'auto_enable': ['menu.presenca'],        'description': 'Permite alterar e salvar o quadro diário de presença.'},
             {'name': 'menu.ponto',                       'label': 'Ver ponto',                       'platforms': ['web'],        'auto_enable': [],                      'description': 'Mostra a tela de Ponto (batidas faciais): histórico do dia, horas trabalhadas, filtros e exportação.'},
             {'name': 'manage.ponto',                     'label': 'Ajustar ponto',                   'platforms': ['web'],        'auto_enable': ['menu.ponto'],          'description': 'Permite adicionar, corrigir e remover batidas de ponto manualmente (registra auditoria e notifica o colaborador).'},
             {'name': 'menu.carregamento',                'label': 'Ver carregamento',                'platforms': ['web', 'app'], 'auto_enable': [],                      'description': 'Mostra o painel de carregamento por turno, caminhão, referência operacional e eventos.'},
-            {'name': 'manage.programacao_carregamento',  'label': 'Programar carregamento',          'platforms': ['web', 'app'], 'auto_enable': ['menu.carregamento'],    'description': 'Permite abrir jornadas e definir quais caminhões vão operar no turno.'},
-            {'name': 'manage.operacao_carregamento',     'label': 'Operar carregamento',             'platforms': ['web', 'app'], 'auto_enable': ['menu.carregamento'],    'description': 'Permite registrar carga, paradas, ocorrências e fechamento do caminhão.'},
+            {'name': 'manage.programacao_carregamento',  'label': 'Programar carregamento',          'platforms': ['web']       , 'auto_enable': ['menu.carregamento'],    'description': 'Permite abrir jornadas e definir quais caminhões vão operar no turno.'},
+            {'name': 'manage.operacao_carregamento',     'label': 'Operar carregamento',             'platforms': ['web']       , 'auto_enable': ['menu.carregamento'],    'description': 'Permite registrar carga, paradas, ocorrências e fechamento do caminhão.'},
             {'name': 'menu.rotas_carregamento',          'label': 'Ver referências de carregamento', 'platforms': ['web'],        'auto_enable': [],                      'description': 'Mostra o cadastro das referências operacionais usadas no carregamento.'},
             {'name': 'create.rotas_carregamento',        'label': 'Cadastrar referências',           'platforms': ['web'],        'auto_enable': ['menu.rotas_carregamento'], 'description': 'Permite criar referências operacionais usadas na operação de carregamento.'},
             {'name': 'menu.veiculos_carregamento',       'label': 'Ver veículos de carregamento',    'platforms': ['web'],        'auto_enable': [],                      'description': 'Mostra o cadastro dos caminhões terceiros usados na operação.'},
@@ -1122,7 +1137,7 @@ PERMISSION_SCOPE_GROUPS = [
             {'name': 'action.global.bulk_export',     'label': 'Exportar listas em massa (genérico)',      'platforms': ['web'], 'auto_enable': [],                              'description': 'Mostra botões "Exportar selecionados" e "Exportar tudo" em listas que suportam exportação.'},
             {'name': 'action.global.bulk_delete',     'label': 'Excluir em massa (genérico)',              'platforms': ['web'], 'auto_enable': [],                              'description': 'Permite seleção múltipla + exclusão em lote em listas que suportam (ação destrutiva).'},
             {'name': 'action.ponto.exportar',         'label': 'Exportar ponto para Excel',                'platforms': ['web'], 'auto_enable': ['menu.ponto'],                  'description': 'Mostra o botão "Exportar Excel" na tela de Ponto e habilita o download da planilha de batidas.'},
-            {'name': 'action.estoque.ajuste',         'label': 'Ajustar inventário (ajuste +/−)',          'platforms': ['web', 'app'], 'auto_enable': ['menu.estoque_movimentos'], 'description': 'Mostra os tipos "Ajuste positivo" e "Ajuste negativo" no lançamento de movimento. Sem esta permissão o usuário só registra entradas, saídas e trocas — não corrige o saldo do inventário diretamente.'},
+            {'name': 'action.estoque.ajuste',         'label': 'Ajustar inventário (ajuste +/−)',          'platforms': ['web']       , 'auto_enable': ['menu.estoque_movimentos'], 'description': 'Mostra os tipos "Ajuste positivo" e "Ajuste negativo" no lançamento de movimento. Sem esta permissão o usuário só registra entradas, saídas e trocas — não corrige o saldo do inventário diretamente.'},
         ],
     },
 ]
@@ -14938,6 +14953,262 @@ def create_app():
         except Exception as exc:
             app.logger.error('Erro ao atualizar status nota %s: %s', nota_id, exc)
             return db_error_response(exc)
+
+    # ═══════════════════════════════════════════════════════════════════════════════
+    # MÓDULO HOTELARIA — Solicitação de Depósito Bancário (tabela própria)
+    # Fluxo: pendente → em_analise (etapa 1) → aprovado (etapa 2). Reprovável em
+    # qualquer etapa. O histórico é gravado por trigger no banco (045).
+    # ═══════════════════════════════════════════════════════════════════════════════
+
+    HOTELARIA_ETAPA1 = 'aprovar.hotelaria.lider'
+    HOTELARIA_ETAPA2 = 'aprovar.hotelaria.responsavel'
+
+    def _hotelaria_filiais_permitidas(profile):
+        """None = todas; lista = restrito a essas filiais."""
+        if not profile_has_filial_scope(profile):
+            return None
+        return profile.get('allowed_filial_ids') or []
+
+    def _hotelaria_enriquecer(rows):
+        """Anexa nome da filial e dos atores — o documento precisa de UNIDADE e
+        de 'APROVADO POR'."""
+        rows = list(rows or [])
+        if not rows:
+            return rows
+        filial_ids = sorted({r['filial_id'] for r in rows if r.get('filial_id')})
+        actor_ids = sorted({
+            v for r in rows
+            for v in (r.get('criado_por'), r.get('analisado_por'), r.get('aprovado_por'), r.get('reprovado_por'))
+            if v
+        })
+        filiais, nomes = {}, {}
+        try:
+            if filial_ids:
+                fr = supabase.table('filiais').select('id, cidade, uf, parceira').in_('id', filial_ids).execute().data or []
+                filiais = {
+                    f['id']: f"{(f.get('parceira') + ' · ') if f.get('parceira') else ''}{f.get('cidade') or ''}"
+                              f"{('/' + f['uf']) if f.get('uf') else ''}"
+                    for f in fr
+                }
+            if actor_ids:
+                cr = supabase.table('colaboradores').select('id, nome_completo').in_('id', actor_ids).execute().data or []
+                nomes = {c['id']: c.get('nome_completo') for c in cr}
+        except Exception as exc:
+            app.logger.warning('hotelaria enriquecer: %s', exc)
+        for r in rows:
+            r['filial_nome'] = filiais.get(r.get('filial_id')) or f"Filial {r.get('filial_id')}"
+            r['criado_por_nome'] = nomes.get(r.get('criado_por'))
+            r['analisado_por_nome'] = nomes.get(r.get('analisado_por'))
+            r['aprovado_por_nome'] = nomes.get(r.get('aprovado_por'))
+            r['reprovado_por_nome'] = nomes.get(r.get('reprovado_por'))
+            # "APROVADO POR" do documento: quem agiu por último no fluxo.
+            r['aprovador_atual_nome'] = r['aprovado_por_nome'] or r['analisado_por_nome']
+        return rows
+
+    @app.get('/api/hotelaria')
+    @require_auth
+    def hotelaria_listar(profile):
+        """Minhas solicitações (padrão) ou todas as das filiais liberadas (?escopo=filial)."""
+        if not profile_has_scope_permission(profile, 'menu.hotelaria'):
+            return jsonify({'error': 'Sem permissão para ver hotelaria.'}), 403
+        escopo = (request.args.get('escopo') or 'minhas').strip().lower()
+        limit = min(int(request.args.get('limit', 100)), 500)
+        try:
+            q = supabase.table('hotelaria_solicitacoes').select('*')
+            if escopo == 'minhas':
+                q = q.eq('criado_por', profile.get('id'))
+            permitidas = _hotelaria_filiais_permitidas(profile)
+            if permitidas is not None:
+                if not permitidas:
+                    return jsonify({'items': [], 'total': 0})
+                q = q.in_('filial_id', permitidas)
+            rows = supabase_retry(q.order('id', desc=True).limit(limit).execute).data or []
+            rows = _hotelaria_enriquecer(rows)
+            return jsonify({'items': rows, 'total': len(rows)})
+        except Exception as exc:
+            app.logger.error('hotelaria_listar: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.post('/api/hotelaria')
+    @require_auth
+    def hotelaria_criar(profile):
+        if not profile_has_scope_permission(profile, 'create.hotelaria'):
+            return jsonify({'error': 'Sem permissão para solicitar hotelaria.'}), 403
+        body = request.get_json(silent=True) or {}
+        filial_id = body.get('filial_id') or profile.get('filial_id')
+        if not filial_id:
+            return jsonify({'error': 'Informe a unidade/filial.'}), 400
+        if not ensure_profile_can_access_filial(profile, int(filial_id)):
+            return jsonify({'error': 'Sem permissão para esta base.'}), 403
+        motorista = (body.get('motorista_nome') or '').strip()
+        if not motorista:
+            return jsonify({'error': 'Informe o motorista.'}), 400
+        try:
+            valor = float(body.get('valor') or 0)
+        except (TypeError, ValueError):
+            valor = 0.0
+        if valor <= 0:
+            return jsonify({'error': 'Informe um valor maior que zero.'}), 400
+
+        def _up(campo):
+            v = (body.get(campo) or '').strip()
+            return v.upper() or None
+
+        payload = {
+            'filial_id': int(filial_id),
+            'motorista_nome': motorista.upper(),
+            'placa': _up('placa'),
+            'chave_pix': _up('chave_pix'),
+            'favorecido': _up('favorecido'),
+            'valor': round(valor, 2),
+            'data_deposito': body.get('data_deposito') or date_class.today().isoformat(),
+            'cidade': _up('cidade'),
+            'hotel': _up('hotel'),
+            'observacoes': (body.get('observacoes') or '').strip() or None,
+            'status': 'pendente',
+            'criado_por': profile.get('id'),
+        }
+        try:
+            try:
+                num = supabase.rpc('gerar_numero_solicitacao', {'p_tipo': 'hotelaria'}).execute()
+                if num.data:
+                    payload['numero_solicitacao'] = num.data
+            except Exception as exc:
+                app.logger.warning('hotelaria numero: %s', exc)
+            created = (supabase.table('hotelaria_solicitacoes').insert(payload).execute().data or [{}])[0]
+            write_audit_event(profile, 'create', 'hotelaria_solicitacoes', created.get('id'),
+                              filial_id=payload['filial_id'])
+            return jsonify(created), 201
+        except Exception as exc:
+            app.logger.error('hotelaria_criar: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 400
+
+    @app.get('/api/hotelaria/aprovacoes')
+    @require_auth
+    def hotelaria_fila_aprovacao(profile):
+        """Fila de aprovação: só os status que ESTE usuário pode agir, e só das
+        filiais liberadas. Com ?status=historico devolve as já finalizadas."""
+        pode1 = profile_has_scope_permission(profile, HOTELARIA_ETAPA1)
+        pode2 = profile_has_scope_permission(profile, HOTELARIA_ETAPA2)
+        if not (pode1 or pode2 or profile_has_scope_permission(profile, 'menu.hotelaria_aprovacoes')):
+            return jsonify({'error': 'Sem permissão para aprovar hotelaria.'}), 403
+
+        aba = (request.args.get('status') or 'fila').strip().lower()
+        if aba == 'historico':
+            alvo = ['aprovado', 'reprovado', 'cancelado']
+        else:
+            alvo = []
+            if pode1:
+                alvo.append('pendente')
+            if pode2:
+                alvo.append('em_analise')
+        if not alvo:
+            return jsonify({'items': [], 'total': 0, 'pode_etapa1': pode1, 'pode_etapa2': pode2})
+        try:
+            q = supabase.table('hotelaria_solicitacoes').select('*').in_('status', alvo)
+            permitidas = _hotelaria_filiais_permitidas(profile)
+            if permitidas is not None:
+                if not permitidas:
+                    return jsonify({'items': [], 'total': 0, 'pode_etapa1': pode1, 'pode_etapa2': pode2})
+                q = q.in_('filial_id', permitidas)
+            filial_id = request.args.get('filial_id', type=int)
+            if filial_id:
+                if not ensure_profile_can_access_filial(profile, filial_id):
+                    return jsonify({'error': 'Sem permissão para esta base.'}), 403
+                q = q.eq('filial_id', filial_id)
+            rows = supabase_retry(q.order('id', desc=True).limit(300).execute).data or []
+            rows = _hotelaria_enriquecer(rows)
+            for r in rows:
+                r['pode_agir'] = (r['status'] == 'pendente' and pode1) or (r['status'] == 'em_analise' and pode2)
+                r['etapa'] = 1 if r['status'] == 'pendente' else (2 if r['status'] == 'em_analise' else None)
+            return jsonify({'items': rows, 'total': len(rows), 'pode_etapa1': pode1, 'pode_etapa2': pode2})
+        except Exception as exc:
+            app.logger.error('hotelaria_fila_aprovacao: %s', exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.get('/api/hotelaria/<int:sol_id>/historico')
+    @require_auth
+    def hotelaria_historico(profile, sol_id):
+        """Trilha de aprovação: quem criou, quem analisou, quem aprovou/reprovou."""
+        if not profile_has_scope_permission(profile, 'menu.hotelaria'):
+            return jsonify({'error': 'Sem permissão.'}), 403
+        try:
+            sol = (supabase.table('hotelaria_solicitacoes').select('filial_id')
+                   .eq('id', sol_id).limit(1).execute().data or [])
+            if not sol:
+                return jsonify({'error': 'Solicitação não encontrada.'}), 404
+            if not ensure_profile_can_access_filial(profile, sol[0].get('filial_id')):
+                return jsonify({'error': 'Sem permissão para esta base.'}), 403
+            rows = (supabase.table('hotelaria_historico').select('*')
+                    .eq('solicitacao_id', sol_id).order('criado_em').execute().data or [])
+            return jsonify({'items': rows, 'total': len(rows)})
+        except Exception as exc:
+            app.logger.error('hotelaria_historico %s: %s', sol_id, exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    def _hotelaria_transicao(profile, sol_id, acao, motivo=''):
+        """Aplica a transição validando etapa + permissão + filial."""
+        sol = (supabase.table('hotelaria_solicitacoes').select('*')
+               .eq('id', sol_id).limit(1).execute().data or [])
+        if not sol:
+            return jsonify({'error': 'Solicitação não encontrada.'}), 404
+        sol = sol[0]
+        if not ensure_profile_can_access_filial(profile, sol.get('filial_id')):
+            return jsonify({'error': 'Sem permissão para esta base.'}), 403
+
+        status = sol.get('status')
+        pode1 = profile_has_scope_permission(profile, HOTELARIA_ETAPA1)
+        pode2 = profile_has_scope_permission(profile, HOTELARIA_ETAPA2)
+        agora, uid = now_iso(), profile.get('id')
+
+        if acao == 'reprovar':
+            if status not in ('pendente', 'em_analise'):
+                return jsonify({'error': f'Solicitação já está {status}.'}), 409
+            if not ((status == 'pendente' and pode1) or (status == 'em_analise' and pode2)):
+                return jsonify({'error': 'Sem permissão para reprovar nesta etapa.'}), 403
+            if not motivo.strip():
+                return jsonify({'error': 'Informe o motivo da reprovação.'}), 400
+            patch = {'status': 'reprovado', 'reprovado_por': uid, 'reprovado_em': agora,
+                     'motivo_reprovacao': motivo.strip()}
+        elif status == 'pendente':
+            if not pode1:
+                return jsonify({'error': 'Sem permissão para a etapa 1.'}), 403
+            patch = {'status': 'em_analise', 'analisado_por': uid, 'analisado_em': agora}
+        elif status == 'em_analise':
+            if not pode2:
+                return jsonify({'error': 'Sem permissão para a etapa 2.'}), 403
+            patch = {'status': 'aprovado', 'aprovado_por': uid, 'aprovado_em': agora}
+        else:
+            return jsonify({'error': f'Solicitação já está {status}.'}), 409
+
+        if motivo.strip() and acao != 'reprovar':
+            patch['observacoes'] = motivo.strip()
+        updated = (supabase.table('hotelaria_solicitacoes').update(patch)
+                   .eq('id', sol_id).execute().data or [{}])[0]
+        write_audit_event(profile, acao, 'hotelaria_solicitacoes', sol_id,
+                          details={'de': status, 'para': patch['status']},
+                          filial_id=sol.get('filial_id'))
+        return jsonify(updated)
+
+    @app.post('/api/hotelaria/<int:sol_id>/aprovar')
+    @require_auth
+    def hotelaria_aprovar(profile, sol_id):
+        body = request.get_json(silent=True) or {}
+        try:
+            return _hotelaria_transicao(profile, sol_id, 'aprovar', body.get('observacao') or '')
+        except Exception as exc:
+            app.logger.error('hotelaria_aprovar %s: %s', sol_id, exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
+
+    @app.post('/api/hotelaria/<int:sol_id>/reprovar')
+    @require_auth
+    def hotelaria_reprovar(profile, sol_id):
+        body = request.get_json(silent=True) or {}
+        try:
+            return _hotelaria_transicao(profile, sol_id, 'reprovar', body.get('motivo') or '')
+        except Exception as exc:
+            app.logger.error('hotelaria_reprovar %s: %s', sol_id, exc)
+            return jsonify({'error': translate_database_error(exc)}), 500
 
     # ═══════════════════════════════════════════════════════════════════════════════
     # ENDPOINTS GENÉRICOS DE APROVAÇÃO E ACOMPANHAMENTO

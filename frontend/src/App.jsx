@@ -3,7 +3,7 @@ import DashboardPage from './components/DashboardPage'
 import FiliaisPage from './components/FiliaisPage'
 import ColaboradoresPage from './components/ColaboradoresPage'
 import ColaboradorDocumentosPage from './components/ColaboradorDocumentosPage'
-import DiariasPage from './components/DiariasPage'
+import DiariaPage from './components/DiariaPage'
 import HotelariaPage from './components/HotelariaPage'
 import HotelariaAprovacoesPage from './components/HotelariaAprovacoesPage'
 import ContratosOperacionaisPage from './components/ContratosOperacionaisPage'
@@ -113,7 +113,9 @@ export default function App() {
             <Route path="/rh-documentos" element={<ColaboradorDocumentosPage />} />
           </Route>
           <Route element={<AccessRoute requiredScope="menu.diarias" />}>
-            <Route path="/diarias" element={<DiariasPage />} />
+            <Route path="/diarias" element={<DiariaPage />} />
+          </Route>
+          <Route element={<AccessRoute requiredScope="menu.hotelaria" />}>
             <Route path="/hotelaria" element={<HotelariaPage />} />
           </Route>
           <Route element={<AccessRoute requiredScope="menu.hotelaria_aprovacoes" />}>

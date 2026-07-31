@@ -14,14 +14,19 @@ export const navigationGroups = [
       { to: '/contratos-operacionais', label: 'Contratos operacionais', scope: 'menu.contratos_operacionais' },
       { to: '/teste-contrato', label: 'Teste Contrato (preview)', scope: 'menu.contratos_operacionais' },
       { to: '/rh-documentos', label: 'Documentos RH', scope: 'menu.colaborador_documentos' },
-      { to: '/diarias', label: 'Diária', scope: 'menu.diarias' },
-      { to: '/hotelaria', label: 'Hotelaria', scope: 'menu.diarias' },
-      { to: '/hotelaria-aprovacoes', label: 'Hotelaria — Aprovações', scope: 'menu.hotelaria_aprovacoes' },
       { to: '/rh-planejamento', label: 'Planejamento RH', scope: 'menu.eventos_rh' },
       { to: '/horas-extras', label: 'Horas extras', scope: 'menu.horas_extras' },
       { to: '/quadro-funcionarios', label: 'Quadro de funcionários', scope: 'menu.quadro_funcionarios' },
       { to: '/bonificacao', label: 'Bonificação', scope: 'menu.bonificacao' },
       { to: '/bonificacao-metricas', label: 'Métricas de bonificação', scope: 'menu.bonificacao_metricas' },
+    ],
+  },
+  {
+    title: 'Diária & Hotelaria',
+    items: [
+      { to: '/diarias', label: 'Diária', scope: 'menu.diarias' },
+      { to: '/hotelaria', label: 'Hotelaria', scope: 'menu.hotelaria' },
+      { to: '/hotelaria-aprovacoes', label: 'Hotelaria — Aprovações', scope: 'menu.hotelaria_aprovacoes' },
     ],
   },
   {

@@ -332,6 +332,23 @@ export const api = {
     return request(`/pedidos-compra/metricas${suffix}`)
   },
 
+  // ─── Hotelaria (Solicitação de Depósito Bancário) ─────────────────────────
+  hotelariaListar: (params = {}) => {
+    const s = new URLSearchParams(params).toString()
+    return request(`/hotelaria${s ? `?${s}` : ''}`)
+  },
+  hotelariaCriar: (payload) =>
+    request('/hotelaria', { method: 'POST', body: JSON.stringify(payload) }),
+  hotelariaFila: (params = {}) => {
+    const s = new URLSearchParams(params).toString()
+    return request(`/hotelaria/aprovacoes${s ? `?${s}` : ''}`)
+  },
+  hotelariaHistorico: (id) => request(`/hotelaria/${id}/historico`),
+  hotelariaAprovar: (id, observacao = '') =>
+    request(`/hotelaria/${id}/aprovar`, { method: 'POST', body: JSON.stringify({ observacao }) }),
+  hotelariaReprovar: (id, motivo) =>
+    request(`/hotelaria/${id}/reprovar`, { method: 'POST', body: JSON.stringify({ motivo }) }),
+
   // ─── Acompanhamento / Aprovações ──────────────────────────────────────────
   getApprovals: (params = {}) => {
     const search = new URLSearchParams(params)
