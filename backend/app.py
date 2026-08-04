@@ -15049,6 +15049,9 @@ def create_app():
             valor = 0.0
         if valor <= 0:
             return jsonify({'error': 'Informe um valor maior que zero.'}), 400
+        entrada, saida = body.get('data_entrada'), body.get('data_saida')
+        if entrada and saida and str(saida) < str(entrada):
+            return jsonify({'error': 'A saída não pode ser antes da entrada.'}), 400
 
         def _up(campo):
             v = (body.get(campo) or '').strip()
@@ -15064,6 +15067,10 @@ def create_app():
             'data_deposito': body.get('data_deposito') or date_class.today().isoformat(),
             'cidade': _up('cidade'),
             'hotel': _up('hotel'),
+            # Período da hospedagem: "de dia tal a dia tal". `noites` é coluna
+            # gerada no banco (046), então não é enviada aqui.
+            'data_entrada': body.get('data_entrada') or None,
+            'data_saida': body.get('data_saida') or None,
             'observacoes': (body.get('observacoes') or '').strip() or None,
             'status': 'pendente',
             'criado_por': profile.get('id'),

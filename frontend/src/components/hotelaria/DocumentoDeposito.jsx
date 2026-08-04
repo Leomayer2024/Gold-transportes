@@ -31,6 +31,26 @@ export function dataBR(d) {
   return s.length === 3 ? `${s[2]}/${s[1]}/${s[0]}` : String(d)
 }
 
+/** Noites do período. Usa a coluna gerada pelo banco; se não vier, calcula. */
+export function noitesDe(sol = {}) {
+  if (sol.noites != null) return Number(sol.noites)
+  if (!sol.data_entrada || !sol.data_saida) return null
+  const ini = new Date(`${String(sol.data_entrada).slice(0, 10)}T00:00:00`)
+  const fim = new Date(`${String(sol.data_saida).slice(0, 10)}T00:00:00`)
+  if (isNaN(ini) || isNaN(fim)) return null
+  return Math.max(0, Math.round((fim - ini) / 86400000))
+}
+
+/** "01/08/2026 a 05/08/2026 · 4 noites" */
+export function periodoTexto(sol = {}, placeholder = false) {
+  if (!sol.data_entrada && !sol.data_saida) {
+    return placeholder ? 'XX/XX/XXXX a XX/XX/XXXX' : ''
+  }
+  const n = noitesDe(sol)
+  const base = `${dataBR(sol.data_entrada)} a ${dataBR(sol.data_saida)}`
+  return n == null ? base : `${base} · ${n} ${n === 1 ? 'noite' : 'noites'}`
+}
+
 const cellLabel = {
   background: '#e9edf2', fontWeight: 600, padding: '5px 9px',
   width: 132, whiteSpace: 'nowrap', border: '1px solid #c8d1da', fontSize: 12.5,
@@ -80,6 +100,10 @@ export default function DocumentoDeposito({ sol = {}, placeholder = false }) {
             <td style={cellLabel}>Valor</td>
             <td style={{ ...cellValue, fontWeight: 700 }}>{brl(sol.valor)}</td>
             <td style={{ ...cellLabel, width: 96, textAlign: 'center' }}>DATA</td>
+          </tr>
+          <tr>
+            <td style={cellLabel}>Período</td>
+            <td style={cellValue} colSpan={2}>{periodoTexto(sol, placeholder)}</td>
           </tr>
           <tr>
             <td style={cellLabel}>Referente</td>

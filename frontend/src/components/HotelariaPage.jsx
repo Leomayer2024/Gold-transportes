@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { api } from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { hasScopePermission } from '../lib/permissions'
-import DocumentoDeposito, { StatusChip, Timeline, brl, dataBR } from './hotelaria/DocumentoDeposito'
+import DocumentoDeposito, { StatusChip, Timeline, brl, dataBR, noitesDe } from './hotelaria/DocumentoDeposito'
 
 // ─── Hotelaria ────────────────────────────────────────────────────────────────
 // Módulo próprio (tabela hotelaria_solicitacoes). Duas abas:
@@ -16,6 +16,7 @@ const hoje = () => new Date().toISOString().slice(0, 10)
 const VAZIO = {
   filial_id: '', motorista_nome: '', placa: '', chave_pix: '',
   favorecido: '', valor: '', data_deposito: hoje(), cidade: '', hotel: '',
+  data_entrada: '', data_saida: '',
 }
 
 export default function HotelariaPage() {
@@ -81,12 +82,17 @@ function AbaNova({ onEnviado }) {
     return `${fi.parceira ? fi.parceira + ' · ' : ''}${fi.cidade || ''}${fi.uf ? '/' + fi.uf : ''}`
   }, [filiais, f.filial_id])
 
+  const noites = noitesDe(f)
+
   async function enviar(e) {
     e.preventDefault()
     setErro('')
     if (!f.filial_id) return setErro('Selecione a unidade.')
     if (!f.motorista_nome.trim()) return setErro('Informe o motorista.')
     if (!Number(f.valor)) return setErro('Informe o valor.')
+    if (f.data_entrada && f.data_saida && f.data_saida < f.data_entrada) {
+      return setErro('A saída não pode ser antes da entrada.')
+    }
     setSalvando(true)
     try {
       await api.hotelariaCriar({ ...f, filial_id: Number(f.filial_id), valor: Number(f.valor) })
@@ -138,7 +144,22 @@ function AbaNova({ onEnviado }) {
           <label><span>Hotel</span>
             <input type="text" value={f.hotel} onChange={up('hotel')} style={UP} placeholder="NOME DO HOTEL" />
           </label>
+          <label><span>Entrada (check-in)</span>
+            <input type="date" value={f.data_entrada} onChange={set('data_entrada')} max={f.data_saida || undefined} />
+          </label>
+          <label><span>Saída (check-out)</span>
+            <input type="date" value={f.data_saida} onChange={set('data_saida')} min={f.data_entrada || undefined} />
+          </label>
         </div>
+
+        {noites != null && (
+          <p style={{ margin: '10px 0 0', fontSize: 13, color: '#57606A' }}>
+            Hospedagem de <strong>{noites}</strong> {noites === 1 ? 'noite' : 'noites'}
+            {noites > 0 && Number(f.valor) > 0 && (
+              <> · <strong>{brl(Number(f.valor) / noites)}</strong> por noite</>
+            )}
+          </p>
+        )}
         <button type="submit" className="button-primary" disabled={salvando} style={{ marginTop: 14 }}>
           {salvando ? 'Enviando…' : 'Enviar para aprovação'}
         </button>
